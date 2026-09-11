@@ -146,11 +146,14 @@ resource "aws_lb_target_group" "main" {
   tags = { Name = local.name }
 }
 
-# The catch-all. Priority is the HIGHEST number of any rule on the listener,
-# so every API rule is evaluated first and this one only sees what none of
-# them claimed. See variables.tf on listener_priority for why that matters.
+# The catch-all, on EACH listener: 443 for a browser reaching the ALB
+# directly, 80 for CloudFront. Priority is the HIGHEST number of any rule, so
+# every API rule is evaluated first and this one only sees what none of them
+# claimed — see variables.tf on listener_priority for why that matters.
 resource "aws_lb_listener_rule" "main" {
-  listener_arn = local.platform.alb_https_listener_arn
+  for_each = local.platform.alb_listener_arns
+
+  listener_arn = each.value
   priority     = var.listener_priority
 
   action {
@@ -164,7 +167,7 @@ resource "aws_lb_listener_rule" "main" {
     }
   }
 
-  tags = { Name = local.name }
+  tags = { Name = "${local.name}-${each.key}" }
 }
 
 # --- Autoscaling ------------------------------------------------------------
