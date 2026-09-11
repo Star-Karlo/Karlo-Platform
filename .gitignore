@@ -10,3 +10,9 @@ vite.config.ts.timestamp-*
 .env
 .env.*
 !.env.example
+
+# Terraform. State lives in S3; the tfvars hold real hostnames and keys.
+terraform/.terraform/
+terraform/*.tfvars
+!terraform/*.tfvars.example
+terraform/.terraform.lock.hcl

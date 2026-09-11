@@ -1,0 +1,15 @@
+# Copy to prod.tfvars (gitignored) and fill in.
+environment = "prod"
+
+# The hostname users type. Also what ACM must have a certificate for.
+public_hostname = "app.karlo.id"
+
+# Public by nature — the browser fetches tiles with it. Restrict to your
+# domains in MAPID's console; that, not secrecy, is the protection.
+public_mapid_basemap_key = ""
+
+# Customer Help. Leave both empty to ship without it.
+comms_service_url        = ""
+comms_api_key_secret_arn = ""
+
+tasks_in_public_subnets = true
