@@ -110,7 +110,7 @@ variable "extra_environment" {
 }
 
 variable "public_hostname" {
-  description = "The hostname users type, e.g. app.karlo.id. adapter-node validates form origins against it."
+  description = "The hostname users type, e.g. tms.karlo.id. adapter-node validates form origins against it."
   type        = string
 }
 
