@@ -1,0 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+@import './lib/styles/tokens.css';
+
+/*
+ * The TMS Revamp design system, ported verbatim.
+ *
+ * Imported AFTER our own tokens so its palette wins where the two disagree,
+ * and BEFORE Tailwind so utility classes can still override a component class
+ * on a case-by-case basis.
+ *
+ * It is plain CSS with its own class vocabulary — .card, .btn, .badge,
+ * .order-tab — rather than Tailwind. The two coexist deliberately: the ported
+ * screens use the vocabulary they were written against, and everything already
+ * built keeps working, because the bridge below maps our Tailwind colour names
+ * onto the same variables.
+ */
+@import './lib/styles/revamp.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Bridge: our Tailwind palette, expressed in the ported system's variables.
+ *
+ * Without this the app would be two designs at once — screens using Tailwind
+ * classes on the old palette beside ported screens on the new one. Redefining
+ * the tokens means every existing screen adopts the new colours without being
+ * rewritten, which is the whole point of taking the design system first.
+ */
+:root {
+	--karlo-navy: var(--navy);
+	--karlo-cyan: var(--primary);
+	--karlo-bg-page: var(--surface-alt);
+	--karlo-bg-surface: var(--surface);
+	--karlo-bg-zebra: var(--surface-variant);
+	--karlo-text-muted: var(--on-surface-variant);
+	--karlo-border-card: var(--outline-variant);
+	--karlo-border-input: var(--outline);
+	--karlo-border-divider: var(--outline-variant);
+}
+
+@layer base {
+	html {
+		-webkit-font-smoothing: antialiased;
+	}
+
+	body {
+		@apply bg-canvas font-sans text-base text-ink;
+	}
+
+	/* The spec calls out the missing focus ring as an accessibility gap. Give
+	   every interactive element one, in the action colour. */
+	:focus-visible {
+		@apply outline-none ring-2 ring-cyan ring-offset-1;
+	}
+}
+
+@layer components {
+	/* Cards, tables and mini-lists get a cyan scrollbar when they overflow.
+	   Applied via a class rather than globally so the page scrollbar stays
+	   native. */
+	.scroll-cyan {
+		scrollbar-width: thin;
+		scrollbar-color: theme('colors.cyan.DEFAULT') transparent;
+	}
+	.scroll-cyan::-webkit-scrollbar {
+		width: 6px;
+		height: 6px;
+	}
+	.scroll-cyan::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	.scroll-cyan::-webkit-scrollbar-thumb {
+		background-color: theme('colors.cyan.DEFAULT');
+		border-radius: 999px;
+	}
+}

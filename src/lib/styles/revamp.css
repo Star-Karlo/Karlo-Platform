@@ -1,0 +1,2341 @@
+:root{
+  --primary:#0B57D0;
+  --primary-dark:#0842A0;
+  --primary-container:#D3E3FD;
+  --on-primary-container:#001A41;
+  --surface:#FFFFFF;
+  --surface-alt:#F6F8FC;
+  --surface-variant:#E8EDF6;
+  --outline:#C4C9D4;
+  --outline-variant:#DDE2EA;
+  --on-surface:#1A1C1E;
+  --on-surface-variant:#5B5F67;
+  --success:#146C2E;
+  --success-container:#DDF3E4;
+  --warning:#8A5300;
+  --warning-container:#FFEACC;
+  --error:#B3261E;
+  --error-container:#F9DEDC;
+  --navy:#101F42;
+  --navy-light:#1B3268;
+  --r-sm:8px; --r-md:12px; --r-lg:20px; --r-xl:28px;
+  --shadow-1: 0 1px 2px rgba(11,25,58,.06), 0 1px 3px rgba(11,25,58,.08);
+  --shadow-2: 0 2px 6px rgba(11,25,58,.08), 0 4px 14px rgba(11,25,58,.10);
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  font-family:'Google Sans Flex','Roboto',system-ui,sans-serif;
+  background:var(--surface-alt);
+  color:var(--on-surface);
+  font-size:14px;
+  line-height:1.5;
+}
+.mono{font-family:'Google Sans Flex','Roboto Mono',monospace; font-variant-numeric:tabular-nums;}
+button{font-family:inherit; cursor:pointer;}
+input,select,textarea{font-family:inherit; font-size:14px;}
+
+/* ---------- SHELL ---------- */
+.shell{display:flex; min-height:calc(100vh - 56px);}
+
+/* ---------- Global Navy App Header ---------- */
+.app-header{
+  height:56px; background:linear-gradient(90deg,var(--navy),var(--navy-light));
+  display:flex; align-items:center; justify-content:space-between; padding:0 20px;
+  position:sticky; top:0; z-index:150;
+}
+.app-header-left{display:flex; align-items:center; gap:14px;}
+.app-logo-chip{display:flex; align-items:center; gap:10px;}
+/* The artwork is already white, so the four drop-shadows that used to fake a
+   white outline here only smeared a halo over it. Left plain. */
+.app-logo-img{height:26px; width:auto; display:block;}
+.app-logo-text{color:#fff; font-weight:700; font-size:19px; letter-spacing:.2px;}
+.app-header-right{display:flex; align-items:center; gap:22px;}
+.ah-link{display:flex; align-items:center; gap:8px; background:transparent; border:none; color:#E7ECFB; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;}
+.ah-link:hover{color:#fff;}
+.ah-lang{color:#E7ECFB; font-size:13px; font-weight:700; letter-spacing:.5px; opacity:.9;}
+.ah-icon-btn{display:flex; align-items:center; gap:7px; background:transparent; border:none; color:#E7ECFB; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;}
+.ah-icon-btn:hover{color:#fff;}
+
+/* ---------- Sidebar profile card ---------- */
+.profile-avatar{
+  width:42px; height:42px; border-radius:12px; background:var(--primary-container); color:var(--primary-dark);
+  display:flex; align-items:center; justify-content:center; position:relative; flex-shrink:0;
+}
+.verified-dot{position:absolute; bottom:-3px; right:-3px; width:16px; height:16px; border-radius:50%; background:var(--primary); color:#fff; font-size:9px; display:flex; align-items:center; justify-content:center; border:2px solid #fff;}
+.sidebar{
+  width:248px; flex-shrink:0; background:var(--surface);
+  border-right:1px solid var(--outline-variant);
+  display:flex; flex-direction:column; padding:20px 12px;
+  position:sticky; top:56px; height:calc(100vh - 56px);
+  transition:width .2s ease, padding .2s ease;
+  overflow:hidden;
+}
+.sidebar-hamburger{
+  background:transparent; border:none; color:var(--on-surface-variant); padding:8px; border-radius:8px;
+  display:flex; align-items:center; justify-content:flex-start; cursor:pointer; margin-bottom:8px; width:fit-content;
+}
+.sidebar-hamburger:hover{background:var(--surface-variant); color:var(--primary);}
+.sidebar.collapsed .sidebar-hamburger{justify-content:center; width:100%;}
+.brand{
+  width:100%; display:flex; align-items:center; gap:12px; padding:6px 8px 20px 8px; margin-bottom:6px;
+  border:none; border-bottom:1px solid var(--outline-variant); background:transparent; text-align:left; cursor:pointer; border-radius:0;
+}
+.brand:hover{background:var(--surface-variant);}
+.brand.active .brand-text b{color:var(--primary);}
+.brand .chev{margin-left:auto; flex-shrink:0; transition:transform .2s ease; display:flex; color:var(--on-surface-variant);}
+.brand.open .chev{transform:rotate(180deg);}
+.brand-text{display:flex; flex-direction:column; line-height:1.25; white-space:nowrap;}
+.brand-text b{font-size:13.5px; font-weight:700;}
+.brand-text span{font-size:11.5px; color:var(--on-surface-variant);}
+.nav{
+  display:flex; flex-direction:column; gap:2px; margin-top:6px; flex:1; min-height:0; overflow-y:auto; overflow-x:hidden;
+  padding-right:4px;
+  /* Always-visible thin scrollbar — a hidden/hover-only OS scrollbar (the
+     macOS/trackpad default) gives no hint this list can scroll once every
+     group is expanded, so the last few menu items become unreachable in
+     practice even though the container itself already scrolls. */
+  scrollbar-width:thin; scrollbar-color:var(--outline-variant) transparent;
+}
+.nav::-webkit-scrollbar{width:6px;}
+.nav::-webkit-scrollbar-track{background:transparent;}
+.nav::-webkit-scrollbar-thumb{background:var(--outline-variant); border-radius:3px;}
+.nav::-webkit-scrollbar-thumb:hover{background:var(--on-surface-variant);}
+.nav a{
+  display:flex; align-items:center; gap:12px;
+  padding:10px 14px; border-radius:24px; text-decoration:none;
+  color:var(--on-surface-variant); font-size:12px; font-weight:500; white-space:nowrap;
+}
+.nav a:hover{background:var(--surface-variant);}
+.nav a.active{background:var(--primary-container); color:var(--on-primary-container); font-weight:700;}
+.nav-parent{
+  width:100%; display:flex; align-items:center; gap:12px; border:none; background:transparent;
+  padding:10px 14px; border-radius:24px; color:var(--on-surface-variant); font-size:12px; font-weight:500; text-align:left; white-space:nowrap;
+  flex-shrink:0;
+}
+.nav-icon{width:20px; height:20px; flex-shrink:0; display:flex; align-items:center; justify-content:center;}
+.nav-label{
+  box-sizing:border-box; display:block; flex-grow:1; flex-shrink:1; flex-basis:0%; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; cursor:pointer;
+}
+.nav-parent .chev{margin-left:auto; flex-shrink:0; transition:transform .2s ease; display:flex;}
+.nav-parent.active{background:var(--primary-container); color:var(--on-primary-container); font-weight:700;}
+.nav-parent.open .chev{transform:rotate(180deg);}
+/* flex-shrink:0 is the real fix here — as a flex item inside .nav's
+   column, this would otherwise get proportionally SQUEEZED (its content
+   clipped to near-zero height, independent of max-height) whenever every
+   open group's combined height exceeds .nav's own box, instead of .nav
+   just scrolling past its bounds like overflow-y:auto is supposed to make
+   it do. Reproduced at a short-viewport height with several groups open —
+   every .nav-sub silently collapsed to ~10px (its own padding, no visible
+   links) even though DOM state and max-height both said "open". */
+.nav-sub{display:flex; flex-direction:column; flex-shrink:0; gap:2px; padding:4px 0 6px 32px; overflow:hidden; max-height:0; opacity:0; transition:max-height .22s ease, opacity .18s ease, padding .22s ease;}
+/* 600px comfortably fits any group this app has today (Master Data's own 5
+   items already sit right at the old 200px ceiling) with headroom for more
+   being added later — the real scroll boundary is .nav's own max-height
+   below, not this per-group one. */
+.nav-parent.open + .nav-sub, .brand.open + .nav-sub{max-height:600px; opacity:1; padding:4px 0 6px 32px;}
+.nav-sub .sub-link{display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:16px; text-decoration:none; color:var(--on-surface-variant); font-size:12px; font-weight:500; white-space:nowrap;}
+.nav-sub .sub-link:hover{background:var(--surface-variant);}
+.nav-sub .sub-link.sub-active{color:var(--primary); font-weight:700; background:var(--primary-container);}
+.logout-btn{
+  width:100%; display:flex; align-items:center; gap:12px; border:none; background:transparent;
+  padding:10px 14px; border-radius:24px; color:var(--on-surface-variant); font-size:12px; font-weight:500;
+  text-align:left; cursor:pointer; font-family:inherit; margin-top:auto; white-space:nowrap;
+}
+.logout-btn:hover{background:var(--surface-variant); color:var(--error);}
+.sidebar.collapsed .logout-btn{justify-content:center; padding:10px; gap:0;}
+.sidebar-foot{padding:14px 10px 4px; border-top:1px solid var(--outline-variant); font-size:11.5px; color:var(--on-surface-variant); white-space:nowrap; overflow:hidden;}
+
+/* ---------- Collapsed (icon-rail) sidebar ---------- */
+.sidebar.collapsed{width:76px; padding:20px 10px;}
+.sidebar.collapsed .brand{justify-content:center; padding:6px 0 20px;}
+.sidebar.collapsed .brand-text,
+.sidebar.collapsed .nav-label,
+.sidebar.collapsed .chev,
+.sidebar.collapsed .sidebar-foot{display:none;}
+.sidebar.collapsed .nav-parent,
+.sidebar.collapsed .nav a{justify-content:center; padding:10px; gap:0;}
+.sidebar.collapsed .nav-sub{display:none;}
+
+.main{flex:1; min-width:0; display:flex; flex-direction:column;}
+.topbar{
+  height:54px; background:var(--surface); border-bottom:1px solid var(--outline-variant);
+  display:flex; align-items:center; justify-content:flex-start; padding:0 28px;
+  position:sticky; top:56px; z-index:5;
+}
+.topbar-actions{display:flex; align-items:center; gap:10px;}
+.topbar-action-btn{
+  display:flex; align-items:center; gap:10px; padding:6px 14px 6px 6px; border:1px solid var(--outline-variant);
+  border-radius:12px; background:var(--surface); cursor:pointer; font-family:inherit; transition:border-color .15s, background .15s;
+}
+.topbar-action-btn:hover{border-color:var(--primary); background:var(--primary-container);}
+.topbar-action-icon{width:30px; height:30px; border-radius:9px; background:var(--primary-container); color:var(--primary-dark); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.topbar-action-label{font-size:13px; font-weight:700; color:var(--on-surface); white-space:nowrap;}
+.topbar-action-plus{font-size:17px; font-weight:700; color:var(--primary); line-height:1;}
+
+.content{padding:28px 32px 64px; max-width:1680px; width:100%; min-width:0; margin:0 auto;}
+.page-head{display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:22px; flex-wrap:wrap;}
+.page-head h1{font-size:24px; font-weight:700; letter-spacing:-.2px;}
+.page-head p{color:var(--on-surface-variant); margin-top:4px; font-size:13.5px; max-width:560px;}
+
+/* ---------- CARDS ---------- */
+.card{background:var(--surface); border:1px solid var(--outline-variant); border-radius:var(--r-lg); box-shadow:var(--shadow-1);}
+.card-pad{padding:22px 24px;}
+
+.stats-row{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px;}
+.stat{background:var(--surface); border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:16px 18px;}
+.stat .num{font-size:24px; font-weight:700;}
+.stat .lbl{font-size:12px; color:var(--on-surface-variant); margin-top:2px;}
+.stat .delta{font-size:11.5px; margin-top:8px; display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:20px; background:var(--success-container); color:var(--success); font-weight:600;}
+
+/* ---------- Buttons ---------- */
+.btn{border:none; border-radius:20px; padding:10px 20px; font-weight:600; font-size:13.5px; display:inline-flex; align-items:center; gap:8px; transition:filter .15s, background .15s;}
+.btn:disabled{opacity:.5; cursor:not-allowed;}
+.btn-primary{background:var(--primary); color:#fff;}
+.btn-primary:hover{background:var(--primary-dark);}
+.btn-primary:disabled{background:#A9BFEE; cursor:not-allowed;}
+.btn-outline{background:transparent; border:1px solid var(--outline); color:var(--primary);}
+.btn-outline:hover{background:var(--surface-variant);}
+.btn-text{background:transparent; color:var(--primary); padding:8px 10px;}
+.btn-text:hover{background:var(--primary-container);}
+.btn-sm{padding:6px 12px; font-size:12.5px; border-radius:16px;}
+.btn-success{background:var(--success); color:#fff;}
+
+/* ---------- Tabs (Method toggle) ---------- */
+.method-tabs{display:flex; gap:0; border-bottom:1.5px solid var(--outline-variant); width:100%; margin-bottom:22px;}
+.method-tab{border:none; background:transparent; padding:12px 4px; margin-right:28px; font-weight:600; font-size:13.5px; color:var(--on-surface-variant); border-bottom:2.5px solid transparent; position:relative; top:1.5px;}
+.method-tab.active{color:var(--primary); border-bottom-color:var(--primary); font-weight:700;}
+.linimasa-tabs .method-tab{font-size:12px; margin-right:16px; padding:10px 4px; white-space:nowrap;}
+
+.hidden{display:none !important;}
+
+.note-banner{display:flex; gap:12px; align-items:flex-start; background:var(--primary-container); border-radius:var(--r-md); padding:14px 16px; margin-top:16px;}
+.note-banner .ic{font-size:18px;}
+.note-banner b{color:var(--on-primary-container); font-size:13px;}
+.note-banner p{color:var(--on-primary-container); font-size:12.5px; margin-top:2px; opacity:.85;}
+
+/* ---------- Info Driver (check by username) ---------- */
+.info-header{background:linear-gradient(135deg,var(--primary),#4C8DFF); color:#fff; text-align:center; font-weight:700; font-size:15.5px; padding:15px;}
+.info-body{display:grid; grid-template-columns:190px 1fr; gap:26px;}
+.photo-placeholder{border:1.5px dashed var(--outline); border-radius:var(--r-md); background:var(--surface-alt); color:var(--on-surface-variant); font-size:12px; display:flex; align-items:center; justify-content:center; text-align:center; width:190px; height:190px; overflow:hidden;}
+.photo-placeholder.has-doc{border-style:solid; border-color:var(--outline-variant); background:var(--surface);}
+.photo-placeholder.small{width:100%; height:110px;}
+.info-fields{display:flex; flex-direction:column; gap:14px;}
+.info-label{font-weight:700; font-size:12px; color:var(--on-surface-variant); display:block; text-transform:uppercase; letter-spacing:.3px;}
+.info-value{font-size:14.5px; color:var(--on-surface); margin-top:3px; display:block;}
+.info-docs{display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:20px;}
+.info-actions{display:flex; justify-content:center; gap:14px; margin-top:26px;}
+
+/* ---------- Forms ---------- */
+.field{margin-bottom:16px;}
+.field label{display:block; font-size:12.5px; font-weight:600; color:var(--on-surface-variant); margin-bottom:6px;}
+.field input,.field select{
+  width:100%; padding:11px 18px; border:1px solid var(--outline); border-radius:999px;
+  background:var(--surface); outline:none; transition:border .15s, box-shadow .15s;
+}
+.field input:focus,.field select:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(11,87,208,.14);}
+.field input:disabled,.field select:disabled{background:var(--surface-alt); color:var(--on-surface-variant); cursor:not-allowed;}
+.field input:read-only{background:var(--surface-alt); color:var(--on-surface-variant);}
+.field textarea{
+  width:100%; padding:11px 18px; border:1px solid var(--outline); border-radius:var(--r-md);
+  background:var(--surface); outline:none; resize:vertical; transition:border .15s, box-shadow .15s;
+}
+.field textarea:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(11,87,208,.14);}
+.field .hint{font-size:11.5px; color:var(--on-surface-variant); margin-top:5px;}
+.route-field-row{display:flex; align-items:center; gap:8px;}
+.route-field-select{flex:1; min-width:0;}
+.route-field-row .btn-sm{flex-shrink:0; white-space:nowrap;}
+.route-entry{margin-bottom:12px;}
+
+/* Custom field select (replaces native <select> where the dropdown's arrow
+   spacing and popup placement/colors need to be fully controlled). */
+.field-select{position:relative; width:100%;}
+.field-select-btn{
+  display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%;
+  padding:11px 16px 11px 18px; border:1px solid var(--outline); border-radius:999px; background:var(--surface);
+  font-size:13.5px; font-weight:500; color:var(--on-surface); cursor:pointer; font-family:inherit; text-align:left;
+  transition:border .15s, box-shadow .15s;
+}
+.field-select-btn span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.field-select-btn span.placeholder{color:var(--on-surface-variant); font-weight:400;}
+.field-select-btn:hover{border-color:var(--primary);}
+.field-select.open .field-select-btn{border-color:var(--primary); box-shadow:0 0 0 3px rgba(11,87,208,.14);}
+.field-select-btn-multi{border-radius:var(--r-md); min-height:44px; padding:8px 14px 8px 16px; flex-wrap:wrap;}
+.field-select-chips{display:flex; flex-wrap:wrap; gap:6px; flex:1; min-width:0;}
+.field-select-chip{display:inline-flex; align-items:center; gap:4px; background:var(--primary-container); color:var(--primary); border-radius:999px; padding:4px 6px 4px 12px; font-size:12px; font-weight:600; white-space:nowrap;}
+.field-select-chip-remove{display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; color:var(--primary);}
+.field-select-chip-remove:hover{background:rgba(0,0,0,.1);}
+.field-select-chip-remove svg{width:10px; height:10px;}
+/* Compact variant (smaller field) + chips rendered below instead of inside
+   the button — used where the field sits in a tight space (e.g. a sidebar
+   filter) and shouldn't grow taller as more options get picked. */
+.field-select-btn-sm{padding:6px 10px 6px 12px; font-size:12px; border-radius:8px;}
+.field-select-btn-sm .chevron{width:13px; height:13px;}
+.field-select-chips-below{display:flex; flex-wrap:wrap; gap:5px; margin-top:6px;}
+.field-select-chip-sm{display:inline-flex; align-items:center; gap:3px; background:var(--primary-container); color:var(--primary); border-radius:999px; padding:2px 5px 2px 9px; font-size:11px; font-weight:600; white-space:nowrap;}
+.field-select-chip-remove-sm{display:inline-flex; align-items:center; justify-content:center; width:13px; height:13px; border-radius:50%; color:var(--primary);}
+.field-select-chip-remove-sm:hover{background:rgba(0,0,0,.1);}
+.field-select-chip-remove-sm svg{width:8px; height:8px;}
+.field-select-btn .chevron{width:15px; height:15px; flex-shrink:0; color:var(--on-surface-variant); transition:transform .15s;}
+.field-select.open .field-select-btn .chevron{transform:rotate(180deg);}
+.field-select-btn-searchable{cursor:text;}
+.field-select.open .field-select-btn.field-select-btn-searchable{box-shadow:none;}
+.field-select-btn-searchable input{border:none; outline:none; background:transparent; padding:0; margin:0; font:inherit; color:inherit; flex:1; min-width:0;}
+.field-select-btn-searchable input::placeholder{color:var(--on-surface-variant); font-weight:400;}
+.field-select-menu{
+  position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:60;
+  background:#fff; border:1px solid var(--outline-variant); border-radius:12px;
+  box-shadow:var(--shadow-2); padding:5px; max-height:240px; overflow-y:auto;
+}
+/* Teleported to <body> and placed via inline top/left/width so it can never
+   be clipped by a scrollable ancestor (e.g. a modal body). z-index high
+   enough to clear Leaflet's own internal panes/controls (leaflet.css goes
+   up to 1000 for .leaflet-top/.leaflet-bottom) — a filter like Control
+   Tower's status filter sits right above the map, and at the old z-index
+   of 300 its dropdown was rendering underneath Leaflet's layers instead
+   of over them. */
+.field-select-menu.field-select-menu-teleported{position:fixed; left:auto; right:auto; z-index:1500;}
+.field-select-option{padding:9px 13px; font-size:13px; font-weight:500; color:var(--on-surface); border-radius:8px; cursor:pointer; display:flex; align-items:center; gap:9px;}
+input.field-select-checkbox{width:15px; height:15px; padding:0; border:none; border-radius:3px; background:none; accent-color:var(--primary); flex-shrink:0; flex-grow:0; pointer-events:none;}
+.field-select-option-label{flex:1 1 auto; min-width:0;}
+.field-select-option:hover{background:var(--surface-alt);}
+.field-select-option.selected{background:var(--primary-container); color:var(--primary-dark); font-weight:700;}
+.field-select-empty{padding:9px 13px; font-size:12.5px; color:var(--on-surface-variant);}
+
+/* Document image upload (NPWP/NIB, etc.) */
+.upload-image-row{display:flex; align-items:center; gap:12px;}
+.upload-image-preview{
+  width:72px; height:72px; border-radius:10px; border:1px solid var(--outline-variant);
+  object-fit:cover; background:var(--surface-alt); flex-shrink:0;
+}
+.upload-image-placeholder{
+  width:72px; height:72px; border-radius:10px; border:1.5px dashed var(--outline-variant);
+  display:flex; align-items:center; justify-content:center; font-size:22px; color:var(--on-surface-variant);
+  background:var(--surface-alt); flex-shrink:0;
+}
+.upload-image-actions{display:flex; flex-direction:column; gap:6px;}
+.upload-image-input{position:absolute; width:1px; height:1px; opacity:0; overflow:hidden;}
+.upload-image-remove{font-size:11.5px; color:var(--error); background:none; border:none; cursor:pointer; text-align:left; padding:0; font-family:inherit;}
+.upload-doc-row{display:flex; align-items:center; gap:12px;}
+.upload-doc-name{font-size:12.5px; font-weight:600; color:var(--on-surface); max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.upload-doc-view{font-size:11.5px; color:var(--primary); font-weight:600;}
+
+/* Warehouse map picker (Leaflet + OpenStreetMap, no API key required) */
+.map-picker-search{display:flex; gap:8px; margin-bottom:8px;}
+.map-picker-search input{
+  flex:1; padding:10px 16px; border:1px solid var(--outline); border-radius:999px;
+  background:var(--surface); outline:none; font-size:13px; transition:border .15s, box-shadow .15s;
+}
+.map-picker-search input:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(11,87,208,.14);}
+.map-picker-error{font-size:11.5px; color:var(--error); margin-bottom:8px;}
+.map-picker-canvas{width:100%; height:180px; border-radius:var(--r-md); border:1px solid var(--outline-variant); overflow:hidden;}
+.latlng-display input{font-family:'Google Sans Flex','Roboto Mono',monospace; font-variant-numeric:tabular-nums;}
+
+.two-col{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+.two-col > .field, .three-col > .field{min-width:0;}
+.three-col{display:grid; grid-template-columns:1.4fr 1fr .8fr; gap:16px;}
+
+/* ---------- Option cards (A/B choice selector) ---------- */
+.option-card-row{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px;}
+.option-card{
+  display:flex; flex-direction:column; gap:6px; padding:14px 16px; border:1.5px solid var(--outline-variant);
+  border-radius:var(--r-md); cursor:pointer; background:var(--surface); transition:border-color .15s, background .15s;
+}
+.option-card:hover{border-color:var(--primary);}
+.option-card:has(input:disabled){cursor:default;}
+.option-card:has(input:disabled):hover{border-color:var(--outline-variant);}
+.option-card.selected:has(input:disabled):hover{border-color:var(--primary);}
+.option-card.selected{border-color:var(--primary); background:var(--primary-container);}
+.option-card-head{display:flex; align-items:center; gap:10px;}
+.option-card-head input[type="radio"]{width:16px; height:16px; accent-color:var(--primary); cursor:pointer; flex-shrink:0;}
+.option-card-title{font-weight:700; font-size:13.5px; color:var(--on-surface);}
+.option-card.selected .option-card-title{color:var(--on-primary-container);}
+.option-card-desc{font-size:12px; color:var(--on-surface-variant); line-height:1.5; margin-left:26px;}
+.option-card.selected .option-card-desc{color:var(--on-primary-container); opacity:.85;}
+.option-detail{border-top:1px solid var(--outline-variant); margin-top:2px; padding-top:16px;}
+.ratio-row{display:flex; align-items:center; gap:12px; margin-bottom:10px;}
+.ratio-row:last-child{margin-bottom:0;}
+.ratio-row .ratio-label{flex:1; font-size:13px; font-weight:600; color:var(--on-surface);}
+.ratio-row .field{margin-bottom:0; width:160px; flex-shrink:0;}
+@media(max-width:640px){
+  .option-card-row{grid-template-columns:1fr;}
+}
+
+/* ---------- Preview box (signature element) ---------- */
+.gen-box{
+  border:1.5px dashed var(--outline); border-radius:var(--r-md); padding:18px 20px; background:var(--surface-alt);
+}
+.gen-title{font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--on-surface-variant); margin-bottom:12px;}
+.gen-formula{display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:14px;}
+.chip{padding:5px 11px; border-radius:8px; font-size:12.5px; font-weight:600; flex-shrink:0;}
+.chip-name{background:#E4ECFF; color:var(--primary-dark);}
+.chip-init{background:#FDEBD3; color:var(--warning);}
+.chip-plus{color:var(--on-surface-variant); font-weight:700;}
+.chip-dupe{background:var(--error-container); color:var(--error);}
+/* Wraps by default (detail views); inside a horizontally-scrolling table
+   cell (.scroll-table) it stays on one line instead, so the column widens
+   to fit and the row itself never grows taller. */
+.chip-row{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+.scroll-table .chip-row{flex-wrap:nowrap;}
+.result-row{display:flex; gap:22px; flex-wrap:wrap;}
+.result-item{}
+.result-item .rl{font-size:11px; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.4px; margin-bottom:3px;}
+.result-item .rv{font-family:'Google Sans Flex','Roboto Mono',monospace; font-weight:700; font-size:17px; color:var(--on-surface); font-variant-numeric:tabular-nums;}
+.dupe-flag{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:var(--error); background:var(--error-container); padding:3px 9px; border-radius:12px; margin-left:8px; vertical-align:middle;}
+
+/* ---------- WA preview ---------- */
+.wa-wrap{display:flex; gap:22px; margin-top:18px; flex-wrap:wrap;}
+.wa-phone{
+  width:260px; flex-shrink:0; background:#0B141A; border-radius:22px; padding:10px;
+}
+.wa-screen{background:#E9DFD3; border-radius:16px; overflow:hidden; min-height:340px; display:flex; flex-direction:column;}
+.wa-head{background:#075E54; color:#fff; padding:12px 14px; font-size:12.5px; font-weight:700; display:flex; align-items:center; gap:8px;}
+.wa-head .dot{width:26px; height:26px; border-radius:50%; background:rgba(255,255,255,.25); display:flex; align-items:center; justify-content:center; font-size:11px;}
+.wa-body{padding:12px; flex:1;}
+.wa-bubble{background:#fff; border-radius:8px; padding:10px 12px; font-size:11.5px; line-height:1.55; box-shadow:0 1px 1px rgba(0,0,0,.1); white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; max-width:100%;}
+.wa-bubble b{font-weight:700;}
+.wa-time{font-size:9.5px; color:#999; text-align:right; margin-top:4px;}
+
+.side-actions{flex:1; min-width:240px; display:flex; flex-direction:column; gap:10px;}
+.status-pill{display:inline-flex; align-items:center; gap:6px; padding:5px 13px; border-radius:20px; font-size:12px; font-weight:700; width:fit-content; background:#fff; border:1.4px solid transparent;}
+.status-sent{border-color:#9FDCB4; color:var(--success);}
+.status-fail{border-color:#F0AFA8; color:var(--error);}
+.status-pending{border-color:#F5C98A; color:var(--warning);}
+.login-badge{display:inline-flex; align-items:center; gap:5px; padding:4px 11px; border-radius:14px; font-size:11.5px; font-weight:700; width:fit-content; background:#fff; border:1.4px solid transparent;}
+.login-done{border-color:#9FDCB4; color:var(--success);}
+.login-pending{border-color:var(--outline-variant); color:var(--on-surface-variant);}
+
+/* ---------- Table ---------- */
+.table-wrap{overflow-x:auto; border:1px solid var(--outline-variant); border-radius:var(--r-md);}
+table{width:100%; border-collapse:collapse; font-size:12px;}
+th{text-align:left; background:#F4F6F9; padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--on-surface-variant); font-weight:700; border-bottom:1px solid var(--outline-variant); white-space:nowrap;}
+td{padding:9px 14px; border-bottom:1px solid var(--outline-variant); vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tbody tr:nth-child(odd){background:#FFFFFF;}
+tbody tr:nth-child(even){background:#EEF1F5;}
+tbody tr:hover{background:var(--primary-container); background:#EAF1FE;}
+.badge{padding:4px 11px; border-radius:20px; font-size:11px; font-weight:700; display:inline-block; background:#fff; border:1.4px solid transparent;}
+.badge-self{border-color:#C9B8F5; color:#5B3EBF;}
+.badge-planner{border-color:#AFC8F7; color:var(--primary-dark);}
+.badge-active{border-color:#9FDCB4; color:var(--success);}
+.badge-wait{border-color:#F5C98A; color:var(--warning);}
+.badge-fail{border-color:#F0AFA8; color:var(--error);}
+.icon-btn{border:none; background:transparent; color:var(--on-surface-variant); padding:6px; border-radius:8px; font-size:14px;}
+.icon-btn:hover{background:var(--surface-variant); color:var(--primary);}
+
+/* ---------- Order list: KPI stat cards (horizontal scroll) ---------- */
+.stat-scroll-wrap{position:relative; margin-bottom:20px;}
+.stat-scroll-row{display:flex; gap:14px; overflow-x:auto; scroll-behavior:smooth; padding-bottom:2px; scrollbar-width:none;}
+.stat-scroll-row::-webkit-scrollbar{display:none;}
+.stat-card{flex:0 0 auto; width:220px; background:var(--surface); border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:14px 16px;}
+.stat-card-head{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
+.stat-card-icon{width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-weight:700; font-size:12px;}
+.stat-card-label{font-size:12.5px; font-weight:600; color:var(--on-surface-variant);}
+.stat-card-divider{height:1px; background:var(--outline-variant); margin-bottom:10px;}
+.stat-card-num{font-size:22px; font-weight:700; color:var(--on-surface);}
+.stat-scroll-arrow{
+  position:absolute; top:38px; right:-4px; transform:translateY(-50%); width:32px; height:32px; border-radius:50%;
+  background:#fff; border:1px solid var(--outline-variant); box-shadow:var(--shadow-2); display:flex; align-items:center;
+  justify-content:center; color:var(--on-surface-variant); cursor:pointer; z-index:2;
+}
+.stat-scroll-arrow:hover{color:var(--primary); border-color:var(--primary);}
+.stat-icon-blue{background:var(--primary-container); color:var(--primary-dark);}
+.stat-icon-amber{background:var(--warning-container); color:var(--warning);}
+.stat-icon-green{background:var(--success-container); color:var(--success);}
+.stat-icon-navy{background:var(--navy); color:#fff;}
+
+/* ---------- Order list: status filter tabs (horizontal scroll) + toolbar ---------- */
+.order-toolbar{display:flex; align-items:flex-end; gap:14px; border-bottom:1.5px solid var(--outline-variant); margin-bottom:18px;}
+.order-tabs-row{display:flex; gap:0; overflow-x:auto; scrollbar-width:none; flex:1; min-width:0;}
+.order-tabs-row::-webkit-scrollbar{display:none;}
+.order-tab{border:none; background:transparent; padding:12px 16px; margin-right:2px; font-weight:600; font-size:13px; color:var(--on-surface-variant); border-bottom:2.5px solid transparent; white-space:nowrap; position:relative; top:1.5px; flex-shrink:0;}
+.order-tab.active{color:var(--primary); border-bottom-color:var(--primary); font-weight:700;}
+.order-toolbar-actions{display:flex; gap:10px; flex-shrink:0; padding-bottom:10px;}
+
+/* ---------- Order list: shipper cell ---------- */
+.shipper-cell{display:flex; align-items:center; gap:10px;}
+.shipper-avatar{width:30px; height:30px; border-radius:50%; background:var(--primary-container); color:var(--primary-dark); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:11px; position:relative; flex-shrink:0;}
+.shipper-avatar .verified-dot{width:13px; height:13px; font-size:7px; bottom:-2px; right:-2px; border-width:1.5px;}
+.shipper-name{font-weight:600; font-size:12.5px; color:var(--on-surface);}
+
+.table-footer-bar{text-align:center; padding:12px; margin-top:12px; background:var(--surface-alt); color:var(--on-surface-variant); font-size:12.5px; border-radius:var(--r-md);}
+
+/* ---------- Order list: single-line rows, horizontal scroll, frozen Timer/Kontrol columns ----------
+   Two independent <table> elements (scrollable left + fixed right) instead of
+   `position:sticky` on individual cells — sticky cells paint on top of
+   whatever normal-flow content shares that screen position once the table is
+   wider than its container, which visually swallowed the Muatan/Status
+   columns. Splitting the frozen columns into their own table sidesteps that. */
+.spot-order-wrap{display:flex; align-items:stretch; border:1px solid var(--outline-variant); border-radius:var(--r-md); overflow:hidden; background:var(--surface);}
+.spot-order-scroll{overflow-x:auto; flex:1; min-width:0;}
+/* width:100% (not a fixed px width) lets the columns below — all specified
+   in % rather than px — scale proportionally to fill whatever room
+   .spot-order-scroll actually has (a wide monitor no longer leaves a dead
+   gap to the right of the table); min-width keeps cells from getting
+   crushed illegibly on a narrow one, falling back to the wrapper's own
+   horizontal scroll instead. */
+.spot-order-table{table-layout:fixed; width:100%; min-width:1256px;}
+.spot-order-table th,
+.spot-order-table td{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+/* ---------- Table with frozen trailing columns (horizontal scroll) ---------- */
+.scroll-table td{white-space:nowrap;}
+.sticky-col-aksi{position:sticky; right:0; width:96px; min-width:96px;}
+.sticky-col-status{position:sticky; right:96px; width:92px; min-width:92px; box-shadow:-6px 0 6px -6px rgba(20,24,32,.15) inset;}
+th.sticky-col-aksi,th.sticky-col-status{background:#F4F6F9; z-index:2;}
+tbody tr:nth-child(odd) td.sticky-col-aksi,
+tbody tr:nth-child(odd) td.sticky-col-status{background:#FFFFFF;}
+tbody tr:nth-child(even) td.sticky-col-aksi,
+tbody tr:nth-child(even) td.sticky-col-status{background:#EEF1F5;}
+tbody tr:hover td.sticky-col-aksi,
+tbody tr:hover td.sticky-col-status{background:#EAF1FE;}
+td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
+
+/* ---------- Truck type x size compatibility matrix ---------- */
+.truck-matrix-table{border-collapse:collapse; font-size:12.5px; white-space:nowrap;}
+.truck-matrix-table th{text-align:center; background:#F4F6F9; padding:10px 16px; font-size:11.5px; font-weight:700; color:var(--on-surface-variant); border-bottom:1px solid var(--outline-variant);}
+.truck-matrix-table td{text-align:center; padding:8px 16px; border:1px solid var(--outline-variant);}
+.truck-matrix-row-label{text-align:left !important; font-weight:600; color:var(--on-surface); background:#FAFBFC;}
+.truck-matrix-cell input[type="checkbox"]{width:16px; height:16px; accent-color:var(--primary); cursor:pointer;}
+.truck-matrix-check{display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:4px; border:1.5px solid var(--outline-variant); background:#fff;}
+.truck-matrix-check.checked{background:var(--success); border-color:var(--success);}
+.truck-matrix-check svg{width:10px; height:10px; color:#fff;}
+/* Detail Shipment summary card (Step 3 — Pick your fleet) */
+.detail-shipment-card{border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:20px 22px; display:flex; flex-direction:column; gap:18px;}
+.detail-shipment-row-pair{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+.detail-shipment-row{display:flex; align-items:center; gap:14px;}
+.detail-shipment-icon{width:42px; height:42px; border-radius:12px; background:var(--primary-container); color:var(--primary-dark); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.detail-shipment-icon svg{width:20px; height:20px;}
+.detail-shipment-label{font-weight:700; font-size:13.5px; color:var(--on-surface); margin-bottom:2px;}
+.detail-shipment-value{font-size:12.5px; color:var(--on-surface-variant);}
+.fleet-shipment-card{margin-bottom:16px;}
+.fleet-shipment-card:last-child{margin-bottom:0;}
+
+/* Step 4 — Review & Submit */
+.review-chip-group{display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:16px;}
+.review-chip-label{font-size:12px; font-weight:700; color:var(--on-surface-variant); margin-right:2px;}
+.review-chip{background:var(--surface-alt); border:1px solid var(--outline-variant); border-radius:999px; padding:5px 12px; font-size:12px; font-weight:600; color:var(--on-surface);}
+.review-value-row{display:flex; align-items:center; justify-content:space-between; margin-top:20px; padding-top:16px; border-top:1px solid var(--outline-variant); font-size:13px; color:var(--on-surface-variant);}
+.review-value-row b{font-size:16px; color:var(--on-surface);}
+.review-value-row-total{margin-top:0; padding-top:0; border-top:none; font-size:14px; font-weight:600;}
+.review-value-row-total b{font-size:19px; color:var(--primary-dark);}
+.review-cost-box{border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:16px 20px; margin:20px 0 24px; background:var(--surface-alt);}
+.review-cost-box-label{font-size:12px; font-weight:700; color:var(--on-surface-variant); margin-bottom:10px;}
+.review-cost-box-row{display:flex; align-items:flex-end; justify-content:space-between; gap:12px;}
+.review-cost-box-title{font-weight:700; font-size:13.5px; color:var(--on-surface);}
+.review-cost-box-hint{font-size:11.5px; color:var(--primary-dark); font-style:italic; margin-top:2px;}
+.review-cost-box-row b{font-size:17px; color:var(--on-surface);}
+
+/* ---------- Multi-step wizard (Internal Order) ---------- */
+.wizard-layout{display:grid; grid-template-columns:240px 1fr; gap:24px; align-items:start;}
+.wizard-sidebar{background:var(--surface); border:1px solid var(--outline-variant); border-radius:var(--r-lg); padding:22px 20px; position:sticky; top:126px;}
+.wizard-sidebar-title{font-size:13.5px; font-weight:700; color:var(--on-surface); margin-bottom:18px;}
+.wizard-step-list{display:flex; flex-direction:column;}
+.wizard-step{display:flex; align-items:flex-start; gap:12px; padding-bottom:22px; position:relative; cursor:pointer; background:none; border:none; text-align:left; font-family:inherit; width:100%;}
+.wizard-step:last-child{padding-bottom:0;}
+.wizard-step:not(:last-child)::before{content:''; position:absolute; left:12px; top:26px; bottom:0; width:2px; background:var(--outline-variant);}
+.wizard-step.completed:not(:last-child)::before{background:var(--primary);}
+.wizard-step-circle{width:25px; height:25px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; background:var(--surface-alt); color:var(--on-surface-variant); border:2px solid var(--outline-variant); z-index:1;}
+.wizard-step.active .wizard-step-circle{background:var(--primary); color:#fff; border-color:var(--primary);}
+.wizard-step.completed .wizard-step-circle{background:var(--primary); color:#fff; border-color:var(--primary);}
+.wizard-step-label{font-size:12.5px; font-weight:600; color:var(--on-surface-variant); line-height:1.4; padding-top:3px;}
+.wizard-step.active .wizard-step-label{color:var(--primary); font-weight:700;}
+.wizard-step.completed .wizard-step-label{color:var(--on-surface);}
+
+.shipment-block{background:var(--surface); border:1px solid var(--outline-variant); border-radius:var(--r-md); margin-bottom:16px;}
+.shipment-block:last-child{margin-bottom:0;}
+.shipment-block-header{display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:var(--surface); border-bottom:1px solid var(--outline-variant); border-radius:var(--r-md) var(--r-md) 0 0; cursor:pointer;}
+.shipment-block-title{font-weight:700; font-size:13.5px;}
+.shipment-block-summary{font-weight:500; font-size:12px; color:var(--on-surface-variant); margin-left:12px;}
+
+.item-detail-table td{vertical-align:middle; padding:8px 10px;}
+.item-detail-table td input{
+  width:100%; min-width:70px; padding:8px 14px; border:1px solid var(--outline); border-radius:999px;
+  background:var(--surface); outline:none; font-size:12.5px; font-family:inherit; color:var(--on-surface);
+  transition:border .15s, box-shadow .15s;
+}
+.item-detail-table td input::placeholder{color:var(--on-surface-variant);}
+.item-detail-table td input:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(11,87,208,.14);}
+.item-detail-table td:nth-child(2) input,
+.item-detail-table td:nth-child(3) input{min-width:90px;}
+.item-detail-table td:nth-child(4),
+.item-detail-table td:nth-child(5),
+.item-detail-table td:nth-child(6){width:56px;}
+.item-detail-table td:nth-child(4) input,
+.item-detail-table td:nth-child(5) input,
+.item-detail-table td:nth-child(6) input{min-width:0; width:56px; padding:8px 6px; text-align:center;}
+.shipment-block-actions{display:flex; align-items:center; gap:8px;}
+.shipment-block-body{padding:20px;}
+.shipment-block-chevron{display:flex; transition:transform .2s ease; color:var(--on-surface-variant);}
+.shipment-block-chevron.open{transform:rotate(180deg);}
+.multi-point-row{margin-bottom:10px;}
+.multi-point-search-row{display:flex; align-items:center; gap:8px;}
+.multi-point-field{flex:1; min-width:0;}
+
+.warehouse-picker-row{display:flex; gap:10px; align-items:center;}
+.warehouse-picker-row .field-select{flex:1;}
+.search-field-row{display:flex; gap:10px; align-items:center;}
+.search-field-row input{flex:1;}
+.modal-box.picker-modal{max-width:1080px;}
+.picker-modal .table-wrap table{font-size:11px;}
+.picker-modal .table-wrap th{font-size:10px; padding:8px 10px;}
+.picker-modal .table-wrap td{padding:7px 10px;}
+.picker-modal .btn-sm{padding:5px 11px; font-size:11px;}
+
+.agreement-select-btn{width:100%; justify-content:center; font-size:12px;}
+.agreement-select-btn-label{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.warehouse-search-field{position:relative;}
+.search-field-results{
+  position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:60; max-height:260px; overflow-y:auto;
+  background:#fff; border:1px solid var(--outline-variant); border-radius:12px; box-shadow:var(--shadow-2); padding:5px;
+}
+.search-result-item{padding:9px 13px; border-radius:8px; cursor:pointer;}
+.search-result-item:hover{background:var(--surface-alt);}
+.search-result-title{font-size:13px; font-weight:600; color:var(--on-surface);}
+.search-result-sub{font-size:11.5px; color:var(--on-surface-variant); margin-top:2px;}
+.search-result-empty{padding:9px 13px; font-size:12.5px; color:var(--on-surface-variant);}
+.picker-modal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;}
+.picker-modal-search{max-width:340px; margin-left:auto; margin-bottom:14px;}
+.picker-modal-tabs{margin-bottom:14px;}
+.wizard-nav-row{display:flex; justify-content:space-between; align-items:center; margin-top:20px;}
+.wizard-step-placeholder{text-align:center; padding:60px 20px; color:var(--on-surface-variant);}
+.wizard-step-placeholder .eic{font-size:34px; margin-bottom:14px;}
+/* Resets the min-width the shared .spot-order-table rule now carries (for
+   the scrollable/responsive left table) — without this the frozen
+   Timer/Kontrol table inherited that same 1256px min-width and starved the
+   scrollable table of nearly all the row's space. */
+.spot-order-table-frozen{width:166px; min-width:0; flex-shrink:0; border-left:1px solid var(--outline-variant);}
+.frozen-icon-btn{width:30px; height:30px; border-radius:8px; border:1.5px solid var(--outline-variant); background:#fff; color:var(--primary); display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;}
+.frozen-icon-btn:hover{background:var(--primary-container); border-color:var(--primary);}
+
+@media(max-width:640px){
+  .stat-card{width:180px;}
+}
+
+.section-title{display:flex; align-items:center; justify-content:space-between; margin:34px 0 14px;}
+.section-title h2{font-size:16px; font-weight:700;}
+.search-mini{display:flex; align-items:center; gap:8px; border:1px solid var(--outline); border-radius:10px; padding:7px 14px; font-size:12.5px; color:var(--on-surface-variant); background:var(--surface); width:220px;}
+.search-mini input{border:none; outline:none; width:100%; background:transparent;}
+
+.toast{
+  position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(20px); opacity:0;
+  background:#1A1C1E; color:#fff; padding:13px 22px; border-radius:12px; font-size:13px; font-weight:500;
+  display:flex; align-items:center; gap:10px; box-shadow:var(--shadow-2); transition:all .25s ease; z-index:50; pointer-events:none;
+}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+.toast .tic{color:#7CDB99; font-size:16px;}
+
+.divider{height:1px; background:var(--outline-variant); margin:22px 0;}
+
+/* ---------- Confirmation Modal ---------- */
+.modal-overlay{position:fixed; inset:0; background:rgba(20,24,32,.52); display:flex; align-items:center; justify-content:center; z-index:200; padding:20px;}
+.modal-overlay.hidden{display:none;}
+.modal-box{background:#fff; border-radius:var(--r-lg); padding:26px 28px; max-width:420px; width:100%; box-shadow:var(--shadow-2); animation:modalPop .15s ease;}
+@keyframes modalPop{from{opacity:0; transform:scale(.96);} to{opacity:1; transform:scale(1);}}
+.modal-box h3{font-size:16.5px; font-weight:700; margin-bottom:10px;}
+.modal-box p{font-size:13px; color:var(--on-surface-variant); line-height:1.65;}
+.modal-actions{display:flex; justify-content:flex-end; gap:10px; margin-top:24px;}
+.btn-danger{background:var(--error); color:#fff;}
+.btn-danger:hover{background:#8f231c;}
+
+.modal-box-lg{max-width:620px; max-height:80vh; display:flex; flex-direction:column;}
+.modal-box-lg .recon-modal-list{overflow-y:auto; margin-top:6px;}
+/* Wide enough for TruckTypeMatrix's full 9-column table (MyTransporter's
+   vendor detail view) to render without its own horizontal scroll —
+   combined with .modal-box-lg for the same max-height/flex behavior,
+   just overriding the width. */
+.modal-box-xl{max-width:1080px;}
+.modal-scroll-body{flex:1; min-height:0; overflow-y:auto; padding-right:6px; margin-right:-6px;}
+
+/* ---------- Rekonsiliasi Post-Trip ---------- */
+.sangu-final-tag{display:inline-block; margin-left:8px; padding:2px 8px; border-radius:20px; background:var(--primary-container); color:var(--primary-dark); font-size:10.5px; font-weight:700; vertical-align:middle;}
+.sangu-needs-input-tag{display:inline-block; margin-left:8px; padding:2px 8px; border-radius:20px; background:var(--warning-container); color:var(--warning); font-size:10.5px; font-weight:700; vertical-align:middle;}
+.sangu-tambahan-tag{display:inline-block; margin-left:8px; padding:2px 8px; border-radius:20px; background:var(--primary-container); color:var(--primary-dark); font-size:10.5px; font-weight:700; vertical-align:middle;}
+.sangu-recon-actions{padding-top:18px; margin-top:18px; border-top:1px solid var(--outline-variant); display:flex; justify-content:flex-end;}
+/* Uang Sangu's own action row additionally carries "Finalisasi" on the
+   left — .sangu-recon-actions itself stays untouched (still flex-end) so
+   the Rekonsiliasi Post-Trip section below, which reuses that same base
+   class for its own single "Finalisasi Rekonsiliasi" button, isn't
+   affected by this. Two permanent flex children (not a conditionally
+   rendered left button) keep the right-hand Update button pinned to the
+   right even mid-edit, when the left slot has nothing to show. */
+.sangu-recon-actions--split{justify-content:space-between;}
+.sangu-recon-actions-left,
+.sangu-recon-actions-right{display:flex;}
+.sangu-finalized-badge{margin-top:18px; padding:12px 16px; border-radius:10px; background:var(--success-container); color:var(--success); font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px;}
+.sangu-finalized-badge svg{width:15px; height:15px; flex-shrink:0;}
+
+.recon-modal-item{border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:14px 16px; margin-bottom:12px;}
+.recon-modal-item:last-child{margin-bottom:0;}
+.recon-modal-item-head{display:flex; align-items:flex-start; justify-content:space-between; gap:14px;}
+.recon-modal-item-label{font-weight:700; font-size:13.5px; color:var(--on-surface);}
+.recon-modal-item-formula{font-size:12px; color:var(--on-surface-variant); margin-top:3px;}
+.recon-modal-finalize{display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--on-surface); white-space:nowrap; cursor:pointer; flex-shrink:0;}
+.recon-modal-finalize input{width:15px; height:15px; accent-color:var(--primary);}
+.recon-modal-attachment{display:flex; align-items:center; gap:10px; margin-top:12px; padding-top:12px; border-top:1px solid var(--outline-variant);}
+.recon-modal-attachment .doc-photo-placeholder{width:44px; height:44px; margin:0;}
+.recon-modal-attachment span{font-size:12.5px; color:var(--on-surface-variant);}
+.recon-modal-nominal{margin-top:12px; padding-top:12px; border-top:1px solid var(--outline-variant);}
+.recon-modal-nominal label{display:block; font-size:11.5px; color:var(--on-surface-variant); margin-bottom:5px;}
+.recon-modal-nominal-readonly{font-weight:700; font-size:14px; color:var(--on-surface); display:flex; align-items:center; gap:8px;}
+.recon-modal-total{display:flex; align-items:center; justify-content:space-between; padding-top:16px; margin-top:6px; border-top:1.5px dashed var(--outline-variant); font-size:14px; font-weight:700; color:var(--on-surface);}
+.recon-modal-total b{font-size:18px; color:var(--navy);}
+
+.recon-status-tag{display:inline-block; margin-left:8px; padding:2px 9px; border-radius:20px; font-size:10.5px; font-weight:700; vertical-align:middle; white-space:nowrap;}
+.recon-status-tag.pending{background:var(--warning-container); color:#8A5300;}
+.recon-status-tag.approved{background:#E3F3E8; color:var(--success);}
+.recon-status-tag.rejected{background:#FBE6E3; color:var(--error);}
+
+.sangu-row-note{font-size:12px; color:var(--error); margin-top:5px; font-style:italic;}
+
+.recon-modal-approval{margin-top:12px; padding-top:12px; border-top:1px solid var(--outline-variant);}
+.recon-modal-approval-actions{display:flex; gap:10px; flex-wrap:wrap;}
+.recon-approve-btn{border:1.4px solid #9FDCB4; color:var(--success); background:#fff;}
+.recon-approve-btn.active{background:var(--success); color:#fff;}
+.recon-reject-btn{border:1.4px solid #F0AFA8; color:var(--error); background:#fff;}
+.recon-reject-btn.active{background:var(--error); color:#fff;}
+
+/* ---------- Fleet Home ---------- */
+.fleet-actions{display:flex; flex-wrap:wrap; gap:12px; margin-bottom:26px;}
+.fleet-search-row{display:flex; flex-wrap:wrap; gap:20px; margin-bottom:22px;}
+.fleet-search-row .field{max-width:280px; min-width:200px; flex:1 1 280px;}
+.fleet-columns{display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start;}
+.fleet-col-title{font-size:16px; font-weight:700; margin-bottom:12px;}
+.fleet-col-card .detail-header{margin-bottom:0; border-radius:var(--r-lg) var(--r-lg) 0 0;}
+.filter-row{display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap;}
+.custom-select{position:relative; display:inline-block;}
+.filter-btn{
+  display:inline-flex; align-items:center; justify-content:space-between; gap:10px; min-width:170px;
+  padding:9px 18px; border:1px solid var(--outline); border-radius:999px; background:var(--surface);
+  font-size:12.5px; font-weight:600; color:var(--on-surface-variant); cursor:pointer; font-family:inherit;
+  transition:border .15s, box-shadow .15s;
+}
+.filter-btn:hover{border-color:var(--primary);}
+.filter-btn:focus{outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(11,87,208,.14);}
+.filter-btn .chevron{width:14px; height:14px; flex-shrink:0; color:var(--on-surface-variant); transition:transform .15s;}
+.custom-select.open .filter-btn .chevron{transform:rotate(180deg);}
+.filter-dropdown{
+  position:absolute; top:calc(100% + 6px); left:0; z-index:60;
+  background:#fff; border:1px solid var(--outline-variant); border-radius:10px;
+  box-shadow:var(--shadow-2); padding:4px; width:max-content; min-width:170px; max-width:260px;
+}
+.filter-dropdown.hidden{display:none;}
+.filter-option{padding:8px 12px; font-size:12.5px; font-weight:600; color:var(--on-surface); border-radius:7px; cursor:pointer; white-space:nowrap;}
+.filter-option:hover{background:var(--surface-alt);}
+.filter-option.selected{background:var(--primary-container); color:var(--primary-dark);}
+.suggest-filters{background:var(--primary-container); border-radius:var(--r-md); padding:12px 14px; margin-bottom:14px;}
+.suggest-title{font-size:11.5px; font-weight:700; color:var(--on-primary-container); margin-bottom:8px;}
+.suggest-check-row{display:flex; gap:16px; flex-wrap:wrap;}
+.suggest-check{display:flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:var(--on-primary-container); cursor:pointer;}
+.suggest-check input{width:15px; height:15px; accent-color:var(--primary); cursor:pointer;}
+.suggest-tag{display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:10px; margin-top:4px; margin-right:4px;}
+.suggest-tag-freq{background:#FDEBD3; color:var(--warning);}
+.suggest-tag-idle{background:var(--error-container); color:var(--error);}
+.avatar-sm{width:32px; height:32px; border-radius:50%; background:var(--primary-container); color:var(--primary-dark); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex-shrink:0;}
+.no-pairing{color:var(--error); font-weight:600;}
+.pairing-ok{color:var(--on-surface); font-weight:600; font-family:'Google Sans Flex','Roboto Mono',monospace; font-variant-numeric:tabular-nums;}
+.pagination{display:flex; gap:6px; justify-content:center; margin-top:16px;}
+.page-btn{border:1px solid var(--outline-variant); background:var(--surface); color:var(--on-surface-variant); width:32px; height:32px; border-radius:8px; font-size:12.5px; font-weight:600;}
+.page-btn:hover{background:var(--surface-variant);}
+.page-btn.active{background:var(--primary); color:#fff; border-color:var(--primary);}
+.back-btn{padding:6px 4px 16px; font-weight:600;}
+
+/* ---------- Truck Detail Page ---------- */
+.detail-grid{display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start;}
+.detail-col{display:flex; flex-direction:column; gap:20px; min-width:0;}
+.detail-card{overflow:hidden;}
+.detail-header{padding:14px 18px; text-align:center; color:#fff; font-weight:700; font-size:15px;}
+.header-blue{background:linear-gradient(135deg,var(--primary),#4C8DFF);}
+
+.dfield-row{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+.dfield{display:flex; align-items:flex-start; gap:12px; margin-bottom:16px;}
+.dfield-icon{width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px;}
+.dfield-icon.icon-blue{background:var(--primary-container); color:var(--primary-dark);}
+.dfield-body{flex:1; min-width:0;}
+.dfield-label{font-size:10.5px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.4px; margin-bottom:5px;}
+.detail-value{background:var(--surface-alt); border:1px solid var(--outline-variant); border-radius:8px; padding:8px 12px; font-size:13.5px; font-weight:600; color:var(--on-surface); min-height:18px;}
+.detail-value.editing{background:transparent; border:none; padding:0; min-height:0;}
+.detail-value[data-multiline]{white-space:pre-line; line-height:1.7;}
+.detail-value .cargo-chip{display:inline-block; background:var(--primary-container); color:var(--primary-dark); font-size:11.5px; font-weight:700; padding:4px 10px; border-radius:12px; margin:2px 5px 2px 0;}
+
+.date-range{display:flex; align-items:center; gap:8px;}
+.date-range .detail-value{flex:1;}
+.dim-row{display:flex; align-items:center; gap:8px;}
+.dim-row .detail-value{flex:1; text-align:center;}
+.dr-arrow{color:var(--on-surface-variant); font-weight:700; flex-shrink:0;}
+
+.doc-label{font-size:12px; font-weight:700; color:var(--on-surface-variant); margin-bottom:10px;}
+.doc-photo-placeholder{
+  width:100%; max-width:260px; height:150px; border:1.5px dashed var(--outline); border-radius:var(--r-md);
+  background:var(--surface-alt); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+  color:var(--on-surface-variant); font-size:11.5px; margin:0 auto;
+}
+.doc-photo-placeholder.ph-blue{background:#EFF4FE; border-color:#C7D9F9; color:var(--primary-dark);}
+.truck-illustration{
+  width:100%; height:130px; border:1px solid var(--outline-variant); border-radius:var(--r-md);
+  background:linear-gradient(180deg,#F3F7FD,var(--surface-alt)); display:flex; align-items:center; justify-content:center; margin-bottom:16px; color:var(--primary);
+}
+.truck-illustration svg{width:110px; height:90px;}
+.detail-actions{display:flex; justify-content:flex-end; gap:12px; margin-top:24px; padding-bottom:8px;}
+.driver-detail-grid{display:grid; grid-template-columns:190px 1fr; gap:28px; align-items:start;}
+.dfield-body-list .dfield{margin-bottom:20px;}
+.btn-teal{background:#4FBDBD; color:#fff;}
+.btn-teal:hover{background:#3FA8A8;}
+.btn-amber{background:#F0B94A; color:#fff;}
+.btn-amber:hover{background:#DBA53A;}
+@media(max-width:640px){
+  .driver-detail-grid{grid-template-columns:1fr;}
+}
+@media(max-width:920px){
+  .detail-grid{grid-template-columns:1fr;}
+  .dfield-row{grid-template-columns:1fr;}
+}
+.row-avatar-name{display:flex; align-items:center; gap:10px;}
+.mini-icon-btn{width:32px; height:32px; border-radius:8px; border:1.5px solid var(--outline-variant); background:#fff; color:var(--primary); display:inline-flex; align-items:center; justify-content:center;}
+.mini-icon-btn--active{background:var(--primary); color:#fff; border-color:var(--primary);}
+/* Adjust Widget toggle carries a text label (unlike the plain square
+   minimize/close icon buttons beside it) so its function is clear without
+   relying on the title tooltip alone. */
+.ct-widget-toggle{width:auto; padding:0 10px; gap:6px; font-size:11.5px; font-weight:600; white-space:nowrap;}
+.ct-widget-toggle svg{width:14px; height:14px; flex-shrink:0;}
+.mini-icon-btn:disabled{color:var(--on-surface-variant); cursor:not-allowed; opacity:.55;}
+.mini-icon-btn:hover{background:var(--primary-container); border-color:var(--primary);}
+.mini-icon-btn-dark{width:32px; height:32px; border-radius:8px; border:1.5px solid var(--outline-variant); background:#fff; color:var(--primary); display:inline-flex; align-items:center; justify-content:center;}
+.mini-icon-btn-dark:hover{background:var(--primary-container); border-color:var(--primary);}
+.mini-icon-btn-dark.mini-icon-btn-active{background:var(--primary); border-color:var(--primary); color:#fff;}
+.mini-icon-btn-del{width:32px; height:32px; border-radius:8px; border:1.5px solid #F3C6C2; background:#fff; color:var(--error); display:inline-flex; align-items:center; justify-content:center;}
+.mini-icon-btn-del:disabled{color:var(--on-surface-variant); border-color:var(--outline-variant); cursor:not-allowed; opacity:.55;}
+.mini-icon-btn-del:hover{background:var(--error-container); border-color:var(--error);}
+.status-toggle-btn{width:32px; height:32px; border-radius:8px; border:1.5px solid var(--outline-variant); background:#fff; display:inline-flex; align-items:center; justify-content:center; transition:background .15s, transform .1s, border-color .15s;}
+.status-toggle-btn:active{transform:scale(0.92);}
+.status-toggle-btn.status-on{color:var(--success);}
+.status-toggle-btn.status-off{color:var(--error);}
+.status-toggle-btn.status-on:hover{border-color:var(--success); background:var(--success-container);}
+.status-toggle-btn.status-off:hover{border-color:var(--error); background:var(--error-container);}
+.action-cell{display:flex; gap:6px;}
+.status-legend{display:flex; gap:18px; margin-top:10px; font-size:11.5px; color:var(--on-surface-variant);}
+.status-legend span{display:inline-flex; align-items:center; gap:6px;}
+.legend-dot{width:9px; height:9px; border-radius:50%; display:inline-block;}
+
+.pairing-row{display:flex; flex-direction:column; gap:6px;}
+.pairing-autocomplete{position:relative;}
+.pairing-input{width:100%; padding:7px 10px; border:1px solid var(--primary); border-radius:8px; font-size:12.5px; outline:none; font-family:inherit;}
+.pairing-input:focus{box-shadow:0 0 0 3px rgba(11,87,208,.14);}
+.pairing-actions{display:flex; gap:6px;}
+.pairing-dropdown{
+  display:none; position:fixed; z-index:300;
+  background:#fff; border:1px solid var(--outline-variant); border-radius:10px;
+  box-shadow:var(--shadow-2); max-height:180px; overflow-y:auto; padding:4px;
+  width:max-content; min-width:160px; max-width:320px;
+}
+.pairing-dropdown.show{display:block;}
+.pairing-option{padding:8px 10px; font-size:12.5px; border-radius:7px; cursor:pointer; color:var(--on-surface);}
+.pairing-option:hover{background:var(--primary-container);}
+.pairing-option .po-hint{color:var(--on-surface-variant); font-size:11px; margin-left:4px;}
+.pairing-check{
+  width:20px; height:20px; border-radius:50%; border:1.5px solid var(--outline); background:#fff;
+  display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; color:#fff; padding:0; cursor:pointer;
+  transition:background .15s, border-color .15s;
+}
+.pairing-check:hover{border-color:var(--primary);}
+.pairing-check.checked{background:var(--primary); border-color:var(--primary);}
+.settings-inline{display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; background:var(--surface-alt); border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:16px 18px; margin-bottom:22px;}
+.settings-inline .field{margin-bottom:0; min-width:200px;}
+
+.progress-wrap{margin:16px 0;}
+.progress-bar{height:8px; background:var(--surface-variant); border-radius:6px; overflow:hidden;}
+.progress-fill{height:100%; width:0%; background:linear-gradient(90deg,var(--primary),#4C8DFF); border-radius:6px; transition:width .4s ease;}
+.progress-txt{font-size:12px; color:var(--on-surface-variant); margin-top:6px;}
+
+.empty{text-align:center; padding:40px 20px; color:var(--on-surface-variant);}
+.empty .eic{font-size:30px; margin-bottom:10px;}
+
+/* ---------- Spot Order detail page ---------- */
+.spot-detail-page{background:#fff; margin:-28px -32px -64px; padding:28px 32px 64px; min-height:calc(100vh - 110px);}
+.spot-detail-breadcrumb{font-size:12.5px; font-weight:700; letter-spacing:.3px; text-transform:uppercase; color:var(--on-surface-variant); margin-bottom:22px;}
+.spot-detail-breadcrumb .sep{margin:0 8px; color:var(--outline);}
+.spot-detail-breadcrumb b{color:var(--on-surface);}
+.spot-detail-grid{display:grid; grid-template-columns:1fr 1fr; gap:28px; align-items:start;}
+
+.shipper-block{display:flex; align-items:center; gap:14px; margin-bottom:20px;}
+.shipper-block--row{position:relative; justify-content:center;}
+.shipper-block-title{position:absolute; left:0; top:50%; transform:translateY(-50%); font-size:20px; font-weight:800; color:var(--on-surface);}
+.shipper-block-id{display:flex; align-items:center; gap:14px;}
+.shipper-block .shipper-logo{width:46px; height:46px; border-radius:50%; background:var(--primary-container); color:var(--primary-dark); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; position:relative; flex-shrink:0;}
+.shipper-block .shipper-logo .verified-dot{width:16px; height:16px; font-size:9px;}
+.shipper-block-name{font-weight:700; font-size:14.5px; color:var(--on-surface);}
+.shipper-block-sub{font-size:12px; color:var(--on-surface-variant); margin-top:1px;}
+
+.detail-section{background:var(--surface); border:1px solid var(--outline-variant); border-radius:var(--r-lg); margin-bottom:20px; overflow:hidden;}
+.detail-section-head{display:flex; align-items:center; gap:12px; padding:16px 20px; cursor:pointer; -webkit-tap-highlight-color:transparent;}
+.detail-section-head h3{font-size:14.5px; font-weight:700; flex:1;}
+.detail-section-head .chev{color:var(--on-surface-variant); transition:transform .2s ease; display:flex;}
+.detail-section-head.open .chev{transform:rotate(180deg);}
+.detail-section-body{padding:0 20px 18px;}
+
+.detail-row{display:flex; gap:20px; padding:13px 0; border-bottom:1px solid var(--outline-variant);}
+.detail-row:last-child{border-bottom:none;}
+.detail-row-label{width:200px; flex-shrink:0;}
+.detail-row-label b{font-size:13px; font-weight:700; color:var(--on-surface);}
+.detail-row-label .req{color:var(--error);}
+.detail-row-label .hint{display:block; font-size:11.5px; color:var(--on-surface-variant); font-style:italic; margin-top:3px; line-height:1.4;}
+.detail-row-value{flex:1; min-width:0; font-size:13px; color:var(--on-surface); padding-top:1px;}
+.detail-row-value .addr-kota{font-weight:700;}
+.detail-row-value .addr-label{font-weight:700; margin-top:2px;}
+.detail-row-value .addr-detail{font-size:12.5px; color:var(--on-surface-variant); margin-top:4px; line-height:1.6;}
+
+/* Profil Perusahaan — one continuous card walking Akun/Data Perusahaan/Data
+   PIC/Data Dokumen top to bottom (no per-section collapse, unlike the
+   .detail-section accordion elsewhere), reusing the same .detail-row layout
+   for each field so it stays visually consistent with the rest of the app. */
+.profile-card{max-width:900px;}
+.profile-section-title{font-size:15px; font-weight:700; color:var(--on-surface); margin:26px 0 4px;}
+.profile-section-title:first-child{margin-top:0;}
+.profile-link{color:var(--primary); font-weight:600; text-decoration:underline; font-size:13px;}
+.profile-logo-preview{width:64px; height:64px; border-radius:var(--r-md); object-fit:cover; border:1px solid var(--outline-variant);}
+.profile-logo-placeholder{
+  width:64px; height:64px; border-radius:var(--r-md); border:1px dashed var(--outline-variant);
+  display:flex; align-items:center; justify-content:center; color:var(--on-surface-variant); background:var(--surface-alt);
+}
+.profile-info-card{
+  display:flex; align-items:flex-start; gap:14px; padding:14px 16px; margin:12px 0 4px;
+  border:1px solid var(--outline-variant); border-radius:var(--r-md); background:var(--surface-alt);
+}
+.profile-info-card-icon{
+  flex-shrink:0; width:36px; height:36px; border-radius:50%; background:var(--primary-container); color:var(--primary);
+  display:flex; align-items:center; justify-content:center;
+}
+.profile-info-card-title{font-size:13px; font-weight:700; color:var(--on-surface); margin-bottom:3px;}
+.profile-info-card-desc{font-size:12px; color:var(--on-surface-variant); line-height:1.5;}
+.profile-edit-actions{display:flex; justify-content:flex-end; margin-top:22px;}
+
+.ltl-sibling-row{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; border:1px solid var(--outline-variant); border-radius:var(--r-md); margin-bottom:8px; cursor:pointer; color:var(--on-surface-variant); transition:background .15s ease, border-color .15s ease;}
+.ltl-sibling-row:last-child{margin-bottom:0;}
+.ltl-sibling-row:hover{background:var(--surface-alt); border-color:var(--primary);}
+.ltl-sibling-id{font-size:13px; font-weight:700; color:var(--on-surface);}
+.ltl-sibling-name{font-size:12px; margin-top:2px;}
+
+/* Alamat Muat / Alamat Bongkar — dashed route connector between the two
+   titles, with total jarak tempuh centered on the line, replacing the
+   plain row separator that used to sit between them. */
+.route-rows{display:grid; grid-template-columns:130px 90px 1fr; padding-top:13px;}
+.route-label{grid-column:1; width:130px;}
+.route-label b{font-size:13px; font-weight:700; color:var(--on-surface);}
+.route-label .req{color:var(--error);}
+.route-value{grid-column:3; min-width:0; font-size:13px; color:var(--on-surface); padding-top:1px; padding-bottom:13px;}
+.route-value .addr-kota{font-weight:700;}
+.route-value .addr-label{font-weight:700; margin-top:2px;}
+.route-value .addr-detail{font-size:12.5px; color:var(--on-surface-variant); margin-top:4px; line-height:1.6;}
+.route-marker{grid-column:2; grid-row:1 / 3; display:flex; flex-direction:column; align-items:center; justify-self:center;}
+.route-label--bongkar, .route-value--bongkar{margin-top:14px;}
+.route-marker-line{flex:1; width:0; border-left:1.5px dashed var(--outline-variant);}
+.route-marker-distance{background:var(--surface); border:1px solid var(--outline-variant); border-radius:20px; padding:3px 9px; margin:6px 0; font-size:11px; font-weight:700; color:var(--on-surface-variant); white-space:nowrap;}
+
+.muatan-phase-title{font-weight:700; font-size:13px; color:var(--on-surface); margin:14px 0 2px; padding-top:14px; border-top:1px solid var(--outline-variant);}
+.muatan-phase-title:first-of-type{margin-top:4px; padding-top:0; border-top:none;}
+
+/* Order Kontrak's own Plan/Muat/Bongkar comparison (Detail Muatan) — a
+   Plan/Muat/Bongkar header once at the top, then one row per field below
+   it — but no table chrome: no row divider lines, no boxed/bordered
+   values, just plain aligned columns matching the rest of this page's
+   understated look. */
+.muatan-compare-row{display:grid; grid-template-columns:200px repeat(3, 1fr); gap:12px; align-items:center; padding:9px 0;}
+.muatan-compare-row--head span{font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:var(--on-surface-variant); font-weight:700; text-align:left;}
+.muatan-compare-field{font-size:13px; font-weight:700; color:var(--on-surface);}
+.muatan-compare-value{color:var(--on-surface); font-variant-numeric:tabular-nums; font-size:13px; text-align:left;}
+
+.muatan-photo-row{display:grid; grid-template-columns:repeat(4, 1fr); gap:18px; padding-top:4px;}
+.muatan-photo{display:flex; flex-direction:column; align-items:center; gap:8px; min-width:0;}
+.muatan-photo .doc-photo-placeholder{width:100%; max-width:none; height:auto; aspect-ratio:1; margin:0;}
+.muatan-photo .doc-photo-placeholder svg{width:20px; height:20px;}
+.muatan-photo-caption{width:100%; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; color:var(--on-surface-variant);}
+
+/* Foto POD (Order Kontrak detail) — a fixed 2-row (Muat/Bongkar) x
+   3-column (Surat Jalan/Muatan/Pendukung) grid, always present regardless
+   of upload status; each cell holds up to POD_PHOTO_MAX slots, empty ones
+   just an outlined placeholder. Thumbnails stay square (1:1); hover
+   reveals an eye toggle over an uploaded one to open the detail modal,
+   which shows the photo at a phone-portrait ratio instead. */
+.pod-photo-grid{display:flex; flex-direction:column;}
+.pod-photo-grid-row{display:grid; grid-template-columns:64px repeat(3, 1fr); gap:14px; align-items:center; padding:12px 0; border-bottom:1px solid var(--outline-variant);}
+.pod-photo-grid-row:last-child{border-bottom:none;}
+.pod-photo-grid-row--head{padding-bottom:8px;}
+.pod-photo-grid-row--head span{font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:var(--on-surface-variant); font-weight:700;}
+.pod-photo-grid-label{font-size:13px; font-weight:700; color:var(--on-surface);}
+.pod-photo-cell{display:flex; gap:8px;}
+.pod-photo-slot{
+  position:relative; width:56px; height:56px; flex-shrink:0; border-radius:8px; overflow:hidden;
+  border:1.5px dashed var(--outline); background:var(--surface-alt);
+}
+.pod-photo-slot.filled{border-style:solid; border-color:var(--outline-variant); cursor:pointer;}
+.pod-photo-slot img{width:100%; height:100%; object-fit:cover; display:block;}
+.pod-photo-eye{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  background:rgba(20,24,32,.5); border:none; color:#fff; cursor:pointer;
+  opacity:0; transition:opacity .15s ease;
+}
+.pod-photo-slot.filled:hover .pod-photo-eye{opacity:1;}
+.pod-photo-modal-box{max-width:520px; max-height:88vh; display:flex; flex-direction:column;}
+.pod-photo-modal-head{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px;}
+.pod-photo-modal-head h3{margin:0;}
+.pod-photo-zoom-controls{display:flex; align-items:center; gap:8px; flex-shrink:0;}
+.pod-photo-zoom-controls .icon-btn{width:28px; height:28px; border:1px solid var(--outline-variant); border-radius:8px;}
+.pod-photo-zoom-controls .icon-btn:disabled{opacity:.4; cursor:not-allowed;}
+.pod-photo-zoom-level{font-size:12px; font-weight:700; color:var(--on-surface-variant); width:42px; text-align:center; font-variant-numeric:tabular-nums;}
+.pod-photo-modal-frame{width:100%; max-width:460px; height:460px; margin:0 auto; display:flex; align-items:center; justify-content:center; border-radius:var(--r-md); overflow:auto; border:1px solid var(--outline-variant); background:var(--surface-alt);}
+.pod-photo-modal-frame img{display:block; flex-shrink:0; transition:width .12s ease, height .12s ease;}
+.pod-photo-modal-frame.zoomed{cursor:move;}
+@media (max-width:640px){ .pod-photo-modal-box{max-width:92vw;} .pod-photo-modal-frame{max-width:100%; height:70vw;} }
+@media (max-width:640px){ .pod-photo-grid-row{grid-template-columns:52px repeat(3, 1fr); gap:8px;} }
+
+/* Foto POD — status row (below Muat/Bongkar rows) */
+.pod-photo-grid-row--status{grid-template-columns:64px 1fr;}
+.pod-photo-status-columns{display:flex; gap:32px;}
+.pod-photo-status-col{display:flex; flex-direction:column; gap:6px;}
+.pod-photo-status-cell{display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--on-surface-variant);}
+@media (max-width:640px){ .pod-photo-grid-row--status{grid-template-columns:52px 1fr;} }
+
+/* Verifikasi Muatan/Bongkaran modal — E-POD style review, mirrors the
+   driver app's own e-POD document screen so a planner reviews it in the
+   same layout the driver submitted it in. */
+.epod-modal-box{max-width:980px; max-height:84vh; padding:0; display:flex; flex-direction:column; overflow:hidden;}
+.epod-header{display:flex; align-items:center; gap:10px; padding:14px 20px; border-bottom:1px solid var(--outline-variant); flex-shrink:0;}
+.epod-header-icon{color:var(--on-surface-variant); display:flex;}
+.epod-header-icon svg{width:16px; height:16px;}
+.epod-header-title{flex:1; font-size:13px; font-weight:700; color:var(--on-surface);}
+.epod-header-close{width:28px; height:28px; border:none; background:transparent; border-radius:8px; display:flex; align-items:center; justify-content:center; color:var(--on-surface-variant); cursor:pointer; flex-shrink:0;}
+.epod-header-close:hover{background:var(--surface-alt);}
+.epod-body{overflow-y:auto; padding:22px 24px; display:flex; flex-direction:column; gap:18px;}
+.epod-body > *{flex-shrink:0;}
+.epod-doc-title{text-align:center; padding-bottom:4px;}
+.epod-brand{display:block; font-size:11px; font-weight:800; letter-spacing:.06em; color:var(--primary); margin-bottom:6px;}
+.epod-doc-title h2{font-size:15px; font-weight:800; color:var(--on-surface); letter-spacing:.01em;}
+
+.epod-card{border:1px solid var(--outline-variant); border-radius:var(--r-md); overflow:hidden;}
+.epod-card-head{background:var(--surface-alt); padding:9px 16px; font-size:12px; font-weight:700; color:var(--on-surface); text-align:center;}
+.epod-card-body{padding:14px 16px;}
+.epod-card--auto{align-self:flex-start; width:360px;}
+.epod-info-grid{display:flex; flex-direction:column; gap:10px;}
+.epod-info-row{display:flex; align-items:center; justify-content:space-between; font-size:13px; color:var(--on-surface-variant);}
+.epod-info-row b{color:var(--on-surface); font-weight:700;}
+
+.epod-verify-card{border-color:var(--primary-container); box-shadow:0 0 0 1px var(--primary-container) inset;}
+.epod-verify-layout{display:grid; grid-template-columns:180px 1fr;}
+.epod-verify-photo{padding:16px; border-right:1px dashed var(--outline); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;}
+.epod-verify-photo-frame{width:100%; aspect-ratio:3/4; border-radius:8px; overflow:hidden; border:1px solid var(--outline-variant); cursor:zoom-in;}
+.epod-verify-photo-frame img{width:100%; height:100%; object-fit:cover; display:block; transition:transform .25s ease;}
+.epod-verify-photo-frame:hover img{transform:scale(1.6);}
+.epod-verify-photo-empty{width:100%; aspect-ratio:3/4; border-radius:8px; border:1.5px dashed var(--outline); display:flex; align-items:center; justify-content:center; text-align:center; font-size:11.5px; color:var(--on-surface-variant); font-style:italic; padding:8px;}
+.epod-verify-photo-caption{font-size:11.5px; font-weight:700; color:var(--on-surface-variant);}
+.epod-verify-table{padding:6px 16px 14px;}
+.epod-verify-row{display:grid; grid-template-columns:1.1fr 1fr 1fr 1fr; gap:10px; align-items:center; padding:9px 0; border-bottom:1px solid var(--outline-variant);}
+.epod-verify-row:last-child{border-bottom:none;}
+.epod-verify-row--head span{font-size:10.5px; text-transform:uppercase; letter-spacing:.02em; color:var(--on-surface-variant); font-weight:700;}
+.epod-verify-param{font-size:13px; font-weight:700; color:var(--on-surface);}
+.epod-verify-plan{font-size:13px; color:var(--on-surface-variant); font-variant-numeric:tabular-nums;}
+.epod-verify-cell{font-size:13px; color:var(--on-surface); font-variant-numeric:tabular-nums;}
+.epod-verify-placeholder{font-size:12px; color:var(--on-surface-variant); font-style:italic;}
+.epod-verify-input-wrap{display:flex; align-items:center; gap:0; border:1px solid var(--outline); border-radius:8px; overflow:hidden; max-width:150px;}
+.epod-verify-input-wrap.disabled{opacity:.55;}
+.epod-verify-input-wrap input{width:100%; min-width:0; border:none; padding:7px 10px; font-size:13px; font-variant-numeric:tabular-nums; outline:none;}
+.epod-verify-input-wrap input:disabled{cursor:not-allowed; background:var(--surface-alt);}
+.epod-verify-input-wrap input::-webkit-outer-spin-button, .epod-verify-input-wrap input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
+.epod-verify-unit{flex-shrink:0; background:var(--primary); color:#fff; font-size:11px; font-weight:700; padding:7px 10px;}
+
+.epod-route-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start;}
+.epod-route-grid .fleet-card{border:1px solid var(--outline-variant); border-radius:var(--r-md);}
+
+.epod-message-input{width:100%; min-height:64px; border:1px solid var(--outline); border-radius:8px; padding:10px 12px; font-size:13px; font-family:inherit; resize:vertical;}
+.epod-message-input:read-only{background:var(--surface-alt); color:var(--on-surface-variant);}
+
+.epod-photo-section{border:1px solid var(--outline-variant); border-radius:var(--r-md); overflow:hidden;}
+.epod-photo-head{background:var(--surface-alt); padding:9px 16px; font-size:12px; font-weight:700; color:var(--on-surface); text-align:center;}
+.epod-photo-item{padding:16px;}
+.epod-photo-item img{width:100%; max-height:320px; object-fit:contain; border-radius:8px; cursor:pointer; display:block; margin:0 auto;}
+.epod-photo-caption{text-align:center; font-size:12.5px; font-weight:700; color:var(--on-surface); margin-top:10px;}
+.epod-photo-timestamp{text-align:center; font-size:11px; color:var(--on-surface-variant); border:1px solid var(--outline-variant); border-radius:16px; padding:5px 12px; margin:8px auto 0; width:fit-content;}
+.epod-photo-empty{padding:20px 16px; text-align:center; font-size:12.5px; color:var(--on-surface-variant); font-style:italic;}
+
+/* E-POD document viewer — Muat/Bongkar side-by-side photo layout, and the
+   combined Pesan block (replaces the single editable textarea used in the
+   verify modal, since this is a read-only report covering both phases) */
+.epod-photo-doc-grid{display:grid; grid-template-columns:1fr 1fr; gap:0; padding:16px;}
+.epod-photo-doc-col{display:flex; flex-direction:column; gap:14px; padding:0 8px;}
+.epod-photo-doc-col + .epod-photo-doc-col{border-left:1px solid var(--outline-variant);}
+.epod-photo-doc-item img{width:100%; max-height:220px; object-fit:contain; border-radius:8px; cursor:pointer; display:block; margin:0 auto; border:1px solid var(--outline-variant);}
+.epod-photo-doc-item .epod-photo-caption{margin-top:8px;}
+
+.epod-doc-notes{display:flex; flex-direction:column; gap:14px;}
+.epod-doc-note-label{font-size:13px; font-weight:700; color:var(--on-surface);}
+.epod-doc-note-text{font-size:12.5px; color:var(--on-surface-variant); margin-top:4px; line-height:1.6;}
+.epod-doc-note + .epod-doc-note{padding-top:14px; border-top:1px solid var(--outline-variant);}
+
+@media (max-width:640px){
+  .epod-photo-doc-grid{grid-template-columns:1fr; gap:16px;}
+  .epod-photo-doc-col + .epod-photo-doc-col{border-left:none; border-top:1px solid var(--outline-variant); padding-top:14px;}
+}
+
+/* Printing the E-POD document — show only the open modal, full width */
+@media print{
+  body.epod-printing *{visibility:hidden;}
+  body.epod-printing .epod-modal-box, body.epod-printing .epod-modal-box *{visibility:visible;}
+  body.epod-printing .modal-overlay{position:static; background:none; padding:0; display:block;}
+  body.epod-printing .epod-modal-box{position:absolute; left:0; top:0; width:100%; max-width:100%; max-height:none; box-shadow:none; border-radius:0;}
+  body.epod-printing .epod-header, body.epod-printing .epod-footer{display:none;}
+  body.epod-printing .epod-body{overflow:visible;}
+}
+
+.epod-footer{display:flex; justify-content:flex-end; gap:10px; padding:16px 24px; border-top:1px solid var(--outline-variant); flex-shrink:0;}
+
+/* E-POD verification gate — forced entry point on arrival at
+   verifikasi_pod_muat/bongkar, plus its sesuai/tidak-sesuai flag banner */
+.epod-gate-modal-box{max-width:640px; padding:0; overflow:hidden;}
+.epod-gate-head{display:flex; align-items:center; gap:9px; padding:16px 24px; border-bottom:1px solid var(--outline-variant); font-size:15px; font-weight:800; color:var(--on-surface);}
+.epod-gate-head svg{width:18px; height:18px;}
+.epod-gate-body{display:flex; align-items:center; gap:24px; padding:30px 24px;}
+.epod-gate-illustration{flex-shrink:0;}
+.epod-gate-text-main{font-size:15px; font-weight:700; color:var(--on-surface); line-height:1.5; margin-bottom:12px;}
+.epod-gate-text-sub{font-size:13px; color:var(--on-surface-variant); line-height:1.65;}
+.epod-gate-footer{display:flex; justify-content:flex-end; padding:16px 24px; border-top:1px solid var(--outline-variant);}
+
+.epod-gate-flag{position:fixed; top:88px; left:50%; transform:translateX(-50%); z-index:260; max-width:460px; width:calc(100% - 40px); border-radius:16px; padding:16px 20px; box-shadow:var(--shadow-2);}
+.epod-gate-flag--ok{background:#E6F4EA; border:1px solid #B7E1C1;}
+.epod-gate-flag--bad{background:#FCE8E6; border:1px solid #F3B7B1;}
+.epod-gate-flag-title{font-weight:800; font-size:13.5px; margin-bottom:4px;}
+.epod-gate-flag--ok .epod-gate-flag-title{color:#1E8E3E;}
+.epod-gate-flag--bad .epod-gate-flag-title{color:#C5221F;}
+.epod-gate-flag-sub{font-size:12.5px; line-height:1.5;}
+.epod-gate-flag--ok .epod-gate-flag-sub{color:#1E7A38;}
+.epod-gate-flag--bad .epod-gate-flag-sub{color:#B3261E;}
+@media (max-width:640px){
+  .epod-gate-body{flex-direction:column; text-align:center;}
+}
+@media (max-width:640px){
+  .epod-modal-box{max-width:94vw;}
+  .epod-card--auto{width:100%;}
+  .epod-verify-layout{grid-template-columns:1fr;}
+  .epod-verify-photo{border-right:none; border-bottom:1px dashed var(--outline);}
+  .epod-verify-photo-frame, .epod-verify-photo-empty{max-width:140px;}
+  .epod-verify-row{grid-template-columns:1fr; gap:4px;}
+  .epod-verify-row--head{display:none;}
+  .epod-route-grid{grid-template-columns:1fr;}
+}
+
+.linimasa-panel-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;}
+.linimasa-panel-head h3{font-size:15px; font-weight:700;}
+.linimasa-empty{border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:40px 20px; text-align:center; color:var(--on-surface-variant); font-size:13px;}
+.fleet-card + .detail-section{margin-top:20px;}
+
+/* Linimasa Dokumen — Sistem Auto-generated / Lampiran Transporter / Shipper */
+.epod-doc-panel{display:flex; flex-direction:column;}
+.epod-doc-header{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px;}
+.epod-doc-header-title{display:flex; align-items:center; gap:8px; font-size:14.5px; font-weight:800; color:var(--on-surface);}
+.epod-doc-section-label{font-size:12.5px; font-weight:700; color:var(--on-surface); text-transform:uppercase; letter-spacing:.02em; margin:22px 0 10px;}
+.epod-doc-section-label:first-of-type{margin-top:0;}
+
+.epod-doc-item{border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:14px 16px; margin-bottom:10px;}
+.epod-doc-item--locked{border-style:dashed; background:var(--surface-alt);}
+.epod-doc-item-row{display:flex; align-items:center; gap:12px;}
+.epod-doc-item-icon{width:36px; height:36px; border-radius:9px; background:var(--primary-container); color:var(--primary-dark); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.epod-doc-item-icon--muted{background:var(--surface); border:1px solid var(--outline-variant); color:var(--on-surface-variant);}
+.epod-doc-item-info{flex:1; min-width:0;}
+.epod-doc-item-name{font-size:13.5px; font-weight:700; color:var(--on-surface);}
+.epod-doc-item-file{font-size:12px; color:var(--on-surface-variant); margin-top:2px;}
+.epod-doc-item-actions{display:flex; gap:16px; flex-shrink:0;}
+.epod-doc-action-btn{background:none; border:none; padding:0; color:var(--primary); cursor:pointer; display:flex; align-items:center;}
+.epod-doc-item-timestamp{font-size:11.5px; color:var(--on-surface-variant); margin:10px 0 0 48px;}
+
+.epod-doc-upload{border:1.5px dashed var(--outline); border-radius:var(--r-md); padding:14px 16px; margin-bottom:10px;}
+.epod-doc-upload-row{display:flex; align-items:center; gap:12px;}
+.epod-doc-upload-link{color:var(--primary); font-size:12.5px; font-weight:600; text-decoration:underline; cursor:pointer; flex-shrink:0;}
+.epod-doc-upload-hint{font-size:11px; color:var(--on-surface-variant); font-style:italic; margin:8px 0 0 48px;}
+
+/* Informasi Armada & Pengemudi — reusable card (verify modal + Linimasa Driver) */
+.fleet-card{background:var(--surface); border-radius:16px; border:1px solid var(--outline-variant);}
+.fleet-card-head{padding:16px 20px 13px; font-size:16px; font-weight:800; color:var(--on-surface); border-bottom:1px solid var(--outline-variant);}
+.fleet-card-body{padding:16px 18px 18px;}
+.fleet-inner{background:var(--surface); border-radius:14px; border:1px solid var(--outline-variant); overflow:hidden;}
+.fleet-inner--bare{margin-bottom:16px;}
+.fleet-row{display:flex; align-items:center; gap:12px; padding:15px 18px; border-bottom:1px solid var(--outline-variant); flex-wrap:wrap;}
+.fleet-plate{font-weight:800; font-size:14.5px; color:var(--on-surface);}
+.fleet-dot{color:var(--on-surface-variant);}
+.fleet-type{font-size:13.5px; color:var(--on-surface);}
+.fleet-gps-pill{margin-left:auto; display:flex; align-items:center; gap:6px; background:var(--surface-alt); border-radius:20px; padding:6px 14px; font-size:12.5px; font-weight:700; color:#1E8E3E;}
+.fleet-row .badge{flex-shrink:0;}
+.fleet-driver-row{display:flex; align-items:center; gap:12px; padding:15px 18px;}
+.fleet-driver-avatar{width:42px; height:42px; border-radius:50%; background:var(--primary-container); color:var(--primary-dark); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0;}
+.fleet-driver-avatar--plain{background:var(--outline-variant);}
+.fleet-driver-name{font-size:14.5px; font-weight:800; color:var(--on-surface);}
+.fleet-driver-username{font-size:14.5px; font-weight:600; color:var(--on-surface);}
+.fleet-driver-phone{font-size:12.5px; color:var(--on-surface-variant); margin-top:2px;}
+.fleet-empty{display:flex; align-items:center; justify-content:center; gap:9px; padding:24px 18px; color:var(--on-surface-variant); font-size:12.5px; text-align:center;}
+.fleet-empty-icon{font-size:19px; line-height:1;}
+
+.linimasa-timeline{border:1px solid var(--outline-variant); border-radius:var(--r-lg); padding:22px 20px; max-height:312px; overflow-y:auto;}
+.linimasa-timeline + .detail-section, .linimasa-empty + .detail-section, .epod-doc-panel + .detail-section{margin-top:20px;}
+.timeline-item{display:grid; grid-template-columns:120px 20px 1fr; column-gap:14px;}
+.timeline-time{text-align:right; font-size:12.5px; color:var(--on-surface-variant); padding-top:1px;}
+.timeline-marker{display:flex; flex-direction:column; align-items:center;}
+.timeline-dot{width:12px; height:12px; border-radius:50%; background:var(--primary); flex-shrink:0; margin-top:3px;}
+.timeline-line{flex:1; width:0; border-left:2px dashed var(--outline-variant); margin-top:2px; min-height:32px;}
+.timeline-content{padding-bottom:22px; min-width:0;}
+.timeline-item:last-child .timeline-content{padding-bottom:0;}
+.timeline-title{font-weight:700; font-size:14px; color:var(--on-surface);}
+.timeline-actor{font-size:13px; color:var(--on-surface); margin-top:4px;}
+.timeline-role{font-size:12.5px; color:var(--on-surface-variant);}
+
+/* ---------- Uang Sangu Driver (auto-generated allowance estimate) ----------
+   Lives inside the same .detail-section accordion pattern as Detail Muatan
+   etc — no card-of-its-own background/border, just the row styling. */
+.sangu-row{display:flex; align-items:flex-start; gap:14px; padding:16px 0; border-bottom:1px solid var(--outline-variant);}
+.sangu-row-body{flex:1; min-width:0;}
+.sangu-row-label{font-weight:700; font-size:14px; color:var(--on-surface);}
+.sangu-row-formula{font-size:12.5px; color:var(--on-surface-variant); margin-top:3px;}
+.sangu-ferry-input{display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap;}
+.sangu-ferry-input input{width:150px; padding:8px 14px; border:1px solid var(--outline); border-radius:999px; background:var(--surface); outline:none; font-size:13px;}
+.sangu-ferry-input input:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(11,87,208,.14);}
+.sangu-remove-component{flex-shrink:0; margin-top:2px;}
+.sangu-add-trigger{cursor:pointer;}
+.sangu-add-trigger .sangu-row-label{color:var(--primary); font-weight:600;}
+.sangu-add-trigger:hover .sangu-row-label{color:var(--primary-dark);}
+.sangu-add-component{padding:16px 0;}
+.sangu-add-component-form{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.sangu-add-component-form input{padding:8px 14px; border:1px solid var(--outline); border-radius:999px; background:var(--surface); outline:none; font-size:13px;}
+.sangu-add-component-form input[type="text"]{flex:1; min-width:180px;}
+.sangu-add-component-form input[type="number"]{width:140px;}
+.sangu-add-component-form input:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(11,87,208,.14);}
+.sangu-row-value{font-weight:700; font-size:15px; color:var(--on-surface); white-space:nowrap; padding-top:4px; display:flex; align-items:center; justify-content:flex-end; gap:6px;}
+.sangu-row-value.zero,.sangu-row-value .zero{color:var(--on-surface-variant); font-weight:600;}
+.sangu-edit-value{background:transparent; border:none; color:var(--on-surface-variant); padding:3px; border-radius:6px; display:inline-flex;}
+.sangu-edit-value:hover{color:var(--primary); background:var(--surface-variant);}
+.sangu-inline-edit{display:flex; align-items:center; gap:8px;}
+.sangu-inline-value-input{width:130px; padding:7px 12px; border:1px solid var(--outline); border-radius:999px; background:var(--surface); outline:none; font-size:13px; text-align:right; font-weight:700;}
+.sangu-inline-value-input:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(11,87,208,.14);}
+.sangu-subtotal{display:flex; align-items:flex-end; justify-content:space-between; gap:14px; padding-top:18px; border-top:1.5px dashed var(--outline-variant);}
+.sangu-subtotal-label{font-size:13.5px; color:var(--on-surface); font-weight:500;}
+.sangu-subtotal-hint{font-size:11.5px; color:var(--on-surface-variant); margin-top:2px;}
+.sangu-subtotal-value{font-size:22px; font-weight:800; color:var(--navy); white-space:nowrap;}
+
+@media(max-width:640px){
+  .timeline-item{grid-template-columns:90px 18px 1fr;}
+  .timeline-time{font-size:11.5px;}
+  .sangu-subtotal{flex-direction:column; align-items:flex-start; gap:6px;}
+}
+
+@media(max-width:1100px){
+  .spot-detail-grid{grid-template-columns:1fr;}
+}
+@media(max-width:640px){
+  .detail-row{flex-direction:column; gap:6px;}
+  .detail-row-label{width:auto;}
+}
+
+@media(max-width:920px){
+  .sidebar{display:none;}
+  .stats-row{grid-template-columns:repeat(2,1fr);}
+  .two-col,.three-col{grid-template-columns:1fr;}
+  .fleet-columns{grid-template-columns:1fr;}
+  .fleet-search-row .field{max-width:none; flex-basis:100%;}
+  .info-body{grid-template-columns:1fr;}
+  .info-docs{grid-template-columns:1fr;}
+  .photo-placeholder{width:100%;}
+  .content{padding:20px 16px;}
+  .spot-detail-page{margin:-20px -16px; padding:20px 16px;}
+}
+
+/* ---------- Login ---------- */
+.login-page{position:relative; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; overflow:hidden;}
+.login-backdrop{position:absolute; inset:0; z-index:0;}
+.login-backdrop-svg{width:100%; height:100%; display:block;}
+.login-card{
+  position:relative; z-index:1; width:100%; max-width:420px; background:var(--surface);
+  border-radius:var(--r-xl); padding:36px 32px; box-shadow:var(--shadow-2);
+}
+.login-logo{display:flex; align-items:center; gap:10px; justify-content:center; margin-bottom:28px;}
+.login-logo-mark{
+  width:38px; height:38px; border-radius:11px; background:linear-gradient(135deg,var(--primary),var(--navy));
+  color:#fff; font-weight:800; font-size:19px; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.login-logo-text{font-weight:800; font-size:19px; letter-spacing:.4px; color:var(--navy);}
+.login-google-btn{
+  width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:11px 18px;
+  border:1px solid var(--outline); border-radius:999px; background:var(--surface); font-weight:600; font-size:13.5px;
+  color:var(--on-surface); cursor:pointer; transition:background .15s, box-shadow .15s;
+}
+.login-google-btn:hover:not(:disabled){background:var(--surface-alt);}
+.login-google-btn:disabled{opacity:.6; cursor:not-allowed;}
+.login-divider{display:flex; align-items:center; gap:14px; margin:22px 0; color:var(--on-surface-variant); font-size:12.5px;}
+.login-divider::before,.login-divider::after{content:''; flex:1; height:1px; background:var(--outline-variant);}
+.login-submit{width:100%; justify-content:center; margin-top:6px; padding:12px 18px; font-size:14px;}
+.login-error{background:var(--error-container); color:var(--error); border-radius:var(--r-md); padding:10px 14px; font-size:12.5px; margin-bottom:14px;}
+.login-hint{text-align:center; font-size:12.5px; color:var(--on-surface-variant); margin-top:22px;}
+.auth-loading{min-height:100vh; display:flex; align-items:center; justify-content:center; color:var(--on-surface-variant); font-size:14px;}
+
+/* ---------- Agreement Document (printable / exportable to PDF) ---------- */
+.doc-toolbar{display:flex; justify-content:space-between; margin-bottom:18px;}
+.agreement-doc-archive-banner{max-width:820px; margin:0 auto 18px; background:#FFF6E8; border:1px solid #F5C98A; color:#8A5A00; border-radius:var(--r-md); padding:12px 16px; font-size:12.5px;}
+.agreement-doc{background:#fff; border:1px solid var(--outline-variant); border-radius:var(--r-lg); box-shadow:var(--shadow-1); max-width:820px; margin:0 auto; padding:48px 56px; font-size:13.5px; line-height:1.7; color:var(--on-surface);}
+.agreement-doc-header{text-align:center; margin-bottom:26px;}
+.agreement-doc-header h1{font-size:18px; font-weight:800; letter-spacing:.02em; margin-bottom:6px;}
+.agreement-doc-number{font-size:12.5px; color:var(--on-surface-variant);}
+.agreement-doc-parties{display:grid; grid-template-columns:1fr 1fr; gap:20px; margin:18px 0;}
+.agreement-doc-party{border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:14px 16px;}
+.agreement-doc-party-label{font-size:11px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.02em; margin-bottom:4px;}
+.agreement-doc-party-name{font-weight:700; font-size:14px;}
+.agreement-doc-section{margin-top:24px;}
+.agreement-doc-section h2{font-size:14px; font-weight:700; margin-bottom:10px; border-bottom:1px solid var(--outline-variant); padding-bottom:6px;}
+.agreement-doc-table{width:100%; border-collapse:collapse;}
+.agreement-doc-table td{padding:6px 0; vertical-align:top;}
+.agreement-doc-table td:first-child{width:200px; color:var(--on-surface-variant); font-weight:600;}
+.agreement-doc-routes{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+.agreement-doc-route-label{font-weight:700; margin-bottom:6px;}
+.agreement-doc-routes ul{margin:0; padding-left:18px;}
+.agreement-doc-terms{white-space:pre-wrap;}
+
+@media print {
+  .app-header, .sidebar, .topbar, .doc-toolbar { display: none !important; }
+  .content { padding: 0 !important; max-width: none !important; }
+  .agreement-doc { box-shadow: none; border: none; max-width: 100%; padding: 0; }
+  .invoice-doc { max-width: 100%; }
+  .invoice-doc .invoice-card, .invoice-doc .invoice-status-bar, .invoice-doc .invoice-info-row { box-shadow: none; }
+}
+
+/* ---------- Planner — Allocate ---------- */
+/* This page has no page-head and wants map+list to fill the full viewport
+   with no leftover space — .content's own padding (28px/32px/64px) would
+   otherwise eat into that, so it's cancelled here via negative margins
+   (matching .content's shorthand exactly) and replaced with a slimmer one,
+   leaving only the truly fixed chrome above (header 56px + topbar 54px) to
+   size against. Everything here runs flush to the viewport edges, so cards
+   go square (no border-radius) instead of the app's usual rounded corners —
+   rounding would leave visible corner gaps against the edge it's flush with. */
+.planner-page{margin:-28px -32px -64px; padding:0; height:calc(100vh - 56px); box-sizing:border-box; display:flex; flex-direction:row;}
+/* Detail Order only exists once an order is selected — width is JS-driven
+   (drag-to-resize) rather than a fixed percentage, and can collapse to a
+   slim 56px strip via the minimize toggle. */
+.planner-side-panel{position:relative; flex-shrink:0; overflow-y:auto; padding:56px 20px 20px; border-radius:0; border-width:0 1px 0 0;}
+.planner-side-panel-minimized{overflow:visible; padding:0; display:flex; flex-direction:column; align-items:center;}
+.planner-side-minimize{
+  position:absolute; top:16px; left:16px; width:28px; height:28px; border-radius:50%; border:1px solid var(--outline-variant);
+  background:var(--surface-alt); color:var(--on-surface-variant); display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:1;
+}
+.planner-side-minimize:hover{background:var(--outline-variant);}
+.planner-side-minimize svg{width:13px; height:13px; transform:rotate(90deg);}
+.planner-side-panel-minimized .planner-side-minimize{position:static; margin-top:16px;}
+.planner-side-panel-minimized .planner-side-minimize svg{transform:rotate(-90deg);}
+.planner-side-close{
+  position:absolute; top:16px; right:16px; width:28px; height:28px; border-radius:50%; border:1px solid var(--outline-variant);
+  background:var(--surface-alt); color:var(--on-surface-variant); display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:1;
+}
+.planner-side-close:hover{background:var(--outline-variant);}
+.planner-side-close svg{width:13px; height:13px;}
+/* right:0 (not a negative offset) — .planner-side-panel has overflow-y:auto,
+   which clips any child positioned outside its own box, so a handle hanging
+   past the right edge would be unreachable. */
+.planner-side-resize-handle{position:absolute; top:0; right:0; bottom:0; width:6px; cursor:col-resize; z-index:2;}
+.planner-side-resize-handle:hover, .planner-side-resize-handle:active{background:var(--primary-container);}
+.planner-main{flex:1; min-width:0; display:flex; flex-direction:column;}
+/* A fixed-height workspace (map 60% / order list 40%) rather than the app's
+   usual free-flowing page, so the order list's own header/footer can stay
+   frozen while only its rows scroll — that only works if the list has a
+   bounded height to scroll within. */
+.planner-workspace{flex:1; min-height:0; display:flex; flex-direction:column;}
+/* Map and order list share one continuous card (no gap, no seam) instead of
+   being two separate cards — .planner-map-panel/.planner-orders-panel are
+   just flex sections inside it now, not cards of their own. */
+.planner-combined-panel{flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; padding:0; border-radius:0;}
+/* Leaflet's own panes/controls use z-index up to 1000 internally — without a
+   stacking context of its own here, those values compare directly against
+   the app header/topbar (z-index 150/5) and win once the map scrolls into
+   view, rendering the map on top of them. Setting z-index on this relatively
+   positioned ancestor scopes all of Leaflet's z-index values inside it. */
+.planner-map-panel{flex:6 1 0; min-height:0; overflow:hidden; position:relative; z-index:0;}
+.planner-map-canvas{width:100%; height:100%;}
+/* Wrapper keeps the truck-status legend/filter and the muat/bongkar legend
+   side by side, anchored together at the map's top-right corner. */
+.planner-map-legends{position:absolute; top:16px; right:16px; z-index:400; display:flex; align-items:flex-start; gap:10px;}
+.planner-map-legend{
+  background:#fff; border:1px solid var(--outline-variant);
+  border-radius:var(--r-md); padding:10px 14px; display:flex; gap:16px; font-size:12px; color:var(--on-surface-variant);
+  box-shadow:var(--shadow-2); white-space:nowrap;
+}
+.planner-map-legend span{display:flex; align-items:center; gap:6px;}
+/* Leaflet's divIcon defaults to a bordered white square box — reset that so
+   only the pickup/dropoff SVG itself shows, with a drop-shadow standing in
+   for the box's visual weight. */
+.planner-map-pin{background:transparent !important; border:none !important;}
+.planner-map-pin--pickup svg,
+.planner-map-pin--dropoff svg{
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
+}
+/* The icon SVGs fill with currentColor — without setting it here they
+   inherit whatever ambient text color the map container has (black), same
+   Muat/Bongkar colors as the map legend. */
+.planner-map-pin--pickup{color:var(--primary);}
+.planner-map-pin--dropoff{color:var(--success);}
+
+/* Truck marker: modernized 3D truck illustration with plate pill tag underneath */
+.planner-truck-map-pin{
+  position:relative;
+  display:flex;
+  background:transparent !important;
+  border:none !important;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  user-select:none;
+  transform:scale(1.15);
+  z-index:1001 !important;
+}
+.planner-truck-map-body{
+  display:flex;
+  align-items:center;
+  line-height:0;
+}
+.planner-truck-map-body svg{
+  height:26px !important;
+  display:block !important;
+  filter:none !important;
+  cursor:pointer;
+}
+.planner-truck-map-plate{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  margin-top:2px;
+  padding:2px 6px;
+  border:1.5px solid #cbd5e1;
+  border-radius:999px;
+  background:#ffffff;
+  box-shadow:0 1px 3px rgba(0,0,0,.25);
+  font-size:10px;
+  white-space:nowrap;
+}
+.planner-truck-map-dot{
+  width:6px; height:6px; border-radius:50%; flex-shrink:0;
+}
+.planner-truck-map-text{
+  font-size:10px; font-weight:700; color:#0f172a;
+}
+.planner-truck-map-pin.is-selected .planner-truck-map-plate{
+  border-color:#0B57D0 !important;
+  box-shadow:0 0 0 2px rgba(11,87,208,.35), 0 2px 6px rgba(0,0,0,.2);
+  background:#eff6ff;
+  font-weight:700;
+  color:#0f172a;
+  letter-spacing:.2px;
+  line-height:1.2;
+}
+.planner-truck-radar-ping{
+  position:absolute;
+  width:56px;
+  height:56px;
+  border-radius:50%;
+  top:12px;
+  left:50%;
+  transform:translate(-50%, -50%);
+  background:rgba(11,87,208,.2);
+  pointer-events:none;
+  animation:truckRadarPing 1.8s cubic-bezier(0,0,.2,1) infinite;
+}
+@keyframes truckRadarPing{
+  0%{ transform:translate(-50%, -50%) scale(.4); opacity:.8; }
+  100%{ transform:translate(-50%, -50%) scale(1.8); opacity:0; }
+}
+/* line to bend it through a preferred road/area. */
+/* Bottom margin so the last stop row doesn't sit flush against whatever
+   follows it (the Jarak/ETA/Biaya Toll strip) — same rhythm as the plain
+   Stops accordion's own .planner-stops margin. */
+.planner-custom-stops{margin-bottom:18px;}
+/* .hint is also used elsewhere in the app as a small INLINE annotation next
+   to a label (e.g. AgreementFormView, SpotOrderDetailView) — that usage
+   must stay inline, so this centered/padded empty-state treatment is scoped
+   to just the planner's own list containers rather than a bare .hint rule. */
+.planner-custom-stops .hint,
+.planner-stops .hint,
+.planner-ltl-sim .hint,
+.planner-ltl-shipments .hint,
+.planner-ft-results .hint{
+  display:block; padding:14px 8px; text-align:center; font-size:12px; color:var(--on-surface-variant); line-height:1.5;
+}
+.planner-custom-stop{display:flex; align-items:center; gap:8px;}
+.planner-custom-stop + .planner-custom-stop{margin-top:6px;}
+.planner-custom-stop--dragging{opacity:.4;}
+.planner-custom-stop-drag{
+  flex-shrink:0; width:14px; display:flex; align-items:center; justify-content:center; color:var(--on-surface-variant); cursor:grab;
+}
+.planner-custom-stop-drag:active{cursor:grabbing;}
+.planner-custom-stop-drag--hidden{visibility:hidden; cursor:default;}
+.planner-custom-stop-num{
+  flex-shrink:0; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:11.5px; font-weight:700; color:#fff;
+}
+.planner-custom-stop-num--muat{background:var(--primary);}
+.planner-custom-stop-num--via{background:#F09300;}
+.planner-custom-stop-num--bongkar{background:var(--success);}
+.planner-custom-stop-pill{
+  flex:1; min-width:0; padding:8px 14px; border:1px solid var(--outline-variant); border-radius:999px;
+  font-size:12.5px; color:var(--on-surface); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.planner-custom-stop-btns{display:flex; align-items:center; gap:4px; flex-shrink:0;}
+.planner-custom-stop-btn{
+  width:22px; height:22px; border-radius:50%; border:1px solid var(--outline-variant); background:#fff;
+  color:var(--on-surface-variant); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;
+}
+.planner-custom-stop-btn:disabled{opacity:.35; cursor:not-allowed;}
+.planner-custom-stop-btn-add{border-color:var(--success); color:var(--success);}
+.planner-custom-stop-btn-remove{border-color:var(--error); color:var(--error);}
+/* Custom Rute's own map-click hint + Reset Rute — sat with zero spacing/
+   typography of its own, flush against the Custom Rute/Find Truck buttons
+   above it. */
+.planner-custom-route-hint{
+  display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:14px; padding-top:12px;
+  border-top:1px dashed var(--outline-variant); font-size:11.5px; color:var(--on-surface-variant); line-height:1.5;
+}
+.planner-custom-route-reset{
+  flex-shrink:0; background:none; border:none; padding:0; font-family:inherit; font-size:11.5px; font-weight:700;
+  color:var(--primary); text-decoration:underline; cursor:pointer; white-space:nowrap;
+}
+.planner-custom-route-reset:hover{opacity:.75;}
+
+.planner-toll-fare{border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:12px 14px; margin-bottom:16px;}
+.planner-toll-fare-label{font-size:11px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.03em; margin-bottom:8px;}
+.planner-toll-fare-row{display:flex; align-items:center; gap:8px;}
+.planner-toll-fare-row .field-select{flex:1;}
+.planner-toll-fare-refresh{
+  flex-shrink:0; width:30px; height:30px; border-radius:50%; border:1px solid var(--outline-variant); background:var(--surface-alt);
+  color:var(--on-surface-variant); display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.planner-toll-fare-refresh:hover{color:var(--primary); border-color:var(--primary);}
+.planner-toll-fare-value{flex-shrink:0; font-size:14px; font-weight:700; color:var(--on-surface); white-space:nowrap;}
+.planner-toll-fare-note{font-size:10.5px; color:var(--on-surface-variant); line-height:1.5; margin-top:10px; padding-top:8px; border-top:1px dashed var(--outline-variant);}
+
+/* Toll Summary — collapsible gate-by-gate breakdown (in/out per detected
+   toll segment), matching the reference accordion pattern. */
+.planner-toll-summary{border:1px solid var(--outline-variant); border-radius:var(--r-md); overflow:hidden; margin-bottom:16px;}
+.planner-toll-summary-head{
+  width:100%; display:flex; align-items:center; justify-content:space-between; padding:12px 14px;
+  background:none; border:none; cursor:pointer; font-size:13px; font-weight:700; color:var(--on-surface); font-family:inherit;
+}
+.planner-toll-summary-head .icon-wrap{transition:transform .15s;}
+.planner-toll-summary-body{padding:0 14px 14px; border-top:1px solid var(--outline-variant); padding-top:10px;}
+.planner-toll-summary-gate{padding:8px 0;}
+.planner-toll-summary-gate + .planner-toll-summary-gate{border-top:1px dashed var(--outline-variant);}
+.planner-toll-summary-gate-name{font-size:12.5px; font-weight:700; color:var(--on-surface); margin-bottom:4px;}
+.planner-toll-summary-gate-row{display:flex; justify-content:space-between; font-size:12px; color:var(--on-surface-variant); padding:1px 0;}
+.planner-legend-icon{display:inline-flex; width:16px; height:16px;}
+.planner-legend-icon--pickup{color:var(--primary);}
+.planner-legend-icon--dropoff{color:var(--success);}
+
+.planner-truck-legend{
+  background:#fff; border:1px solid var(--outline-variant);
+  border-radius:var(--r-md); box-shadow:var(--shadow-2); width:236px; overflow:hidden; flex-shrink:0;
+}
+.planner-truck-legend-head{
+  width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 12px;
+  background:none; border:none; cursor:pointer; font-size:12.5px; font-weight:700; color:var(--on-surface); white-space:nowrap;
+}
+.planner-truck-legend-body{padding:0 12px 12px; display:flex; flex-direction:column; gap:2px; border-top:1px solid var(--outline-variant); padding-top:8px;}
+/* Collapsed state: just the truck icon, beside the muat/bongkar legend. */
+.planner-truck-legend-toggle{
+  width:36px; height:36px; border-radius:50%; flex-shrink:0;
+  background:#fff; border:1px solid var(--outline-variant); box-shadow:var(--shadow-2); color:var(--on-surface-variant);
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.planner-truck-legend-toggle:hover{color:var(--primary); border-color:var(--primary);}
+.planner-truck-legend-option{display:flex; align-items:center; gap:8px; padding:5px 2px; font-size:12.5px; color:var(--on-surface-variant); cursor:pointer;}
+.planner-truck-legend-option input{margin:0;}
+.planner-truck-legend-dot{width:10px; height:10px; border-radius:50%; flex-shrink:0;}
+.planner-truck-legend-label{flex:1;}
+.planner-truck-legend-count{color:var(--on-surface-variant); font-variant-numeric:tabular-nums;}
+/* Planned/Empty have no supporting data in this app yet — kept visible for
+   parity with the reference legend's shape, but visually marked as inert
+   (always zero) rather than presented as real, live counts. */
+.planner-truck-legend-option--placeholder{opacity:.5;}
+.planner-truck-legend-reset{width:100%; margin-top:6px;}
+.planner-truck-legend-head--static{cursor:default; white-space:normal; line-height:1.3;}
+.planner-vendor-armada-legend{width:250px; max-height:340px; display:flex; flex-direction:column;}
+.planner-vendor-armada-list{list-style:decimal; margin:0; padding:8px 12px 12px 28px; gap:10px; overflow-y:auto;}
+.planner-vendor-armada-item{font-size:12.5px; color:var(--on-surface); padding-left:2px;}
+.planner-vendor-armada-item::marker{color:var(--on-surface-variant); font-weight:700; font-size:11.5px;}
+.planner-vendor-armada-row{display:flex; align-items:center; gap:8px;}
+.planner-vendor-armada-item .icon-wrap{color:var(--primary); flex-shrink:0;}
+.planner-vendor-armada-label{flex:1;}
+.planner-vendor-armada-count{color:var(--on-surface-variant); font-variant-numeric:tabular-nums; font-size:11.5px; white-space:nowrap;}
+
+/* "Pantau" (Monitor) panel — layer chips + threshold config, collapsed to
+   just an icon (reusing .planner-truck-legend-toggle) beside the truck
+   status legend toggle when closed. */
+.ct-monitor-panel{background:#fff; border:1px solid var(--outline-variant); border-radius:var(--r-md); box-shadow:var(--shadow-2); width:308px; flex-shrink:0; padding:14px;}
+.ct-monitor-panel-head{display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:13px; font-weight:700; color:var(--on-surface); margin-bottom:12px;}
+.ct-monitor-chips{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;}
+.ct-monitor-chip{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:20px; font-size:12px; font-weight:700; white-space:nowrap;}
+.ct-monitor-chip-dot{width:8px; height:8px; border-radius:50%; flex-shrink:0;}
+.ct-monitor-chip-icon{font-size:12px; line-height:1;}
+.ct-monitor-chip-remove{background:none; border:none; padding:0; margin-left:1px; font-size:14px; line-height:1; color:inherit; opacity:.6; cursor:pointer;}
+.ct-monitor-chip-remove:hover{opacity:1;}
+.ct-monitor-add-wrap{position:relative;}
+.ct-monitor-chip--add{background:#fff; border:1.4px dashed var(--outline-variant); color:var(--on-surface-variant); cursor:pointer;}
+.ct-monitor-chip--add:hover{border-color:var(--primary); color:var(--primary);}
+.ct-monitor-chip--add svg{width:11px; height:11px;}
+.ct-monitor-add-menu{position:absolute; top:calc(100% + 6px); left:0; z-index:10; background:#fff; border:1px solid var(--outline-variant); border-radius:10px; box-shadow:var(--shadow-2); padding:6px; min-width:170px;}
+.ct-monitor-add-menu-item{display:flex; align-items:center; gap:8px; width:100%; padding:7px 8px; background:none; border:none; border-radius:6px; font-size:12.5px; font-weight:600; color:var(--on-surface); text-align:left; cursor:pointer; white-space:nowrap;}
+.ct-monitor-add-menu-item:hover{background:var(--surface-variant, #F4F5F7);}
+.ct-monitor-add-menu-empty{padding:7px 8px; font-size:12px; color:var(--on-surface-variant);}
+.ct-monitor-config-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid var(--outline-variant);}
+.ct-monitor-config-label{font-size:12.5px; color:var(--on-surface-variant);}
+.ct-monitor-config-input{width:64px; padding:6px 8px; border:1px solid var(--outline-variant); border-radius:8px; font-size:13px; font-weight:700; color:var(--on-surface); text-align:center; font-variant-numeric:tabular-nums;}
+.ct-monitor-config-input:focus{outline:none; border-color:var(--primary);}
+.ct-monitor-config-unit{font-size:12px; color:var(--on-surface-variant); min-width:38px; text-align:right;}
+.ct-monitor-save-btn{width:100%; margin-top:14px; padding:9px; background:#fff; border:1.4px dashed var(--outline-variant); border-radius:10px; font-size:12.5px; font-weight:700; color:var(--on-surface); cursor:pointer;}
+.ct-monitor-save-btn:hover{border-color:var(--primary); color:var(--primary);}
+
+.planner-truck-status-badge{display:inline-flex; align-items:center; gap:6px;}
+.planner-row-disabled{opacity:.55; cursor:not-allowed;}
+
+.planner-orders-panel{flex:4 1 0; min-height:0; display:flex; flex-direction:column; padding:0; overflow:hidden; border-top:1px solid var(--outline-variant);}
+/* Header (filter tabs) and footer (pagination) are shrunk down from their
+   normal app-wide sizing so more of this panel's limited height goes to the
+   actual row list, which is the point of this panel. Scoped to these two
+   wrappers so the shared .method-tabs/.pagination components stay full-size
+   everywhere else in the app. */
+.planner-orders-head{flex-shrink:0; padding:8px 16px 0;}
+.planner-orders-head .method-tabs{margin-bottom:0;}
+.planner-orders-head .method-tab{padding:8px 4px; font-size:12.5px; margin-right:20px;}
+.planner-orders-scroll{flex:1; min-height:0; overflow:auto; padding:0 16px;}
+.planner-orders-scroll thead th{position:sticky; top:0; z-index:2; background:#F4F6F9;}
+.planner-orders-foot{flex-shrink:0; padding:6px 16px; border-top:1px solid var(--outline-variant);}
+.planner-orders-foot .pagination{margin-top:0;}
+.planner-orders-foot .page-btn{width:24px; height:24px; font-size:11px; border-radius:6px;}
+
+.planner-order-header{display:flex; flex-direction:column; gap:6px; margin-bottom:18px; padding-bottom:16px; border-bottom:1px solid var(--outline-variant);}
+.planner-order-title-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.planner-order-company{font-size:15.5px; font-weight:700; color:var(--on-surface); line-height:1.3; min-width:0;}
+.planner-order-meta{font-size:12.5px; color:var(--on-surface-variant);}
+.planner-item-name{font-size:13px; font-weight:600; color:var(--on-surface); margin-top:14px; margin-bottom:12px; line-height:1.4;}
+
+/* Compact 3-up strip (Tonase/Qty/Volume) — thin dividers instead of the
+   padded card treatment used elsewhere, since this sits right under the
+   header and just needs to be scannable, not call attention to itself. */
+.planner-route-strip-label{font-size:11px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px;}
+.planner-route-strip-hint{display:block; font-size:12px; color:var(--on-surface-variant); line-height:1.5; padding:10px 12px; margin-bottom:18px; border:1px solid var(--outline-variant); border-radius:var(--r-md); background:var(--surface-alt);}
+.planner-muatan-strip{display:flex; margin-bottom:18px; border:1px solid var(--outline-variant); border-radius:var(--r-md); overflow:hidden;}
+.planner-muatan-item{flex:1; min-width:0; padding:8px 6px; text-align:center; border-right:1px solid var(--outline-variant);}
+.planner-muatan-item:last-child{border-right:none;}
+.planner-muatan-label{font-size:9.5px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.03em; margin-bottom:3px;}
+.planner-muatan-value{font-size:12.5px; font-weight:700; color:var(--on-surface); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+/* LTL combined-shipment cards — one per selected order, stacked in the side
+   panel in place of the single-order header/muatan-strip pair. */
+.planner-ltl-shipments{display:flex; flex-direction:column; gap:10px; margin-bottom:18px;}
+.planner-ltl-shipment-card{border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:12px 14px;}
+.planner-ltl-shipment-card--collapsed{padding-bottom:12px;}
+.planner-ltl-shipment-card .planner-item-name{margin-top:8px; margin-bottom:10px;}
+.planner-ltl-shipment-card .planner-muatan-strip{margin-bottom:0;}
+.planner-ltl-shipment-head{
+  width:100%; display:flex; align-items:center; gap:8px; background:none; border:none; padding:0; margin-bottom:4px;
+  font-family:inherit; text-align:left; cursor:pointer;
+}
+.planner-ltl-shipment-company{flex:1; min-width:0; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.planner-ltl-shipment-badge{
+  flex-shrink:0; font-size:10px; font-weight:700; color:#fff; background:var(--primary);
+  padding:2px 8px; border-radius:999px; text-transform:uppercase; letter-spacing:.03em;
+}
+.planner-ltl-shipment-toggle{flex-shrink:0; width:13px; height:13px; color:var(--on-surface-variant); transition:transform .15s;}
+/* Small shipment tag prefixed onto a combined-route stop pill, so the same
+   list can show "which shipment does this stop belong to" without a whole
+   separate column. */
+.planner-ltl-stop-tag{
+  display:inline-block; font-size:9.5px; font-weight:700; color:var(--primary); background:var(--primary-container);
+  padding:1px 6px; border-radius:999px; margin-right:5px; text-transform:uppercase; letter-spacing:.02em;
+}
+
+/* Simulasi Muatan — cargo-load simulator, first thing shown in the LTL
+   panel so a dispatcher picks a truck type before working through orders. */
+.planner-ltl-sim{border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:12px 14px; margin-bottom:18px;}
+.planner-ltl-sim-head{
+  width:100%; display:flex; align-items:center; gap:8px; background:none; border:none; padding:0; margin:0;
+  font-family:inherit; text-align:left; cursor:pointer;
+}
+/* Matches the chevron icon's own 13px box (.planner-ltl-shipment-toggle) and
+   centers each text span within an identical fixed-height box, the same way
+   Icon.vue centers its SVG — line-height alone wasn't reliably centering
+   these against the icon since text ascent/descent isn't symmetric around a
+   line box the way flex-centered content is. */
+.planner-ltl-sim-title{flex:1; min-width:0; height:13px; display:inline-flex; align-items:center; line-height:1;}
+/* .planner-stops-label's own margin-bottom:14px (declared later in this
+   file, so it otherwise wins the cascade) pinned this span to the top of
+   its centered flex box instead of actually centering it — the extra
+   specificity here (two classes vs one) makes the override stick regardless
+   of source order. */
+.planner-ltl-sim-head .planner-ltl-sim-title{margin-bottom:0;}
+.planner-ltl-sim-head-percent{
+  flex-shrink:0; height:13px; display:inline-flex; align-items:center; font-size:12.5px; font-weight:800; color:var(--on-surface); line-height:1;
+}
+.planner-ltl-sim-head-percent--overload{color:var(--error);}
+.planner-ltl-sim .field-select{margin-top:8px;}
+.planner-ltl-sim-truck{display:flex; flex-direction:column; align-items:center; margin-top:16px;}
+.planner-ltl-sim-truck-visual{width:120px; transition:filter .2s; animation:ltlTruckBounce 1.6s ease-in-out infinite;}
+.planner-ltl-sim-truck-visual svg{width:100%; height:auto; display:block; overflow:visible;}
+@keyframes ltlTruckBounce{
+  0%, 100%{ transform:translateY(0); }
+  50%{ transform:translateY(-1.5px); }
+}
+.planner-ltl-sim-truck--overload .planner-ltl-sim-truck-visual{
+  filter:drop-shadow(0 0 6px rgba(179,38,30,.5));
+  animation:ltlTruckBounce 1.6s ease-in-out infinite, ltlOverloadPulse 1.4s ease-in-out infinite;
+}
+@keyframes ltlOverloadPulse{
+  0%, 100%{ opacity:1; }
+  50%{ opacity:.72; }
+}
+/* Wheels spin continuously; the origin is set in viewBox user-space
+   coordinates (each wheel's own center), matching the default SVG
+   transform-box so the rotation pivots correctly on that wheel. */
+.planner-ltl-sim-wheel-spin{animation:ltlWheelSpin .6s linear infinite;}
+@keyframes ltlWheelSpin{
+  from{ transform:rotate(0deg); }
+  to{ transform:rotate(360deg); }
+}
+/* height/y are real SVG geometry properties in modern browsers, so — unlike
+   the old v-html-rebuilt version, which replaced the whole SVG on every
+   percent change — Vue now patches this rect's attributes in place, and
+   these transitions actually animate. */
+.planner-ltl-sim-truck-fill{transition:height .4s ease, y .4s ease, fill .3s ease;}
+.planner-ltl-sim-percent{margin-top:6px; font-size:20px; font-weight:800; color:var(--on-surface);}
+.planner-ltl-sim-truck--overload .planner-ltl-sim-percent{color:var(--error);}
+.planner-ltl-sim-meta{margin-top:8px; font-size:11.5px; color:var(--on-surface-variant); text-align:center;}
+.planner-ltl-sim-alert{
+  display:flex; align-items:center; justify-content:center; gap:6px; margin-top:10px; padding:8px 10px;
+  border-radius:var(--r-md); background:var(--error-container); color:var(--error); font-size:11.5px; font-weight:700; text-align:center;
+}
+
+/* Truck detail (Fleet Catalog "Kontrol" column) — shares the side panel with
+   order detail, so it reuses the same card-region rhythm at a slightly
+   denser 2-column grid since it has more fields to fit. */
+.planner-td-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px 14px; margin-top:14px;}
+.planner-td-item{min-width:0;}
+.planner-td-label{font-size:10px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.03em; margin-bottom:3px;}
+.planner-td-value{font-size:13px; font-weight:600; color:var(--on-surface); overflow-wrap:break-word;}
+
+.planner-stops-label{font-size:11px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.05em; margin-bottom:14px;}
+.planner-stops-toggle{
+  width:100%; display:flex; align-items:center; justify-content:space-between; background:none; border:none; padding:0;
+  font-family:inherit; cursor:pointer;
+}
+.planner-stops-toggle svg{transition:transform .15s; color:var(--on-surface-variant);}
+.planner-stops{margin-bottom:18px;}
+.planner-stop{display:flex; gap:14px;}
+.planner-stop-marker{display:flex; flex-direction:column; align-items:center; width:20px; flex-shrink:0;}
+.planner-stop-icon{display:flex; width:20px; height:20px; flex-shrink:0;}
+.planner-stop-icon svg{width:100%; height:100%;}
+.planner-stop-icon--muat{color:var(--primary);}
+.planner-stop-icon--bongkar{color:var(--success);}
+.planner-stop-line{flex:1; width:0; min-height:26px; border-left:2px dotted var(--outline-variant); margin:4px 0;}
+.planner-stop-body{flex:1; min-width:0; padding-bottom:22px;}
+.planner-stop-type{font-size:11px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;}
+.planner-stop-city{font-size:15px; font-weight:700; color:var(--on-surface);}
+.planner-stop-name{font-size:13px; color:var(--on-surface-variant); margin-top:2px;}
+.planner-stop-address{font-size:12px; color:var(--on-surface-variant); margin-top:3px; line-height:1.5;}
+.planner-stop-contact{display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--on-surface-variant); margin-top:9px;}
+.planner-stop-contact svg{width:13px; height:13px;}
+
+.planner-find-transporter{margin-top:12px; padding:12px; background:#fff; border:1px solid var(--outline-variant); border-radius:var(--r-md);}
+.planner-ft-tabs{margin-bottom:10px;}
+.planner-ft-tabs.method-tab, .planner-find-transporter .method-tab{padding:6px 4px; font-size:12px; margin-right:16px;}
+.planner-ft-filter-group{margin-bottom:12px;}
+.planner-ft-filter-label{font-size:11.5px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px;}
+.planner-ft-radius-row{display:flex; align-items:center; gap:10px;}
+.planner-ft-radius-row input[type="range"]{flex:1;}
+.planner-ft-radius-value{font-size:12.5px; font-weight:700; color:var(--on-surface); white-space:nowrap;}
+.planner-ft-idle-toggle{display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--on-surface-variant); cursor:pointer; margin-bottom:12px;}
+.planner-ft-idle-toggle input{margin:0;}
+.planner-ft-results-label{font-size:11.5px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.03em; margin-bottom:8px;}
+.planner-ft-results{display:flex; flex-direction:column; gap:8px;}
+.planner-ft-result{
+  display:flex; align-items:center; gap:12px; padding:12px; background:#fff; border:1px solid var(--outline-variant);
+  border-radius:var(--r-md); cursor:pointer; transition:border-color .15s, box-shadow .15s;
+}
+.planner-ft-result:hover{border-color:var(--primary);}
+.planner-ft-result-selected, .planner-ft-result-selected:hover{
+  background:var(--primary-container); border-color:var(--primary); box-shadow:0 0 0 2px rgba(11,87,208,.22);
+}
+.planner-ft-result-body{flex:1; min-width:0;}
+.planner-ft-result-name{font-weight:700; font-size:13.5px; color:var(--on-surface);}
+.planner-ft-result-sub{font-size:11.5px; color:var(--on-surface-variant); margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.planner-ft-result-tags{display:flex; flex-wrap:wrap; gap:5px; margin-top:7px;}
+.planner-ft-tag{background:var(--surface-alt); color:var(--on-surface-variant); font-size:10.5px; font-weight:600; padding:3px 8px; border-radius:999px; white-space:nowrap;}
+.planner-ft-tag-good{background:var(--success-container); color:var(--success);}
+.planner-ft-assign-btn{
+  flex-shrink:0; background:var(--on-surface); color:#fff; border:none; border-radius:999px; padding:8px 16px;
+  font-size:12.5px; font-weight:700; cursor:pointer; font-family:inherit;
+}
+.planner-ft-assign-btn:hover{opacity:.88;}
+.planner-ft-assign-btn:disabled{opacity:.45; cursor:not-allowed;}
+.planner-ft-assign-btn-sm{padding:5px 12px; font-size:11.5px;}
+
+/* Reuses the Find Transporter result card's look (name/sub/tags) for
+   consistency — just a static summary here, not a pick from a list, so the
+   pointer cursor + hover highlight are cancelled. */
+.planner-selected-truck-card{margin-top:16px; cursor:default;}
+.planner-selected-truck-card:hover{border-color:var(--outline-variant);}
+.planner-table{table-layout:fixed;}
+.planner-table th, .planner-table td{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.planner-row{cursor:pointer;}
+.planner-row:hover{background:var(--surface-alt);}
+.planner-row-selected, .planner-row-selected:hover{background:var(--primary-container); box-shadow:inset 0 0 0 2px var(--primary);}
+.planner-ltl-col{text-align:center;}
+.planner-ltl-toggle{display:inline-flex; align-items:center; gap:6px; cursor:pointer; user-select:none;}
+.planner-ltl-toggle input{position:absolute; opacity:0; width:0; height:0;}
+.planner-ltl-switch{position:relative; width:26px; height:15px; border-radius:999px; background:#c7ccd4; transition:background .15s; flex-shrink:0;}
+.planner-ltl-switch::before{content:''; position:absolute; top:2px; left:2px; width:11px; height:11px; border-radius:50%; background:#fff; transition:transform .15s; box-shadow:0 1px 2px rgba(0,0,0,.3);}
+.planner-ltl-toggle input:checked + .planner-ltl-switch{background:var(--primary);}
+.planner-ltl-toggle input:checked + .planner-ltl-switch::before{transform:translateX(11px);}
+.planner-ltl-check{width:15px; height:15px; accent-color:var(--primary); cursor:pointer;}
+.planner-ltl-check:disabled{opacity:.35; cursor:not-allowed;}
+
+@media (max-width:720px) {
+  .planner-page{height:auto; margin:0; padding:16px; flex-direction:column;}
+  .planner-side-panel{width:auto; border-width:0 0 1px 0;}
+  .planner-workspace{flex:none;}
+  .planner-map-panel{flex:none; height:320px;}
+  .planner-orders-panel{flex:none; height:480px;}
+}
+
+/* ---------- Control Tower ---------- */
+.ct-live{
+  display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--success);
+  font-family:ui-monospace, monospace;
+}
+.ct-live-dot{width:7px; height:7px; border-radius:50%; background:var(--success); animation:ctLivePulse 2s ease-in-out infinite;}
+@keyframes ctLivePulse{0%,100%{opacity:1;} 50%{opacity:.35;}}
+@media (prefers-reduced-motion: reduce){ .ct-live-dot{animation:none;} }
+
+/* Full-viewport shell, same escape-the-content-padding trick as
+   .planner-page — negative margins cancel out .content's own padding so
+   this fills the page edge-to-edge, then height:calc(100vh - 56px) fills
+   exactly what's left below AppHeader (the only chrome above .content —
+   there's no separate Topbar strip eating extra height here). KPI strip /
+   side panel+map / bottom panel are internal flex sections divided by
+   borders, not separate cards, so nothing has a gap or seam between it and
+   its neighbor. */
+.ct-shell{
+  margin:-28px -32px -64px; padding:0; height:calc(100vh - 56px); box-sizing:border-box;
+  display:flex; flex-direction:column; border-radius:0; overflow:hidden;
+}
+/* Flex row instead of a fixed N-column grid — more KPI cards than fit a
+   viewport no longer squeeze every card narrower, they wrap onto a second
+   row instead. This used to scroll horizontally with the scrollbar hidden,
+   but that left cards past the fold undiscoverable with no visual cue that
+   there was more to see (e.g. Order LTL/Order Multishipment silently
+   scrolled out of view on a narrower window) — wrapping keeps every card
+   always visible instead. */
+.ct-kpi-strip{flex:0 0 auto; display:flex; flex-wrap:wrap; gap:8px; padding:10px 16px; border-bottom:1px solid var(--outline-variant); background:#fff;}
+/* Rounded, background-tinted "chips" read as clickable filter tabs at a
+   glance — the old version was unstyled <button> elements, which left each
+   card with the browser's own default button border (a dark outline, not
+   an intentional divider) on top of a plain grid-line right border. */
+.ct-kpi{
+  padding:9px 14px; border:none; border-radius:10px; display:flex; flex-direction:column; gap:2px;
+  background:var(--surface-alt); text-align:left; font-family:inherit; cursor:pointer;
+  transition:background .15s ease, transform .1s ease;
+  flex:0 0 auto; min-width:132px; white-space:nowrap;
+}
+.ct-kpi:hover{background:var(--primary-container);}
+.ct-kpi:active{transform:scale(.98);}
+.ct-kpi.active{background:var(--primary-container); box-shadow:inset 0 0 0 1.5px var(--primary);}
+.ct-kpi-num{font-size:19px; font-weight:800; line-height:1; color:var(--on-surface);}
+.ct-kpi.active .ct-kpi-num{color:var(--primary);}
+.ct-kpi-label{font-size:9.5px; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.02em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+
+.ct-middle{flex:1 1 auto; min-height:0; display:flex; flex-direction:row;}
+@media (max-width:960px){ .ct-middle{flex-direction:column;} }
+
+/* Order Control — the side panel a KPI card's click populates. */
+/* Width is JS-driven (drag-to-resize, starts at 20% of .ct-middle's own
+   width) rather than a fixed flex-basis percentage — same pattern as
+   Planner Allocate's own resizable detail side panel. */
+.ct-oc-panel{flex:0 0 auto; position:relative; min-width:0; display:flex; flex-direction:column; border-right:1px solid var(--outline-variant); overflow:hidden;}
+@media (max-width:960px){ .ct-oc-panel{flex:0 0 auto; width:auto !important; max-height:40vh; border-right:none; border-bottom:1px solid var(--outline-variant);} }
+.ct-oc-resize-handle{position:absolute; top:0; right:0; bottom:0; width:6px; cursor:col-resize; z-index:2;}
+.ct-oc-resize-handle:hover, .ct-oc-resize-handle:active{background:var(--primary-container);}
+@media (max-width:960px){ .ct-oc-resize-handle{display:none;} }
+.ct-oc-head{flex:0 0 auto; padding:9px 16px; border-bottom:1px solid var(--outline-variant);}
+/* Same flex-column + 4px gap the KPI strip cards use between their own
+   stacked number/label pair (.ct-kpi) — scoped to the side panel's own
+   header only (.ct-detail-panel reuses .ct-oc-head too, as a row layout,
+   and must not inherit this) so the title and the active-category line
+   below it sit exactly as close together. */
+.ct-oc-panel .ct-oc-head{display:flex; flex-direction:column; gap:4px;}
+.ct-oc-head-row{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+.ct-oc-head h3{font-size:13px; font-weight:700; margin:0; line-height:1.2;}
+.ct-oc-status-filter{width:100px; flex-shrink:0;}
+.ct-oc-sub{display:flex; align-items:center; gap:8px;}
+.ct-oc-sub .cat{font-size:11.5px; font-weight:700; color:var(--primary);}
+.ct-oc-list{flex:1 1 auto; min-height:0; display:flex; flex-direction:column; overflow-y:auto;}
+.ct-oc-empty{flex:1 1 auto; padding:32px 16px; text-align:center; color:var(--on-surface-variant); font-size:12.5px; line-height:1.6;}
+.ct-oc-row{padding:12px 16px; border-bottom:1px solid var(--outline-variant); cursor:pointer;}
+.ct-oc-row:last-child{border-bottom:none;}
+.ct-oc-row:hover{background:var(--surface-alt);}
+.ct-oc-row.active{background:var(--primary-container);}
+.ct-oc-switcher{display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:10px;}
+.ct-oc-switcher-btn{width:22px; height:22px; border-radius:50%; border:1px solid var(--outline-variant); background:#fff; color:var(--on-surface-variant); font-size:13px; line-height:1; display:flex; align-items:center; justify-content:center; cursor:pointer;}
+.ct-oc-switcher-btn:hover:not(:disabled){background:var(--surface-alt); color:var(--primary); border-color:var(--primary);}
+.ct-oc-switcher-btn:disabled{opacity:.35; cursor:default;}
+.ct-oc-switcher-label{font-size:11px; font-weight:700; color:var(--on-surface-variant); letter-spacing:.02em; min-width:56px; text-align:center;}
+.ct-oc-status{display:flex; justify-content:center;}
+.ct-oc-customer{font-size:13px; font-weight:700; color:var(--on-surface); margin-top:8px;}
+.ct-oc-id{font-size:11px; font-weight:700; color:var(--on-surface-variant); margin-top:3px;}
+.ct-oc-route{font-size:11.5px; color:var(--on-surface-variant); display:flex; align-items:center; gap:4px; margin-top:6px;}
+.ct-oc-route svg{width:11px; height:11px; flex-shrink:0;}
+.ct-oc-fleet{font-size:11px; color:var(--on-surface-variant); margin-top:3px; display:flex; align-items:center; gap:5px;}
+.ct-oc-fleet svg{width:13px; height:13px; flex-shrink:0; color:var(--on-surface-variant);}
+.ct-oc-fleet .plate{color:var(--on-surface); font-weight:600;}
+.ct-oc-extra{
+  display:flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:var(--warning);
+  background:#FBEBCF; padding:4px 9px; border-radius:6px; margin-top:8px; width:fit-content;
+}
+.ct-oc-extra svg{width:11px; height:11px; flex-shrink:0;}
+
+/* Per-order process checklist — 4 milestones, checked off independently of
+   the status badge above (that's "where in the pipeline right now"; this is
+   "what's been handled so far"). */
+.ct-oc-milestones{display:grid; grid-template-columns:1fr 1fr; gap:6px 10px; margin-top:10px; padding-top:10px; border-top:1px dashed var(--outline-variant);}
+.ct-oc-milestone{display:flex; align-items:center; gap:6px; font-size:10px; color:var(--on-surface-variant);}
+.ct-oc-milestone.done{color:var(--success);}
+.ct-oc-milestone-dot{
+  width:14px; height:14px; border-radius:50%; border:1.5px solid var(--outline-variant); flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+}
+.ct-oc-milestone-dot svg{width:9px; height:9px; color:#fff;}
+.ct-oc-milestone.done .ct-oc-milestone-dot{border-color:var(--success); background:var(--success);}
+
+/* No overflow:hidden here (unlike before) — Leaflet's own .leaflet-container
+   CSS already clips its internal tile/marker panning to its own bounds, so
+   this card doesn't need to double up on that; doing so was also clipping
+   the truck legend/Pantau Armada panels whenever they ran taller than the
+   map's own remaining height (e.g. with the bottom detail panel open). */
+.ct-map-card{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; position:relative;}
+.ct-map-canvas{flex:1 1 auto; min-height:0; width:100%;}
+.ct-map-caption{flex:0 0 auto; display:flex; gap:6px; align-items:flex-start; padding:10px 16px; font-size:11px; color:var(--on-surface-variant); border-top:1px solid var(--outline-variant); flex-wrap:wrap; row-gap:4px;}
+/* Plan (blue) vs Aktual (green) route legend — only shown when the
+   focused order has actual-route data to compare against the plan. */
+.ct-route-legend{display:flex; gap:14px; margin-left:auto; flex-shrink:0;}
+.ct-route-legend-item{display:inline-flex; align-items:center; gap:5px; font-weight:600; color:var(--on-surface);}
+.ct-route-legend-line{display:inline-block; width:16px; height:0; border-top:3px solid; border-radius:2px;}
+.ct-route-legend-line--plan{border-color:#0B57D0;}
+.ct-route-legend-line--actual{border-color:#146C2E;}
+/* Overspeed Colors is on — the actual route is drawn as a green/yellow/red
+   speed gradient instead of flat green, so its legend swatch matches. */
+.ct-route-legend-line--overspeed{border:none; height:3px; background:linear-gradient(to right, hsl(120,82%,43%), hsl(60,82%,43%), hsl(0,82%,43%));}
+.ct-route-legend-dot{display:inline-block; width:9px; height:9px; border-radius:50%; background:#fff; border:2px solid #146C2E; box-sizing:border-box;}
+/* Small always-on label above the muat/bongkar/berangkat map points —
+   overrides Leaflet's default tooltip chrome (padding/shadow/arrow) so it
+   reads as a compact tag, not a full tooltip bubble. */
+/* Doubled up with the .leaflet-tooltip class Leaflet always adds — Vite
+   dev-mode HMR can re-inject leaflet.css's own <style> tag after this
+   file's, which would otherwise let its same-specificity .leaflet-tooltip
+   defaults win the cascade regardless of source order here. */
+.leaflet-tooltip.ct-route-point-label{background:rgba(255,255,255,0.94); border:1px solid var(--outline-variant); border-radius:4px; padding:0px 5px; font-size:9.5px; font-weight:700; color:var(--on-surface); box-shadow:none;}
+.ct-route-point-label::before{display:none;}
+/* Muat/Bongkar/Berangkat/Harsh Driving labels — no chip box, just bold
+   colored text (matching the point's own marker color) with a soft white
+   halo so it stays legible over any map tile underneath it. */
+.leaflet-tooltip.ct-route-point-label--plain{background:none; border:none; padding:0; font-size:12px; font-weight:800; text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 0 6px #fff;}
+/* Planner Allocate's Transporter Catalog coverage circles — centered city
+   label, no chip box, purple to match the circle outline/fill so it reads
+   as one shape rather than a separate marker. */
+.leaflet-tooltip.planner-vendor-coverage-label{background:none; border:none; padding:0; font-size:11.5px; font-weight:800; color:#7C3AED; text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 0 6px #fff;}
+.planner-vendor-coverage-label::before{display:none;}
+/* MyTransporter's per-vendor "Wilayah Operasi" map (TransporterVendorView.vue). */
+.vendor-detail-map{width:100%; height:320px; border-radius:var(--r-md); border:1px solid var(--outline-variant); overflow:hidden;}
+.vendor-map-swatch{display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:middle;}
+.leaflet-tooltip.ct-route-point-label--muat{color:var(--primary);}
+.leaflet-tooltip.ct-route-point-label--bongkar{color:var(--success);}
+.leaflet-tooltip.ct-route-point-label--berangkat{color:#146C2E;}
+.leaflet-tooltip.ct-route-point-label--harsh{color:#EA580C;}
+.leaflet-tooltip.ct-route-point-label--refuel{color:#0B57D0;}
+/* Stop/Idle/Harsh-Driving event dots — click (or hover, for a quick
+   preview) popup content. */
+.ct-event-popup{display:flex; flex-direction:column; gap:3px; font-size:12px; color:var(--on-surface); min-width:180px;}
+.ct-event-popup b{font-size:12.5px;}
+.ct-event-popup-gmaps{margin-top:4px; align-self:flex-start; padding:5px 10px; border-radius:8px; background:var(--primary-container); color:var(--primary-dark); font-size:11.5px; font-weight:700; text-decoration:none;}
+.ct-event-popup-gmaps:hover{background:var(--primary); color:#fff;}
+.ct-map-caption svg{width:12px; height:12px; flex-shrink:0; margin-top:1px;}
+
+/* Bottom detail panel — a flex sibling of .ct-middle inside .ct-shell, not
+   an overlay sitting on top of the map/side panel's own content. Height is
+   purely content-driven (flex:0 0 auto, no forced/dragged pixel height and
+   no scrolling) — it takes exactly as tall as its header + journey bar + 4
+   cards need. .ct-middle (flex:1) automatically reclaims the rest of the
+   shell's fixed height, and just as automatically yields it back the
+   moment this panel isn't in the DOM (v-if) — both resize live via the
+   map's own ResizeObserver, no manual recalculation needed on either side. */
+.ct-detail-panel{flex:0 0 auto; display:flex; flex-direction:column; border-top:1px solid var(--outline-variant);}
+/* Shorter than the shared .ct-oc-head (which reserves room for a cat/count
+   sub-line) — this one is just a title and a close button, so it uses less
+   padding. The descendant selector (not a bare class) keeps this override
+   safe from cascade source-order regardless of where .ct-oc-head itself is
+   declared. */
+.ct-detail-panel .ct-oc-head{display:flex; align-items:center; justify-content:space-between; gap:16px; padding:8px 16px;}
+.ct-detail-panel .ct-oc-head h3{font-size:13px;}
+.ct-detail-head-actions{display:flex; align-items:center; gap:4px; flex-shrink:0;}
+/* Accordion chevron — points down when the body is showing, rotates to
+   point sideways once minimized (same "collapsed" cue as the sidebar's
+   own nav chevrons). */
+.ct-detail-chevron{transition:transform .18s ease;}
+.ct-detail-chevron--collapsed{transform:rotate(-90deg);}
+.ct-detail-body{flex:0 0 auto; padding:8px 16px 16px; display:flex; flex-direction:column;}
+.ct-journey{flex:0 0 auto;}
+/* 4 content cards below the journey bar — placeholders until their own
+   content/data is defined. */
+.ct-detail-cards{display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-top:8px; flex:0 0 auto; min-height:120px;}
+.ct-detail-card{border:1px solid var(--outline-variant); border-radius:12px; background:var(--surface-variant, #F7F8FA); position:relative;}
+@media (max-width:960px){ .ct-detail-cards{grid-template-columns:repeat(2, 1fr);} }
+
+/* Adjust Widget mode — each of the 4 slots swaps its real content for an
+   editor: current assignment + a select to reassign it (auto-relocating
+   that widget's other slot if it picks one already in use elsewhere), and
+   an X (only when occupied) as the one-click "clear this slot" shortcut
+   the request specifically asked for alongside the picker. */
+.ct-widget-slot--editing{background:#fff; border-style:dashed;}
+.ct-widget-remove{position:absolute; top:8px; right:8px; z-index:1; width:22px; height:22px; border-radius:50%; border:1px solid var(--outline-variant); background:#fff; color:var(--on-surface-variant); display:flex; align-items:center; justify-content:center; cursor:pointer;}
+.ct-widget-remove:hover{border-color:var(--error); color:var(--error);}
+.ct-widget-remove svg{width:11px; height:11px;}
+.ct-widget-slot-editor{height:100%; padding:16px 14px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; text-align:center;}
+.ct-widget-slot-num{font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--on-surface-variant); font-weight:700;}
+.ct-widget-slot-current{font-size:13px; font-weight:700; color:var(--on-surface);}
+.ct-widget-slot-select{margin-top:4px; width:100%; padding:6px 8px; border:1px solid var(--outline-variant); border-radius:8px; font-size:11.5px; font-weight:600; color:var(--on-surface); background:#fff;}
+.ct-widget-slot-select:focus{outline:none; border-color:var(--primary);}
+
+/* Card 1 — tonase/qty/volume as planned vs. as reported at proses muat and
+   proses bongkar. Overrides the plain placeholder look above with actual
+   content padding/layout. */
+.ct-cargo-card{background:#fff; padding:14px 16px; display:flex; flex-direction:column; gap:10px;}
+.ct-cargo-head{display:flex; align-items:baseline; justify-content:space-between; gap:8px;}
+.ct-cargo-head h4{font-size:13px; font-weight:700; color:var(--on-surface); margin:0;}
+.ct-cargo-type{font-size:11px; color:var(--on-surface-variant); font-weight:500;}
+/* flex:1 + justify-content:space-between — grows to fill whatever extra
+   height the grid row stretches this card to (Card 3's taller 3x2 tile
+   grid otherwise leaves this one looking top-packed with dead space below)
+   by spreading its own rows evenly down to the card's bottom edge, instead
+   of leaving that height as one empty gap after a fixed-height table. */
+.ct-cargo-table{display:flex; flex-direction:column; gap:6px; flex:1; justify-content:space-between;}
+.ct-cargo-row{display:grid; grid-template-columns:72px repeat(3, 1fr); gap:6px; align-items:center;}
+.ct-cargo-row--head span{font-size:9.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--on-surface-variant); font-weight:700; text-align:center;}
+.ct-cargo-field{font-size:11px; font-weight:600; color:var(--on-surface);}
+.ct-cargo-value{color:var(--on-surface); font-variant-numeric:tabular-nums; text-align:center; background:#fff; border:1px solid var(--outline-variant); border-radius:6px; padding:3px 4px; font-size:10.5px;}
+.ct-detail-card-empty{padding:16px; font-size:11px; color:var(--on-surface-variant); display:flex; align-items:center; justify-content:center; height:100%; text-align:center;}
+
+/* Card 2 — Rute Perjalanan: compliance ring + plan-vs-actual jarak/ETA,
+   same table shape as Card 1's cargo comparison but with only 2 data
+   columns (Plan/Aktual, no Muat/Bongkar split). The ring sits in the head
+   row itself (right side, label to its left) instead of its own row below
+   the title, so this card's height still matches Card 1's — same reason
+   .ct-cargo-head's default baseline alignment is overridden to center
+   here specifically, to keep the ring vertically centered against the
+   title instead of sitting on its text baseline. */
+.ct-route-card .ct-cargo-head{align-items:center;}
+.ct-route-card{background:#fff; padding:14px 16px; display:flex; flex-direction:column; gap:10px;}
+.ct-route-compliance{display:flex; align-items:center; gap:8px; flex-shrink:0;}
+.ct-route-compliance-ring{width:38px; height:38px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; font-variant-numeric:tabular-nums; border:3px solid var(--outline-variant); color:var(--on-surface);}
+.ct-route-compliance-ring.good{border-color:var(--success); color:var(--success);}
+.ct-route-compliance-ring.ok{border-color:#CA8A04; color:#A16207;}
+.ct-route-compliance-ring.bad{border-color:var(--error); color:var(--error);}
+.ct-route-compliance-label{font-size:9.5px; font-weight:600; color:var(--on-surface-variant); line-height:1.3; text-align:right; white-space:nowrap;}
+.ct-route-table{display:flex; flex-direction:column; gap:6px; flex:1; justify-content:space-between;}
+.ct-route-row{display:grid; grid-template-columns:52px repeat(2, 1fr); gap:6px; align-items:center;}
+.ct-route-row--head span{font-size:9.5px; text-transform:uppercase; letter-spacing:.03em; color:var(--on-surface-variant); font-weight:700; text-align:center;}
+.ct-route-field{font-size:11px; font-weight:600; color:var(--on-surface);}
+.ct-route-value{color:var(--on-surface); font-variant-numeric:tabular-nums; text-align:center; background:#fff; border:1px solid var(--outline-variant); border-radius:6px; padding:3px 4px; font-size:10.5px;}
+
+/* Card 3 — Sensors & Telemetry: a 3x3 tile grid (Vehicle battery / Speed /
+   Odometer / GSM signal / Fuel level / Altitude / Movement / Operator /
+   Engine hours). good=green, warn=red with a small alert badge, neutral
+   otherwise — same semantic-color language as the rest of Control Tower. */
+.ct-telemetry-card{background:#fff; padding:14px 16px; display:flex; flex-direction:column; gap:12px;}
+.ct-telemetry-head{display:flex; align-items:center; justify-content:space-between; color:var(--on-surface-variant);}
+.ct-telemetry-head-title{display:flex; align-items:center; gap:7px; font-size:13px; font-weight:700; color:var(--on-surface);}
+.ct-telemetry-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:7px;}
+.ct-telemetry-tile{position:relative; background:#fff; border:1px solid var(--outline-variant); border-radius:10px; padding:9px 7px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:3px;}
+.ct-telemetry-tile.good{background:var(--success-container); border-color:var(--success);}
+.ct-telemetry-tile.warn{background:var(--error-container); border-color:var(--error);}
+.ct-telemetry-value{font-size:13px; font-weight:800; color:var(--on-surface); font-variant-numeric:tabular-nums; white-space:nowrap;}
+.ct-telemetry-tile.good .ct-telemetry-value{color:var(--success);}
+.ct-telemetry-tile.warn .ct-telemetry-value{color:var(--error);}
+.ct-telemetry-label{font-size:9.5px; color:var(--on-surface-variant);}
+.ct-telemetry-badge{position:absolute; top:6px; right:6px; width:14px; height:14px; border-radius:50%; background:var(--error); color:#fff; font-size:9px; font-weight:800; line-height:1; display:flex; align-items:center; justify-content:center;}
+
+/* Card 4 — Fuel Consumption: plain label/value stat grid (no tile boxes,
+   unlike Card 3) so it reads as a lighter-weight summary strip. */
+.ct-fuel-card{background:#fff; padding:14px 16px; display:flex; flex-direction:column; gap:10px;}
+.ct-fuel-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:12px 10px; flex:1;}
+.ct-fuel-stat{display:flex; flex-direction:column; gap:3px; justify-content:center;}
+.ct-fuel-label{font-size:10px; color:var(--on-surface-variant);}
+.ct-fuel-value{font-size:13.5px; font-weight:800; color:var(--on-surface); font-variant-numeric:tabular-nums; white-space:nowrap;}
+.ct-fuel-subtext{font-size:9.5px; color:var(--on-surface-variant);}
+/* Wide horizontal journey bar — 9 stops spread edge-to-edge via
+   justify-content:space-between so the connecting line (an absolutely
+   positioned fill under the dots) can align to the same first/last-dot
+   edges the steps themselves sit at. */
+.ct-journey{padding:6px 4px 20px;}
+.ct-journey-track{position:relative; display:flex; justify-content:space-between; align-items:flex-start;}
+.ct-journey-track::before{content:''; position:absolute; top:7px; left:0; right:0; height:2px; background:var(--outline-variant); z-index:0;}
+.ct-journey-fill{position:absolute; top:7px; left:0; height:2px; background:var(--success); z-index:1; transition:width .3s ease;}
+.ct-journey-step{position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; gap:7px; max-width:96px; text-align:center;}
+.ct-journey-dot{width:15px; height:15px; border-radius:50%; background:#fff; border:2.5px solid var(--outline-variant); flex-shrink:0;}
+.ct-journey-label{font-size:11px; line-height:1.3; color:var(--on-surface-variant); font-weight:500;}
+.ct-journey-step.done .ct-journey-dot{background:var(--success); border-color:var(--success);}
+.ct-journey-step.done .ct-journey-label{color:var(--on-surface);}
+.ct-journey-step.current .ct-journey-dot{background:#fff; border-color:var(--primary); box-shadow:0 0 0 4px var(--primary-container);}
+.ct-journey-step.current .ct-journey-label{color:var(--primary); font-weight:700;}
+@media (max-width:720px){ .ct-shell{height:auto; margin:0; padding:0;} .ct-detail-panel{flex-basis:auto;} }
+
+/* ---------- Order Kontrak — Invoice page ---------- */
+.invoice-page{max-width:1100px;}
+.invoice-doc{display:flex; flex-direction:column; gap:16px;}
+
+.invoice-status-bar{background:linear-gradient(90deg,var(--navy),var(--navy-light)); color:#fff; border-radius:var(--r-lg) var(--r-lg) 0 0; padding:16px 22px; display:flex; align-items:center; justify-content:space-between; font-size:13.5px;}
+.invoice-status-bar b{font-weight:800;}
+.invoice-status-bar-id{font-weight:800; font-size:14.5px; letter-spacing:.02em;}
+.invoice-status-sub{background:rgba(0,0,0,.18); color:#fff; text-align:center; font-size:12px; padding:7px 12px; margin-top:-16px; border-radius:0 0 var(--r-md) var(--r-md);}
+
+.invoice-info-row{background:var(--surface); border:1px solid var(--outline-variant); border-radius:var(--r-lg); padding:16px 22px; display:flex; gap:40px; flex-wrap:wrap;}
+.invoice-info-item{display:flex; align-items:center; gap:10px;}
+.invoice-info-icon{width:34px; height:34px; border-radius:9px; background:var(--primary-container); color:var(--primary-dark); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.invoice-info-label{font-size:11px; color:var(--on-surface-variant); font-weight:600;}
+.invoice-info-value{font-size:13.5px; font-weight:700; color:var(--on-surface); margin-top:1px;}
+
+.invoice-tabs{display:flex;}
+.invoice-tab{padding:9px 18px; border-radius:8px 8px 0 0; font-size:12.5px; font-weight:700;}
+.invoice-tab--active{background:var(--primary); color:#fff;}
+
+.invoice-card{background:var(--surface); border:1px solid var(--outline-variant); border-radius:var(--r-lg); padding:24px 26px;}
+.invoice-card + .invoice-card{margin-top:0;}
+
+.invoice-section-title{display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:800; color:var(--on-surface); margin-bottom:14px;}
+.invoice-two-col{display:grid; grid-template-columns:1fr 1fr; gap:24px;}
+.invoice-field-label{font-size:11.5px; font-weight:700; color:var(--on-surface); margin-top:16px;}
+.invoice-two-col > div > .invoice-field-label:first-child, .invoice-card > .invoice-field-label:first-child{margin-top:0;}
+.invoice-field-value{font-size:13px; color:var(--on-surface); margin-top:3px; line-height:1.55;}
+.invoice-field-value--muted{color:var(--on-surface-variant);}
+
+.invoice-subcard{background:var(--surface-alt); border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:16px 18px; margin-top:10px;}
+.invoice-subcard-head{font-size:12px; font-weight:700; color:var(--on-surface); margin-bottom:12px;}
+.invoice-subcard--highlight{background:var(--surface); border:1.5px solid var(--primary); box-shadow:0 0 0 3px var(--primary-container);}
+.invoice-checkbox-row{display:flex; align-items:flex-start; gap:10px; cursor:not-allowed;}
+.invoice-checkbox-row--enabled{cursor:pointer;}
+.invoice-checkbox-row input{margin-top:3px;}
+.invoice-hint{font-size:11.5px; color:var(--on-surface-variant); margin-top:3px; line-height:1.5;}
+.invoice-chip-row{display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:6px;}
+.invoice-chip{background:var(--surface); border:1px solid var(--outline-variant); border-radius:14px; padding:4px 10px; font-size:11.5px; font-weight:600; color:var(--on-surface);}
+.invoice-chip--removable{display:inline-flex; align-items:center; gap:6px; background:var(--primary-container); border-color:var(--primary-container); color:var(--primary-dark);}
+.invoice-chip--removable button{background:none; border:none; padding:0; color:inherit; font-size:14px; line-height:1; cursor:pointer; font-weight:800;}
+.invoice-chip-select{border:1px dashed var(--outline); border-radius:14px; padding:4px 10px; font-size:11.5px; font-weight:600; color:var(--primary); background:var(--surface); cursor:pointer;}
+
+.invoice-input-wrap{display:flex; align-items:center; gap:0; border:1px solid var(--outline); border-radius:8px; overflow:hidden; margin-top:4px; max-width:220px; background:var(--surface);}
+.invoice-input-wrap input{width:100%; min-width:0; border:none; padding:7px 10px; font-size:13px; font-variant-numeric:tabular-nums; outline:none;}
+.invoice-input-wrap input::-webkit-outer-spin-button, .invoice-input-wrap input::-webkit-inner-spin-button{-webkit-appearance:none; margin:0;}
+.invoice-input-wrap span{flex-shrink:0; background:var(--surface-alt); color:var(--on-surface-variant); font-size:11px; font-weight:700; padding:7px 10px;}
+
+.invoice-photo-row{display:flex; gap:12px;}
+.invoice-photo-slot{flex:1; aspect-ratio:1; border-radius:8px; border:1px solid var(--outline-variant); background:var(--surface-alt); display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden;}
+.invoice-photo-slot img{width:100%; height:100%; object-fit:cover;}
+.invoice-photo-slot span{font-size:11px; color:var(--on-surface-variant);}
+.invoice-photo-caption{position:absolute; left:0; right:0; bottom:0; background:rgba(20,24,32,.6); color:#fff; font-size:10.5px; text-align:center; padding:4px 2px;}
+
+.invoice-calc-block{margin-top:26px; display:flex; flex-direction:column;}
+.invoice-calc-block--plain{margin-top:0;}
+.invoice-calc-row{display:flex; align-items:baseline; justify-content:space-between; gap:16px; padding:7px 0;}
+.invoice-calc-label{font-size:12.5px; color:var(--on-surface);}
+.invoice-calc-sub{display:block; font-size:10.5px; color:var(--on-surface-variant); margin-top:1px;}
+.invoice-calc-value{font-size:12.5px; color:var(--on-surface); font-variant-numeric:tabular-nums; white-space:nowrap;}
+.invoice-calc-row--bold{border-top:1px solid var(--outline-variant); margin-top:6px; padding-top:12px;}
+.invoice-calc-row--bold .invoice-calc-label, .invoice-calc-row--bold .invoice-calc-value{font-weight:800;}
+
+.invoice-edit-row{display:flex; justify-content:flex-end; margin-top:14px;}
+
+.invoice-toggle-row{display:flex; align-items:center; justify-content:flex-end; gap:10px; font-size:12.5px; color:var(--on-surface-variant); font-weight:600;}
+.invoice-switch{width:38px; height:22px; border-radius:12px; background:var(--outline-variant); border:none; position:relative; cursor:pointer; flex-shrink:0; transition:background .15s ease;}
+.invoice-switch.on{background:var(--primary);}
+.invoice-switch-knob{position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:var(--shadow-1); transition:transform .15s ease;}
+.invoice-switch.on .invoice-switch-knob{transform:translateX(16px);}
+
+.invoice-note-textarea{width:100%; min-height:150px; border:1px solid var(--outline); border-radius:8px; padding:12px 14px; font-size:13px; font-family:inherit; resize:vertical; margin-top:6px;}
+.invoice-note-actions{display:flex; gap:10px; margin-top:10px;}
+
+.invoice-total-row{display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-top:18px; padding-top:16px; border-top:1.5px solid var(--outline-variant);}
+.invoice-total-row .invoice-calc-label{font-size:13.5px; font-weight:800;}
+.invoice-total-value{font-size:24px; font-weight:800; color:#D6336C; font-variant-numeric:tabular-nums;}
+
+.invoice-log-item{font-size:12.5px; color:var(--on-surface-variant); padding:4px 0;}
+.invoice-finalize-row{display:flex; justify-content:flex-end; margin-top:16px; padding-top:14px; border-top:1px solid var(--outline-variant);}
+
+/* Invoice Progress — Pengiriman Berkas / Verifikasi / Billing Status.
+   Reuses the exact same "small rounded-square icon, muted until active"
+   language as .invoice-info-icon / .epod-doc-item-icon elsewhere on this
+   page, instead of the oversized circle+X the reference used — this is the
+   "our own standard" pass over that layout. */
+.invoice-progress-steps{display:grid; grid-template-columns:repeat(3, 1fr); gap:16px;}
+.invoice-progress-step{border:1px solid var(--outline-variant); border-radius:var(--r-lg); padding:16px 18px; display:flex; flex-direction:column; gap:12px;}
+.invoice-progress-step.done{border-color:var(--primary-container); background:var(--surface-alt);}
+.invoice-progress-step-head{display:flex; align-items:center; gap:10px;}
+.invoice-progress-step-icon{width:36px; height:36px; border-radius:9px; background:var(--surface-alt); color:var(--on-surface-variant); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.invoice-progress-step-icon.done{background:var(--primary-container); color:var(--primary-dark);}
+.invoice-progress-step-title{flex:1; font-size:13px; font-weight:700; color:var(--on-surface);}
+.invoice-progress-step-body{display:flex; flex-direction:column; gap:10px;}
+.invoice-progress-files-label{font-size:11.5px; font-weight:700; color:var(--on-surface);}
+.invoice-progress-files{display:flex; flex-direction:column; gap:6px;}
+.invoice-progress-file{display:flex; align-items:center; justify-content:space-between; gap:8px; background:var(--surface); border:1px solid var(--outline-variant); border-radius:8px; padding:6px 10px; font-size:11.5px; color:var(--on-surface);}
+.invoice-progress-file button{background:none; border:none; color:var(--error); font-size:14px; font-weight:800; cursor:pointer; padding:0;}
+.invoice-progress-file--view span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.invoice-progress-file--view .btn{flex-shrink:0; padding:3px 10px; font-size:11px;}
+.invoice-progress-add{width:28px; height:28px; border-radius:8px; border:1.5px dashed var(--outline); color:var(--on-surface-variant); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;}
+.invoice-progress-done-text{font-size:12px; color:var(--on-surface);}
+.invoice-progress-pending-text{font-size:12px; color:var(--on-surface-variant);}
+
+.doc-preview-modal-box{max-width:640px; max-height:88vh; display:flex; flex-direction:column;}
+.doc-preview-frame{width:100%; height:60vh; border-radius:var(--r-md); overflow:auto; border:1px solid var(--outline-variant); background:var(--surface-alt); display:flex; align-items:center; justify-content:center;}
+.doc-preview-frame img{max-width:100%; max-height:100%; display:block;}
+.doc-preview-frame iframe{width:100%; height:100%; border:none;}
+
+.report-kpi-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:16px;}
+.report-kpi-card{border:1px solid var(--outline-variant); border-radius:var(--r-lg); padding:16px 18px; background:var(--surface-alt);}
+.report-kpi-card--positive{border-color:#9FDCB4; background:#F1FAF4;}
+.report-kpi-card--negative{border-color:#F0AFA8; background:#FDF2F1;}
+.report-kpi-label{font-size:11.5px; font-weight:700; color:var(--on-surface-variant); margin-bottom:8px;}
+.report-kpi-value{font-size:20px; font-weight:800; color:var(--on-surface); font-variant-numeric:tabular-nums;}
+
+@media (max-width:760px){
+  .invoice-two-col{grid-template-columns:1fr;}
+  .invoice-info-row{gap:20px;}
+  .invoice-photo-row{flex-direction:column; max-width:220px;}
+  .invoice-progress-steps{grid-template-columns:1fr;}
+  .report-kpi-grid{grid-template-columns:1fr;}
+}
+
+/* MyCargo — Cargo Type (left) / Cargo Item (right) master-detail layout. */
+.cargo-layout{display:flex; align-items:flex-start; gap:20px;}
+.cargo-type-panel{
+  width:280px; flex-shrink:0; display:flex; flex-direction:column;
+  background:var(--surface); border:1px solid var(--outline-variant); border-radius:var(--r-lg); box-shadow:var(--shadow-1); overflow:hidden;
+}
+.cargo-type-panel-head{padding:16px 18px 8px; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--on-surface-variant);}
+.cargo-type-list{display:flex; flex-direction:column;}
+.cargo-type-row{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:12px 18px; border:none; border-left:3px solid transparent; background:none;
+  text-align:left; font-size:13.5px; color:var(--on-surface); cursor:pointer;
+}
+.cargo-type-row:hover{background:var(--surface-alt);}
+.cargo-type-row.active{background:#EEF3FC; border-left-color:var(--primary); font-weight:700;}
+.cargo-type-row-name{flex:1;}
+.cargo-type-row-count{color:var(--on-surface-variant); font-variant-numeric:tabular-nums; font-size:12.5px;}
+.cargo-type-add-btn{
+  margin:4px 18px 16px; padding-top:14px; border:none; border-top:1px solid var(--outline-variant); background:none;
+  text-align:left; color:var(--on-surface-variant); font-weight:600; font-size:13px; cursor:pointer;
+}
+.cargo-type-add-btn:hover{color:var(--primary);}
+.cargo-item-panel{flex:1; min-width:0; padding:22px 24px;}
+.cargo-item-panel-head{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px;}
+.cargo-item-panel-head h2{margin:0 0 4px; font-size:18px;}
+.cargo-item-panel-actions{display:flex; align-items:center; gap:8px;}
+@media (max-width:760px){
+  .cargo-layout{flex-direction:column;}
+  .cargo-type-panel{width:100%;}
+}
+
+
+/* ---------- Shared field styling for the Svelte components ----------
+   The ported system styles inputs through `.field input`, which only applies
+   inside its own form markup. Our components are used on their own as well, so
+   the same rules are given a class they can carry themselves — one definition,
+   so a field looks identical wherever it appears.
+
+   Each selector is ALSO written in its `.field` form. `.field select` uses the
+   `background` SHORTHAND, which resets background-repeat and background-position
+   to their initial values, and at (0,1,1) it outranks a bare `.revamp-select`
+   at (0,1,0) — so the caret lost its `no-repeat` and tiled across the control.
+   `.field .revamp-select` is (0,2,0) and wins, which is the whole reason the
+   doubled selectors are here. Do not collapse them. */
+.revamp-input, .field .revamp-input{
+  width:100%; padding:11px 18px; border:1px solid var(--outline); border-radius:999px;
+  background-color:var(--surface); background-image:none;
+  outline:none; font-size:13px; color:var(--on-surface);
+  transition:border .15s, box-shadow .15s;
+}
+.revamp-input::placeholder, .field .revamp-input::placeholder{color:var(--on-surface-variant); opacity:.8;}
+.revamp-input:focus, .field .revamp-input:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(11,87,208,.12);}
+.revamp-input:disabled, .field .revamp-input:disabled{background-color:var(--surface-alt); color:var(--on-surface-variant); cursor:not-allowed;}
+.revamp-select, .field .revamp-select{
+  appearance:none; -webkit-appearance:none; padding-right:38px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235B5F67' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 14px center; background-size:16px;
+}
+.revamp-textarea{
+  width:100%; padding:11px 18px; border:1px solid var(--outline); border-radius:var(--r-md);
+  background:var(--surface); outline:none; font-size:13px; color:var(--on-surface);
+  resize:vertical; transition:border .15s, box-shadow .15s;
+}
+.revamp-textarea:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(11,87,208,.12);}
+
+/* The reference scopes `.req` under each screen that uses it, so a field
+   rendered by a shared component had no rule to hit. Same colour, stated once. */
+.req{color:var(--error);}
+
+/* A `.field` is a form row, but a two-column group nested inside one is a
+   layout — the 16px bottom margin would double up against the group's own. */
+.field > .two-col:last-child > .field:last-child,
+.field > .two-col > .field{margin-bottom:0;}
+
+/* Errors read below the control, where the hint would otherwise sit. */
+.field .field-error{font-size:11.5px; color:var(--error); margin-top:5px; font-weight:600;}
+
+/* An error banner is the same shape as the reference's note, in the error
+   palette — a second shape for "something went wrong" would only be one more
+   thing to recognise. */
+.note-banner-error{background:var(--error-container);}
+.note-banner-error b, .note-banner-error p{color:var(--error);}
+
+/* One priced lane on the agreement form. Boxed rather than merely spaced,
+   because a lane is a repeated group of a dozen fields and without a border
+   the eye cannot tell where one ends and the next begins. */
+.lane-card{border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:16px; margin-bottom:14px;}
+.lane-card-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+.lane-card-head span{font-size:13px; font-weight:700; color:var(--on-surface);}
+
+/* The `.field label` rule only reaches a label inside `.field` markup. Screens
+   that lay their own forms out get the identical treatment under a class they
+   can carry, so one label does not read differently from the next. */
+.form-label{display:block; font-size:12.5px; font-weight:600; color:var(--on-surface-variant); margin-bottom:6px;}
+
+/* ---------- Customer Help conversation ----------
+   The reference has a single `.wa-bubble` for previewing an outgoing WhatsApp
+   template; a two-sided thread needs a little more. Same bubble, plus the
+   side, the ground it sits on, and the meta line beneath it. */
+.wa-thread{background:#ECE5DD; border-radius:var(--r-md); padding:16px; display:flex;
+  flex-direction:column; gap:10px; max-height:60vh; overflow-y:auto;}
+.wa-row{display:flex; max-width:78%;}
+.wa-row-in{align-self:flex-start;}
+.wa-row-out{align-self:flex-end;}
+.wa-row-note{align-self:center; max-width:90%;}
+.wa-row-out .wa-bubble{background:#D9FDD3;}
+.wa-row-note .wa-bubble{background:var(--surface-alt); font-style:italic; text-align:center;}
+.wa-meta{font-size:10.5px; color:var(--on-surface-variant); margin-top:4px; display:block;}
+.wa-sender{font-weight:700; font-size:11px; color:var(--primary-dark); display:block; margin-bottom:3px;}
+.wa-composer{display:flex; gap:10px; align-items:flex-end; margin-top:14px;}
+.wa-composer textarea{flex:1; min-height:44px;}
+
+/* ---------- Inline filter bar ----------
+   One wrapping row rather than the bordered fieldset groups this replaced —
+   those cost a third of the viewport before any data was visible. */
+.filter-bar{display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px 14px;
+  background:var(--surface); border:1px solid var(--outline-variant);
+  border-radius:var(--r-md); padding:14px 16px; margin-bottom:16px;}
+.filter-bar-field{display:flex; flex-direction:column; gap:5px; min-width:150px; flex:1 1 150px; max-width:230px;}
+.filter-bar-field label{font-size:11.5px; font-weight:600; color:var(--on-surface-variant);}
+.filter-bar-actions{display:flex; align-items:center; gap:8px; margin-left:auto; padding-bottom:1px;}
+
+/* MapLibre's attribution sits bottom-right; keep it small and unobtrusive. */
+.maplibregl-ctrl-attrib{font-size:10px;}

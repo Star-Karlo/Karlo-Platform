@@ -1,0 +1,12 @@
+node_modules
+/build
+/.svelte-kit
+/package
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Secrets. .env now holds COMMS_API_KEY, which is a live credential for the
+# communication service — .env.example carries the names, never the values.
+.env
+.env.*
+!.env.example

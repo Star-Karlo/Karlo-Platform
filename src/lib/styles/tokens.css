@@ -1,0 +1,85 @@
+/* ============================================================
+   KARLO PLATFORM — DESIGN TOKENS
+   Reverse-engineered from https://platform.karlo.id (Aug 2026)
+   Every value below was read off computed styles of the live app.
+   ============================================================ */
+
+:root {
+  /* ---------- BRAND / CORE ---------- */
+  --karlo-navy:            #0D2555;  /* topbar, table headers, sidebar labels, headings */
+  --karlo-navy-50:         rgba(13, 37, 85, 0.5);   /* stat-card labels */
+  --karlo-cyan:            #12C7EF;  /* THE action color: buttons, links, icon circles */
+  --karlo-green:           #1CC88A;  /* active segment in segmented control / success */
+  --karlo-green-nav:       #64E480;  /* 0.5px border on the ACTIVE sidebar item */
+  --karlo-red:             #E75040;  /* destructive (Delete) */
+
+  /* ---------- LEGACY BOOTSTRAP / SB-ADMIN-2 (older screens) ---------- */
+  --karlo-info:            #36B9CC;  /* .btn-info — Print button on Draft Order */
+  --karlo-primary-legacy:  #4E73DF;  /* bootstrap primary, old table heads */
+  --karlo-secondary:       #858796;  /* .btn-secondary + all muted text */
+
+  /* ---------- NEUTRALS ---------- */
+  --karlo-text:            #3A3B45;  /* default body text */
+  --karlo-text-muted:      #858796;  /* table cells, inactive segment, helper text */
+  --karlo-text-dim:        #929292;  /* inactive outline pill tab */
+  --karlo-text-heading:    rgba(12, 20, 36, 0.75); /* "Monitoring" style headings */
+  --karlo-text-dark:       #333333;  /* active sidebar label */
+  --karlo-text-alt:        #5A5C69;  /* legacy headings */
+
+  --karlo-bg-page:         #F7F7F7;  /* the app canvas */
+  --karlo-bg-surface:      #FFFFFF;  /* every card + the sidebar */
+  --karlo-bg-zebra:        #F4F4F4;  /* odd table rows = rgba(0,0,0,.05) over white */
+  --karlo-bg-tint:         #EBF2FD;  /* pale blue info block */
+  --karlo-bg-cream:        #FAF9F5;
+
+  --karlo-border-input:    #D9D9D9;  /* inputs, action-bar tiles */
+  --karlo-border-card:     #E3E6F0;  /* 1px card outline (Order hero) */
+  --karlo-border-muted:    #858796;  /* segmented-control + pill-tab outline */
+  --karlo-border-divider:  #E3E6F0;  /* sidebar group separators */
+
+  /* ---------- TYPE ---------- */
+  --karlo-font: 'Poppins', sans-serif;   /* body font of the whole app */
+  --karlo-font-legacy: 'Roboto', sans-serif; /* loaded, used by a few legacy bits */
+
+  --karlo-fs-xs:   12px;   /* buttons, table cells, filter inputs */
+  --karlo-fs-sm:   14px;   /* stat labels, table headers, underline tabs */
+  --karlo-fs-nav:  15px;   /* sidebar items + profile name */
+  --karlo-fs-md:   16px;   /* base */
+  --karlo-fs-lg:   20px;   /* section + page titles */
+  --karlo-fs-xl:   24px;   /* big page title (ORDERS), stat values */
+
+  --karlo-lh-tight: 1.2;
+  --karlo-lh-base:  1.5;   /* 24px on 16px */
+
+  /* ---------- RADII (the app really does use all of these) ---------- */
+  --karlo-r-nav:     5px;    /* sidebar item */
+  --karlo-r-legacy:  5.6px;  /* bootstrap .btn */
+  --karlo-r-stat:    9px;    /* stat cards */
+  --karlo-r-card:    10px;   /* section cards, tab bar, action-bar tiles */
+  --karlo-r-btn:     20px;   /* standard pill button (h36) */
+  --karlo-r-input:   25px;   /* inputs + outline pill tabs */
+  --karlo-r-cta:     50px;   /* large hero CTA */
+  --karlo-r-segment: 800px;  /* segmented control wrapper */
+  --karlo-r-round:   50%;    /* avatars, icon circles */
+
+  /* ---------- SHADOWS ---------- */
+  --karlo-shadow-card:   0 1px 4px rgba(0, 0, 0, 0.25);      /* stat + list cards */
+  --karlo-shadow-soft:   0 1px 4px rgba(0, 0, 0, 0.1);
+  --karlo-shadow-topbar: 0 2.4px 28px rgba(58, 59, 69, 0.15);
+  --karlo-shadow-bar:    0 2px 2px 0 #CECECE;                 /* sticky action bar */
+  --karlo-shadow-btn:    0 2px 4px rgba(58, 59, 69, 0.2);
+
+  /* ---------- LAYOUT ---------- */
+  --karlo-topbar-h:        64px;
+  --karlo-actionbar-h:     72px;
+  --karlo-sidebar-w:       215px;
+  --karlo-sidebar-w-min:   75px;
+  --karlo-sidebar-pad-x:   9px;
+  --karlo-sidebar-item-h:  35px;
+  --karlo-content-pad-x:   24px;
+  --karlo-grid-gutter:     24px;   /* 2 x 12px column padding */
+  --karlo-sidebar-anim:    0.5s;
+
+  --karlo-z-topbar:    1020;
+  --karlo-z-actionbar: 20;
+}
