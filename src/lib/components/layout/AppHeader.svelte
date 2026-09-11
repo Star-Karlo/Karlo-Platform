@@ -26,6 +26,9 @@
 		manager: '/m/support'
 	};
 	let supportHref = $derived(SUPPORT_PATH[$consoleKey] ?? 'https://karlo.id');
+	// Same shape as Customer Help: the settings page lives under each console,
+	// and a bare /settings matches no route at all.
+	let settingsHref = $derived(`/${{ admin: 'a', shipper: 's', transporter: 't', manager: 'm' }[$consoleKey] ?? 'a'}/settings`);
 
 	onMount(() => notificationActions.getUnread());
 </script>
@@ -78,7 +81,7 @@
 					class="card"
 					style="position:absolute; right:0; top:34px; width:200px; padding:6px; z-index:200;"
 				>
-					<a href="/settings" class="sub-link" style="padding:9px 12px;">User Setting</a>
+					<a href={settingsHref} class="sub-link" style="padding:9px 12px;">User Setting</a>
 					<button
 						class="sub-link"
 						style="padding:9px 12px; border:none; background:transparent; width:100%; text-align:left;"

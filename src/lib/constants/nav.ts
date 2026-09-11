@@ -166,6 +166,9 @@ export const navItems: Record<string, NavItem[]> = {
 			name: 'Settings',
 			icon: Settings,
 			children: [
+				// Platform staff only: a new client company, its feature access and
+				// its first administrator, in one place.
+				{ name: 'Karlo Clients', url: '/a/clients', permission: 'collaboration.inviteMember' },
 				{ name: 'User Management', url: '/a/users' },
 				{ name: 'API Key Management', url: '/a/api-keys' },
 				{ name: 'Customers', url: '/a/customer-list' },

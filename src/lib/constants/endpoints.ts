@@ -24,7 +24,8 @@ export const ENDPOINTS = {
 		logout: '/auth/logout',
 		refresh: '/auth/refresh',
 		me: '/auth/me',
-		changePassword: '/auth/change-password'
+		changePassword: '/auth/change-password',
+		register: '/auth/register'
 	},
 
 	/** Karlo staff only: every company on the platform, whether or not anybody
@@ -62,6 +63,8 @@ export const ENDPOINTS = {
 		/** Move a colleague to another role. Validated against their company. */
 		role: (id: string) => `/users/${id}/role`,
 		suspend: (id: string) => `/users/${id}/suspend`,
+		/** A new company AND its first administrator, in one call. */
+		register: '/auth/register',
 		registerMember: '/auth/register-member'
 	},
 

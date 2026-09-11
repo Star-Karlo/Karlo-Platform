@@ -9,6 +9,7 @@
 	 * behaviour and worth saying out loud on the screen.
 	 */
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import { Building2, Search } from 'lucide-svelte';
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
@@ -28,6 +29,9 @@
 		} catch {
 			companies = [];
 		}
+		// Arriving from Karlo Clients with a company already chosen.
+		const preset = page.url.searchParams.get('company');
+		if (preset && companies.some((c) => c.id === preset)) await choose(preset);
 	});
 
 	async function choose(id: string) {
