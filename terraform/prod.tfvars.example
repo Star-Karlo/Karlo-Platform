@@ -12,4 +12,3 @@ public_mapid_basemap_key = ""
 comms_service_url        = ""
 comms_api_key_secret_arn = ""
 
-tasks_in_public_subnets = true

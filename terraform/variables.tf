@@ -114,11 +114,6 @@ variable "public_hostname" {
   type        = string
 }
 
-variable "tasks_in_public_subnets" {
-  description = "Must match the platform's setting."
-  type        = bool
-  default     = true
-}
 
 variable "log_retention_days" {
   type    = number
