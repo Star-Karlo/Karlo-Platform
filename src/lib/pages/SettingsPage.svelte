@@ -43,7 +43,7 @@
 		message = null;
 		try {
 			await api.post(ENDPOINTS.auth.changePassword, {
-				currentPassword: passwords.current,
+				oldPassword: passwords.current,
 				newPassword: passwords.next
 			});
 			passwords = { current: '', next: '', confirm: '' };
