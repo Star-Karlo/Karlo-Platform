@@ -87,6 +87,8 @@ export const ENDPOINTS = {
 		reroute: (id: string) => `/orders/${id}/reroute`,
 
 		/** Uang sangu. Separate permissions from the order itself. */
+		/** Every order that needs or has an advance — the Uang Sangu screen. */
+		allowances: '/orders/allowances',
 		allowance: (id: string) => `/orders/${id}/allowance`,
 		allowanceFinalise: (id: string) => `/orders/${id}/allowance/finalise`,
 		allowanceHistory: (id: string) => `/orders/${id}/allowance/history`

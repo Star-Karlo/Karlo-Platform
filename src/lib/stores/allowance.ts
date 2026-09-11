@@ -67,7 +67,40 @@ function message(e: any, fallback: string): string {
 	return e?.response?.data?.message ?? fallback;
 }
 
+/** One row of the Uang Sangu list, as the service returns it. */
+export interface AllowanceListRow {
+	orderId: string;
+	orderNumber: string;
+	statusCode: string;
+	customerId?: string;
+	originWarehouseId?: string;
+	destinationWarehouseId?: string;
+	truckId?: string;
+	pickupAt?: string;
+	total?: string | number;
+	enteredAt?: string;
+	finalisedAt?: string;
+}
+
 export const allowanceActions = {
+	/**
+	 * Page through the company's orders with their advances.
+	 *
+	 * `state` narrows: "pending" is entered but not finalised, "final" is
+	 * finalised, "none" is no advance yet, "" is everything.
+	 */
+	async list(params: { page?: number; pageSize?: number; state?: string } = {}) {
+		const res = await api.get(ENDPOINTS.orders.allowances, {
+			page: params.page ?? 0,
+			pageSize: params.pageSize ?? 20,
+			state: params.state || undefined
+		});
+		return {
+			rows: (res.data?.data ?? []) as AllowanceListRow[],
+			totalRows: Number(res.data?.meta?.totalRows ?? 0)
+		};
+	},
+
 	async load(orderId: string) {
 		allowanceStore.update((s) => ({ ...s, loading: true, error: '' }));
 		try {
