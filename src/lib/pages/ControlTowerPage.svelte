@@ -10,7 +10,7 @@
 	import { actingFor } from '$lib/stores/actingFor';
 	import { TRUCK_MARKER } from '$lib/constants/assets';
 	import {
-		fetchLiveFleet, fetchLiveVehicle, truckIcon, plateKey, addressLine, curatedSensors,
+		fetchLiveFleet, fetchLiveVehicle, truckIcon, plateKey, addressLine, curatedSensors, hasFix,
 		STATE_LABEL, STATE_COLOUR, LIVE_POLL_MS, type LiveVehicle, type SensorReading
 	} from '$lib/fms/live';
 
@@ -198,7 +198,7 @@
 		const placed = new Set<number>();
 		for (const o of visibleOrders) {
 			const v = liveFor(o);
-			if (v?.position?.lat != null && v.position.lon != null) {
+			if (v && hasFix(v.position)) {
 				placed.add(v.vehicle_id);
 				out.push({
 					id: o.id,
@@ -232,7 +232,7 @@
 		// planner wants to see.
 		if (showWholeFleet) {
 			for (const v of live) {
-				if (placed.has(v.vehicle_id) || v.position?.lat == null || v.position.lon == null) continue;
+				if (placed.has(v.vehicle_id) || !hasFix(v.position)) continue;
 				out.push({
 					id: `fms-${v.vehicle_id}`,
 					lng: v.position.lon,
@@ -250,7 +250,7 @@
 	});
 
 	let showWholeFleet = $state(true);
-	let liveOnOrders = $derived(visibleOrders.filter((o) => liveFor(o)?.position?.lat != null).length);
+	let liveOnOrders = $derived(visibleOrders.filter((o) => hasFix(liveFor(o)?.position)).length);
 	let fleetSummary = $derived.by(() => {
 		const n: Record<string, number> = { moving: 0, idle: 0, parking: 0, offline: 0 };
 		for (const v of live) n[v.drive_state] = (n[v.drive_state] ?? 0) + 1;

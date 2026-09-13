@@ -94,6 +94,15 @@ export async function fetchLiveVehicle(vehicleId: number): Promise<LiveVehicle |
 	return fmsGet<LiveVehicle>(`/live-view/${vehicleId}`);
 }
 
+/**
+ * Whether a position is worth drawing. A device with no satellite lock
+ * reports 0,0 — off the coast of Africa — and one such truck on the map
+ * makes fit-to-markers zoom out to half the planet.
+ */
+export function hasFix(p: LivePosition | null | undefined): p is LivePosition & { lat: number; lon: number } {
+	return !!p && p.lat != null && p.lon != null && !(Math.abs(p.lat) < 0.5 && Math.abs(p.lon) < 0.5);
+}
+
 /** A plate the way both products compare them: letters and digits only, upper case. */
 export function plateKey(plate: string | undefined | null): string {
 	return (plate ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
