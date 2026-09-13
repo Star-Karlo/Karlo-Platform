@@ -257,3 +257,125 @@ export function truckIcon(state: DriveState): string {
 	iconCache.set(key, url);
 	return url;
 }
+
+// ---------------------------------------------------------------------------
+// Fuel, trips and alerts — the rest of what the vehicle panel shows
+// ---------------------------------------------------------------------------
+
+/**
+ * FMS's fuel ESTIMATE: distance ÷ the vehicle's configured km/L plus idle
+ * hours × idle L/h, over `days`. Not metered — it is null wherever nobody has
+ * set km/L or tank size on the vehicle record, which is most of the migrated
+ * fleet — and the panel says so. Rp/km is derived here, as FMS does.
+ */
+export interface FuelEstimate {
+	days: number;
+	price_per_litre: number | null;
+	distance_km: number | null;
+	idle_hours: number | null;
+	kmpl: number | null;
+	litres: number | null;
+	cost: number | null;
+	idle_litres: number | null;
+	idle_cost: number | null;
+	refuels?: number | null;
+	rp_per_km: number | null;
+}
+
+export async function fetchFuelEstimate(vehicleId: number, days = 30): Promise<FuelEstimate | null> {
+	const res = await fmsGet<{ days: number; price_per_litre: number | null; rows?: any[] }>(
+		`/fuel/analysis?vehicle_id=${vehicleId}&days=${days}`
+	);
+	const r = res.rows?.[0];
+	if (!r) return null;
+	return {
+		days: res.days,
+		price_per_litre: res.price_per_litre,
+		distance_km: r.distance_km ?? null,
+		idle_hours: r.idle_hours ?? null,
+		kmpl: r.kmpl ?? null,
+		litres: r.litres ?? null,
+		cost: r.cost ?? null,
+		idle_litres: r.idle_litres ?? null,
+		idle_cost: r.idle_cost ?? null,
+		refuels: r.refuels ?? null,
+		rp_per_km: r.cost != null && r.distance_km ? r.cost / r.distance_km : null
+	};
+}
+
+/** One fix of a trip. idle_min is dwell at a stop, 0 while moving. */
+export interface TripPoint {
+	lat: number;
+	lon: number;
+	speed: number | null;
+	bearing: number | null;
+	ignition: boolean | null;
+	time: string;
+	address?: string | null;
+	over_limit?: boolean;
+	idle_min?: number;
+}
+
+/**
+ * The road-snapped trace and its distance ALONG ROADS — the number that
+ * compares with a planned route. Windows are kept to days, not weeks: FMS
+ * caps nothing server-side and the telemetry store pays for every point.
+ */
+export interface SnappedTrip {
+	points: [number, number][]; // [lon, lat], GeoJSON order for the map
+	distance_km: number | null;
+	chunks_matched?: number;
+	chunks_total?: number;
+}
+
+const rfc = (d: Date) => d.toISOString();
+
+export async function fetchSnappedTrip(vehicleId: number, from: Date, to: Date): Promise<SnappedTrip> {
+	const res = await fmsGet<any>(
+		`/vehicles/${vehicleId}/history/snapped?from=${encodeURIComponent(rfc(from))}&to=${encodeURIComponent(rfc(to))}`
+	);
+	const raw: any[] = res.items ?? res.points ?? res.coordinates ?? [];
+	const points: [number, number][] = raw
+		.map((p: any) => (Array.isArray(p) ? [Number(p[0]), Number(p[1])] : [Number(p.lon ?? p.lng), Number(p.lat)]))
+		.filter((c) => Number.isFinite(c[0]) && Number.isFinite(c[1])) as [number, number][];
+	return { points, distance_km: res.distance_km ?? null, chunks_matched: res.chunks_matched, chunks_total: res.chunks_total };
+}
+
+export async function fetchTrip(vehicleId: number, from: Date, to: Date, maxPoints = 2000): Promise<TripPoint[]> {
+	const res = await fmsGet<{ items?: TripPoint[] }>(
+		`/vehicles/${vehicleId}/history?from=${encodeURIComponent(rfc(from))}&to=${encodeURIComponent(rfc(to))}&max_points=${maxPoints}`
+	);
+	return res.items ?? [];
+}
+
+export interface Alert {
+	id: number | string;
+	vehicle_id: number;
+	license_plate?: string;
+	driver_name?: string | null;
+	alert_code: string;
+	alert_name: string;
+	severity: 'urgent' | 'important' | 'info';
+	occurred_at: string;
+	actual_value?: number | string | null;
+	limit_value?: number | string | null;
+	lat?: number | null;
+	lon?: number | null;
+	address?: string | null;
+	media_url?: string | null;
+	check_status?: 'unchecked' | 'checked' | 'false_alert';
+	note?: string | null;
+}
+
+export async function fetchAlerts(vehicleId: number, from: Date, to: Date): Promise<Alert[]> {
+	const res = await fmsGet<{ items?: Alert[] }>(
+		`/alerts?vehicle_id=${vehicleId}&from=${encodeURIComponent(rfc(from))}&to=${encodeURIComponent(rfc(to))}`
+	);
+	return res.items ?? [];
+}
+
+export const SEVERITY_COLOUR: Record<Alert['severity'], string> = {
+	urgent: '#dc2626',
+	important: '#f59e0b',
+	info: '#3b82f6'
+};

@@ -124,7 +124,7 @@ export const api = {
 			delete instance.defaults.headers.common['Authorization'];
 		}
 	},
-	get: (url: string, params?: any) => instance.get(url, { params }),
+	get: (url: string, params?: any, config?: { headers?: Record<string, string> }) => instance.get(url, { params, ...(config ?? {}) }),
 	post: (url: string, data?: any) => instance.post(url, data),
 	put: (url: string, data?: any) => instance.put(url, data),
 	delete: (url: string) => instance.delete(url),

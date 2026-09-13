@@ -51,6 +51,8 @@
 		markers = [],
 		lines = [],
 		fitToMarkers = false,
+		flyTo = null,
+		flyZoom = 12,
 		/**
 		 * Called with [longitude, latitude] when the map is clicked.
 		 *
@@ -68,6 +70,9 @@
 		markers?: MapMarker[];
 		lines?: MapLine[];
 		fitToMarkers?: boolean;
+		/** Animate to this point whenever it changes. */
+		flyTo?: [number, number] | null;
+		flyZoom?: number;
 		onPick?: (coordinates: [number, number]) => void;
 		class?: string;
 	} = $props();
@@ -297,6 +302,13 @@
 
 	$effect(() => {
 		if (ready && !fitToMarkers) map.setCenter(center);
+	});
+
+	// A caller that wants to fly somewhere — a vehicle just picked from a
+	// list — passes it here; changing `center` alone would jump without
+	// animation and fight fitToMarkers.
+	$effect(() => {
+		if (ready && flyTo) map.flyTo({ center: flyTo, zoom: Math.max(map.getZoom(), flyZoom), duration: 700 });
 	});
 </script>
 

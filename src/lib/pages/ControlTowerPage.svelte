@@ -1,69 +1,85 @@
 <script lang="ts">
+	/**
+	 * Control Tower: the live fleet and the orders it is carrying, on one screen.
+	 *
+	 * Modelled on FMS's Live View for the fleet half — the same client
+	 * selector, the same vehicle list, the same truck markers — and on the
+	 * K-Fleet console for the order half: a right panel per vehicle with what
+	 * it is hauling, how the route is going, its sensors and its fuel, and the
+	 * order book underneath, so a planner can answer "where is that load" and
+	 * "what is that truck doing" from one place.
+	 *
+	 * FMS owns telemetry, TMS owns orders. Nothing here is stored twice: the
+	 * fleet comes from FMS through the console's proxy on the caller's own
+	 * token, orders come from the business service, and a truck is joined to
+	 * its order by master-data id (plate as the fallback until FMS publishes
+	 * the id).
+	 */
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { MapPin, Truck, Check, AlertCircle } from 'lucide-svelte';
+	import { Search, Truck, MapPin, X, Fuel, Gauge, Radio, Mountain, Battery, Activity, Bell, ZoomIn } from 'lucide-svelte';
+	import { api } from '$lib/utils/api';
+	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { orderStore, orderActions } from '$lib/stores/orders';
 	import { warehouseStore, warehouseActions } from '$lib/stores/warehouses';
 	import { customerStore, customerActions } from '$lib/stores/customers';
-	import { MapView, Select, type MapMarker } from '$lib/components/ui';
+	import { MapView, type MapMarker } from '$lib/components/ui';
 	import { authStore } from '$lib/stores/auth';
 	import { actingFor } from '$lib/stores/actingFor';
+	import { formatNumber, formatCurrency } from '$lib/utils/format';
 	import { TRUCK_MARKER } from '$lib/constants/assets';
 	import {
-		fetchLiveFleet, fetchLiveVehicle, truckIcon, plateKey, addressLine, curatedSensors, hasFix,
-		STATE_LABEL, STATE_COLOUR, LIVE_POLL_MS, type LiveVehicle, type SensorReading
+		fetchLiveFleet, fetchLiveVehicle, fetchFuelEstimate, fetchSnappedTrip, fetchAlerts,
+		truckIcon, plateKey, addressLine, curatedSensors, hasFix,
+		STATE_LABEL, STATE_COLOUR, SEVERITY_COLOUR, LIVE_POLL_MS,
+		type LiveVehicle, type SensorReading, type DriveState, type FuelEstimate, type SnappedTrip, type Alert
 	} from '$lib/fms/live';
 
-	/**
-	 * Control Tower — every live order, and where its truck is.
-	 *
-	 * Laid out as the console's own: a KPI strip that filters, an Order Control
-	 * list on the left, and the map on the right. Choosing a KPI card narrows
-	 * both the list and the markers, which is what makes the strip a control
-	 * rather than a read-out.
-	 */
 	let { basePath }: { basePath: string } = $props();
 
-	/**
-	 * The KPI categories, each a set of the business service's own status codes.
-	 *
-	 * They are sets rather than single statuses because a card answers an
-	 * operational question ("what is on the road?") that spans more than one
-	 * state. Every code here is real — see models/status.go — so a card's count
-	 * and the rows it reveals can never disagree.
-	 */
-	const CATEGORIES: { key: string; label: string; statuses: string[]; kinds?: string[] }[] = [
-		{ key: 'planned', label: 'Order Planned', statuses: ['approved', 'readyToPlan'] },
-		{ key: 'single', label: 'Order Single Shipment', statuses: ['assigned', 'inTransit'], kinds: ['standard'] },
-		{ key: 'threepl', label: 'Order 3PL', statuses: ['assigned', 'inTransit'], kinds: ['threepl'] },
-		{ key: 'empty', label: 'Empty Order', statuses: ['assigned', 'inTransit'], kinds: ['empty'] },
-		{ key: 'toLoading', label: 'Menuju Lokasi Muat', statuses: ['assigned'] },
-		{ key: 'transit', label: 'Dalam Perjalanan', statuses: ['inTransit'] },
-		{ key: 'delivered', label: 'Terkirim — Menunggu POD', statuses: ['delivered'] },
-		{ key: 'done', label: 'Selesai', statuses: ['completed'] }
-	];
+	// ------------------------------------------------------------------------
+	// Client selector — FMS's way: one dropdown over the map, "MAST (3)".
+	// For Karlo staff it lists every client and switches the whole console's
+	// acting-for; a client's own user sees only their company.
+	// ------------------------------------------------------------------------
+	let isStaff = $derived($authStore.user?.isPlatformStaff ?? false);
+	let clients = $state<{ id: string; name: string; role?: string; products?: string[]; vehicles?: number }[]>([]);
 
-	let activeCategory = $state('single');
-	let statusFilter = $state('');
+	async function loadClients() {
+		if (!isStaff) return;
+		try {
+			const res = await api.get(ENDPOINTS.adminCompanies, { pageSize: 100 });
+			const rows = (res.data?.data ?? []).filter((c: any) => c.role !== 'admin');
+			clients = rows.map((c: any) => ({ id: c.id, name: c.name, role: c.role, products: c.products }));
+			// Vehicle counts per client, one cheap paged call each — the
+			// selector reads "BRT (165)" like FMS's does.
+			await Promise.all(
+				clients.map(async (c) => {
+					try {
+						const r = await api.get(`${ENDPOINTS.trucks.list}?pageSize=1`, undefined, { headers: { 'X-Acting-For': c.id } });
+						c.vehicles = Number(r.data?.meta?.totalRows ?? 0);
+					} catch {
+						c.vehicles = undefined;
+					}
+				})
+			);
+			clients = [...clients];
+		} catch {
+			clients = [];
+		}
+	}
 
-	onMount(() => {
-		// One wide page rather than per-category calls: the strip needs counts
-		// across every category at once, and filtering client-side keeps a card
-		// click instant instead of a round trip.
-		void orderActions.getAll({ page: 0, pageSize: 200 });
-		void warehouseActions.getAll({ pageSize: 200 });
-		void customerActions.getAll({ pageSize: 200 });
-	});
+	function chooseClient(id: string) {
+		const c = clients.find((x) => x.id === id);
+		if (c) actingFor.set(c.id, c.name, c.role ?? '');
+		else actingFor.clear();
+		selectedVehicleId = null;
+		selectedOrderId = '';
+	}
 
-	let allOrders = $derived($orderStore.orders ?? []);
-
-	// --- The live fleet, from FMS -------------------------------------------
-	//
-	// FMS owns telemetry. Once a minute (its own map's cadence; the route is
-	// uncached) the whole fleet for the company in view is fetched through
-	// the console's proxy, and every truck with a fix is drawn where it is —
-	// not where its order's warehouse is. A company without FMS gets the
-	// warehouse fallback, and the caption says which is which.
+	// ------------------------------------------------------------------------
+	// The live fleet, from FMS, once a minute.
+	// ------------------------------------------------------------------------
 	let live = $state<LiveVehicle[]>([]);
 	let liveError = $state('');
 	let liveAt = $state<Date | null>(null);
@@ -75,408 +91,489 @@
 			liveAt = new Date();
 			liveError = '';
 		} catch (e: any) {
-			// 403/404 = this company is not on FMS; anything else is a fault.
 			live = [];
 			liveError = /403|404/.test(String(e?.message)) ? '' : 'Telemetri FMS tidak dapat dimuat.';
 		}
 	}
 
 	onMount(() => {
+		void orderActions.getAll({ page: 0, pageSize: 200 });
+		void warehouseActions.getAll({ pageSize: 200 });
+		void customerActions.getAll({ pageSize: 200 });
+		void loadClients();
 		void refreshLive();
 		liveTimer = setInterval(() => void refreshLive(), LIVE_POLL_MS);
 	});
 	onDestroy(() => clearInterval(liveTimer));
 
-	// Acting for a different company means a different fleet.
-	let lastActing = $state('');
+	let lastActing = $state<string | null>(null);
 	$effect(() => {
 		const id = $actingFor.companyId;
-		if (id !== lastActing) {
-			lastActing = id;
+		if (lastActing !== null && id !== lastActing) {
 			void refreshLive();
+			void orderActions.getAll({ page: 0, pageSize: 200 });
 		}
+		lastActing = id;
 	});
 
-	/** Live vehicle by master-data id (when FMS publishes it) and by plate (always). */
 	let liveById = $derived(new Map(live.filter((v) => v.master_data_id).map((v) => [v.master_data_id as string, v])));
 	let liveByPlate = $derived(new Map(live.map((v) => [plateKey(v.license_plate), v])));
-
-	function liveFor(o: { truckId?: string; truckPoliceNumber?: string }): LiveVehicle | undefined {
+	function liveFor(o: { truckId?: string; truckPoliceNumber?: string } | null | undefined): LiveVehicle | undefined {
+		if (!o) return undefined;
 		return (o.truckId && liveById.get(o.truckId)) || liveByPlate.get(plateKey(o.truckPoliceNumber));
 	}
 
-	/**
-	 * Karlo staff carry no company of their own, so every company-scoped read
-	 * is refused until they pick a client to act for. Rendering zeros in that
-	 * state is indistinguishable from "a quiet day", which is how someone ends
-	 * up reporting an empty Control Tower as a bug.
-	 */
-	let needsClient = $derived(
-		$authStore.user?.isPlatformStaff && !$actingFor.companyId && !!$orderStore.error
-	);
-
+	// ------------------------------------------------------------------------
+	// Orders, by category — the order book at the bottom.
+	// ------------------------------------------------------------------------
+	const CATEGORIES: { key: string; label: string; statuses: string[]; kinds?: string[] }[] = [
+		{ key: 'planned', label: 'Order Planned', statuses: ['approved', 'readyToPlan'] },
+		{ key: 'single', label: 'Order Single Shipment', statuses: ['assigned', 'inTransit'], kinds: ['standard'] },
+		{ key: 'threepl', label: 'Order 3PL', statuses: ['assigned', 'inTransit'], kinds: ['threepl'] },
+		{ key: 'empty', label: 'Empty Order', statuses: ['assigned', 'inTransit'], kinds: ['empty'] },
+		{ key: 'delivered', label: 'Verifikasi POD', statuses: ['delivered'] },
+		{ key: 'done', label: 'Selesai', statuses: ['completed'] }
+	];
+	let activeCategory = $state('single');
+	let allOrders = $derived($orderStore.orders ?? []);
 	function inCategory(o: any, c: (typeof CATEGORIES)[number]): boolean {
-		if (!c.statuses.includes(o.statusCode)) return false;
-		if (c.kinds && !c.kinds.includes(o.orderKind ?? 'standard')) return false;
-		return true;
+		return c.statuses.includes(o.statusCode) && (!c.kinds || c.kinds.includes(o.orderKind ?? 'standard'));
 	}
-
-	let counts = $derived(
-		Object.fromEntries(CATEGORIES.map((c) => [c.key, allOrders.filter((o) => inCategory(o, c)).length]))
-	);
-
+	let counts = $derived(Object.fromEntries(CATEGORIES.map((c) => [c.key, allOrders.filter((o) => inCategory(o, c)).length])));
 	let category = $derived(CATEGORIES.find((c) => c.key === activeCategory));
 	let categoryOrders = $derived(category ? allOrders.filter((o) => inCategory(o, category)) : []);
 
-	/** The distinct statuses present, so the filter offers only what exists. */
-	let statusOptions = $derived(
-		[...new Set(categoryOrders.map((o) => o.statusCode).filter((c): c is string => !!c))].map(
-			(code) => ({
-				value: code,
-				label: categoryOrders.find((o) => o.statusCode === code)?.status ?? code
-			})
-		)
-	);
-
-	let visibleOrders = $derived(
-		statusFilter ? categoryOrders.filter((o) => o.statusCode === statusFilter) : categoryOrders
-	);
-
-	let selectedId = $state('');
-	let selectedOrder = $derived(visibleOrders.find((o) => o.id === selectedId) ?? null);
+	/** The order a truck is on right now: the live one first, else the most recently assigned. */
+	const ACTIVE: string[] = ['inTransit', 'assigned', 'delivered', 'approved', 'readyToPlan'];
+	function orderFor(v: LiveVehicle | null): any | null {
+		if (!v) return null;
+		const mine = allOrders.filter((o) => liveFor(o)?.vehicle_id === v.vehicle_id);
+		return mine.sort((a, b) => ACTIVE.indexOf(a.statusCode ?? '') - ACTIVE.indexOf(b.statusCode ?? ''))[0] ?? null;
+	}
 
 	function warehouse(id?: string) {
 		if (!id) return null;
 		return ($warehouseStore.warehouses ?? []).find((w: any) => w.id === id) ?? null;
 	}
-
 	function coordsOf(id?: string): [number, number] | null {
 		const c = warehouse(id)?.location?.coordinates;
 		return Array.isArray(c) && c.length === 2 ? [c[0], c[1]] : null;
 	}
-
 	function klien(o: any): string {
 		const found = ($customerStore.customers ?? []).find((c: any) => c.id === o.customerId);
 		return found?.name ?? o.customerName ?? '—';
 	}
-
 	function routeLabel(o: any): string {
 		const from = o.originWarehouseName || warehouse(o.originWarehouseId)?.city || '?';
 		const to = o.destinationWarehouseName || warehouse(o.destinationWarehouseId)?.city || '?';
 		return `${from} → ${to}`;
 	}
-
-	/**
-	 * The milestones a row shows, ticked from the order's own status.
-	 *
-	 * Derived from the lifecycle position rather than stored: a checklist that
-	 * is written separately from the status is a checklist that will eventually
-	 * disagree with it.
-	 */
-	const LIFECYCLE = ['approved', 'readyToPlan', 'assigned', 'inTransit', 'delivered', 'completed'];
-	function milestones(o: any) {
-		const at = LIFECYCLE.indexOf(o.statusCode);
-		return [
-			{ key: 'plan', label: 'Direncanakan', done: at >= 1 },
-			{ key: 'assign', label: 'Armada Ditugaskan', done: at >= 2 },
-			{ key: 'transit', label: 'Dalam Perjalanan', done: at >= 3 },
-			{ key: 'pod', label: 'Terkirim', done: at >= 4 }
-		];
+	function kindLabel(o: any): string {
+		return ({ standard: 'Single Shipment', threepl: '3PL', empty: 'Empty', ltl: 'LTL', multi: 'Multishipment' } as Record<string, string>)[o.orderKind ?? 'standard'] ?? 'Single Shipment';
 	}
 
-	/**
-	 * Where each truck is drawn.
-	 *
-	 * Position comes from the WAREHOUSE the order is heading to or sitting at,
-	 * not from GPS — no tracker has a producer yet, so there is no live
-	 * coordinate to plot. The caption under the map says so, because a marker
-	 * that looks live but is not is worse than no marker.
-	 */
-	/** Orders in view drawn at their truck's GPS fix when FMS has one, else at the warehouse. */
+	// ------------------------------------------------------------------------
+	// Selection: a vehicle (from the list, the map or an order row).
+	// ------------------------------------------------------------------------
+	let selectedVehicleId = $state<number | null>(null);
+	let selectedOrderId = $state('');
+	let selectedVehicle = $derived(live.find((v) => v.vehicle_id === selectedVehicleId) ?? null);
+	let selectedOrder = $derived(
+		(selectedOrderId && allOrders.find((o) => o.id === selectedOrderId)) || orderFor(selectedVehicle)
+	);
+	let flyTo = $state<[number, number] | null>(null);
+	let tab = $state<'monitoring' | 'notifikasi'>('monitoring');
+
+	function selectVehicle(v: LiveVehicle) {
+		selectedVehicleId = v.vehicle_id;
+		selectedOrderId = '';
+		if (hasFix(v.position)) flyTo = [v.position.lon, v.position.lat];
+	}
+	function selectOrderRow(o: any) {
+		selectedOrderId = o.id;
+		const v = liveFor(o);
+		selectedVehicleId = v?.vehicle_id ?? null;
+		if (v && hasFix(v.position)) flyTo = [v.position.lon, v.position.lat];
+		else {
+			const c = coordsOf(o.originWarehouseId);
+			if (c) flyTo = c;
+		}
+	}
+	function clearSelection() {
+		selectedVehicleId = null;
+		selectedOrderId = '';
+	}
+
+	// Per-vehicle detail: sensors from FMS, shipment from the business service.
+	let detail = $state<LiveVehicle | null>(null);
+	let sensors = $state<SensorReading[]>([]);
+	let shipment = $state<any | null>(null);
+	$effect(() => {
+		const v = selectedVehicle;
+		detail = null;
+		sensors = [];
+		if (!v) return;
+		fetchLiveVehicle(v.vehicle_id).then((full) => {
+			if (full && selectedVehicleId === v.vehicle_id) {
+				detail = full;
+				sensors = curatedSensors(full.position?.metadata);
+			}
+		}).catch(() => {});
+	});
+	$effect(() => {
+		const o = selectedOrder;
+		shipment = null;
+		if (!o?.id) return;
+		api.get(ENDPOINTS.orders.shipment(o.id)).then((r) => {
+			if (selectedOrder?.id === o.id) shipment = r.data?.data ?? null;
+		}).catch(() => {});
+	});
+
+	// Fuel estimate (30 days), the actual route for the order's window, and
+	// the vehicle's alerts. Each is its own request and its own failure: a
+	// missing fuel figure must not blank the route.
+	let fuel = $state<FuelEstimate | null>(null);
+	let trip = $state<SnappedTrip | null>(null);
+	let alerts = $state<Alert[]>([]);
+	let tripWindow = $derived.by<{ from: Date; to: Date } | null>(() => {
+		const o = selectedOrder;
+		const now = new Date();
+		if (o?.pickupAt) {
+			const from = new Date(o.pickupAt);
+			const end = o.statusCode === 'completed' || o.statusCode === 'delivered' ? new Date(o.updatedAt ?? now) : now;
+			// Keep the window to days, not weeks — FMS caps nothing server-side.
+			const to = new Date(Math.min(end.getTime(), from.getTime() + 7 * 86_400_000));
+			return from < to ? { from, to } : null;
+		}
+		// No order: today's driving.
+		return { from: new Date(now.getTime() - 24 * 3_600_000), to: now };
+	});
+	$effect(() => {
+		const v = selectedVehicle;
+		fuel = null;
+		alerts = [];
+		if (!v) return;
+		fetchFuelEstimate(v.vehicle_id).then((f) => { if (selectedVehicleId === v.vehicle_id) fuel = f; }).catch(() => {});
+		const w = tripWindow;
+		if (w) fetchAlerts(v.vehicle_id, w.from, w.to).then((a) => { if (selectedVehicleId === v.vehicle_id) alerts = a; }).catch(() => {});
+	});
+	$effect(() => {
+		const v = selectedVehicle;
+		const w = tripWindow;
+		trip = null;
+		if (!v || !w) return;
+		fetchSnappedTrip(v.vehicle_id, w.from, w.to).then((t) => { if (selectedVehicleId === v.vehicle_id) trip = t; }).catch(() => {});
+	});
+
+	function sensorValue(label: string): string | undefined {
+		return sensors.find((s) => s.label === label)?.value;
+	}
+	let fuelLevel = $derived(sensors.find((s) => s.label.startsWith('Bahan bakar'))?.value);
+
+	// ------------------------------------------------------------------------
+	// Vehicle list — FMS's: search plate or driver, state dot, location, speed.
+	// ------------------------------------------------------------------------
+	let search = $state('');
+	let stateFilter = $state<DriveState | ''>('');
+	const ORDER: DriveState[] = ['moving', 'idle', 'parking', 'offline'];
+	let listed = $derived.by(() => {
+		const q = search.trim().toLowerCase();
+		return live
+			.filter((v) => !stateFilter || v.drive_state === stateFilter)
+			.filter((v) => !q || v.license_plate.toLowerCase().includes(q) || (v.driver?.name ?? '').toLowerCase().includes(q))
+			.sort((a, b) => ORDER.indexOf(a.drive_state) - ORDER.indexOf(b.drive_state) || a.license_plate.localeCompare(b.license_plate));
+	});
+	let fleetSummary = $derived.by(() => {
+		const n: Record<DriveState, number> = { moving: 0, idle: 0, parking: 0, offline: 0 };
+		for (const v of live) n[v.drive_state]++;
+		return n;
+	});
+	function where(v: LiveVehicle): string {
+		const p = v.position;
+		return p?.kota || p?.kabupaten || p?.kecamatan || '—';
+	}
+
+	// ------------------------------------------------------------------------
+	// Markers: every truck with a fix; the selected one larger. Trucks with no
+	// FMS position but an order in view sit at the order's warehouse.
+	// ------------------------------------------------------------------------
 	let markers = $derived.by<MapMarker[]>(() => {
 		const out: MapMarker[] = [];
-		const placed = new Set<number>();
-		for (const o of visibleOrders) {
-			const v = liveFor(o);
-			if (v && hasFix(v.position)) {
-				placed.add(v.vehicle_id);
-				out.push({
-					id: o.id,
-					lng: v.position.lon,
-					lat: v.position.lat,
-					icon: truckIcon(v.drive_state),
-					iconWidth: 22,
-					iconHeight: 44,
-					heading: v.position.bearing ?? 0,
-					title: v.license_plate,
-					subtitle: `${klien(o)} · ${STATE_LABEL[v.drive_state]}${v.position.speed != null ? ` · ${Math.round(v.position.speed)} km/j` : ''}`
-				});
-				continue;
-			}
-			const atOrigin = o.statusCode === 'assigned' || o.statusCode === 'approved' || o.statusCode === 'readyToPlan';
+		for (const v of listed) {
+			if (!hasFix(v.position)) continue;
+			const sel = v.vehicle_id === selectedVehicleId;
+			out.push({
+				id: `v-${v.vehicle_id}`,
+				lng: v.position.lon,
+				lat: v.position.lat,
+				icon: truckIcon(v.drive_state),
+				iconWidth: sel ? 28 : 18,
+				iconHeight: sel ? 56 : 36,
+				heading: v.position.bearing ?? 0,
+				title: v.license_plate,
+				subtitle: `${STATE_LABEL[v.drive_state]}${v.position.speed != null ? ` · ${Math.round(v.position.speed)} km/j` : ''}${v.driver?.name ? ` · ${v.driver.name}` : ''}`
+			});
+		}
+		for (const o of categoryOrders) {
+			if (liveFor(o)) continue;
+			const atOrigin = ['assigned', 'approved', 'readyToPlan'].includes(o.statusCode ?? '');
 			const c = coordsOf(atOrigin ? o.originWarehouseId : o.destinationWarehouseId) ?? coordsOf(o.originWarehouseId);
 			if (!c) continue;
 			out.push({
-				id: o.id,
-				lng: c[0],
-				lat: c[1],
+				id: `o-${o.id}`, lng: c[0], lat: c[1],
 				icon: TRUCK_MARKER[o.statusCode === 'inTransit' ? 'onDuty' : 'waitingDepartureOrder'],
-				iconWidth: 34,
-				iconHeight: 34,
+				iconWidth: 30, iconHeight: 30,
 				title: o.truckPoliceNumber || o.orderNumber,
 				subtitle: `${klien(o)} · ${o.status ?? o.statusCode} · posisi gudang`
 			});
 		}
-		// The rest of the fleet, so the map is the whole yard and not only the
-		// trucks with an order in this category — an idle truck is a fact a
-		// planner wants to see.
-		if (showWholeFleet) {
-			for (const v of live) {
-				if (placed.has(v.vehicle_id) || !hasFix(v.position)) continue;
-				out.push({
-					id: `fms-${v.vehicle_id}`,
-					lng: v.position.lon,
-					lat: v.position.lat,
-					icon: truckIcon(v.drive_state),
-					iconWidth: 18,
-					iconHeight: 36,
-					heading: v.position.bearing ?? 0,
-					title: v.license_plate,
-					subtitle: `${STATE_LABEL[v.drive_state]}${v.driver?.name ? ` · ${v.driver.name}` : ''}`
-				});
-			}
+		return out;
+	});
+
+	/** The selected order's lane, straight — the planned geometry needs the routes endpoint. */
+	let lines = $derived.by(() => {
+		const out: { id: string; coordinates: [number, number][]; dashed?: boolean; color?: string; width?: number }[] = [];
+		const o = selectedOrder;
+		if (o) {
+			const a = coordsOf(o.originWarehouseId);
+			const b = coordsOf(o.destinationWarehouseId);
+			if (a && b) out.push({ id: `plan-${o.id}`, coordinates: [a, b], dashed: true, color: '#0B57D0' });
+		}
+		if (trip && trip.points.length > 1) {
+			out.push({ id: `actual-${selectedVehicleId}`, coordinates: trip.points, color: '#dc2626', width: 3 });
 		}
 		return out;
 	});
 
-	let showWholeFleet = $state(true);
-	let liveOnOrders = $derived(visibleOrders.filter((o) => hasFix(liveFor(o)?.position)).length);
-	let fleetSummary = $derived.by(() => {
-		const n: Record<string, number> = { moving: 0, idle: 0, parking: 0, offline: 0 };
-		for (const v of live) n[v.drive_state] = (n[v.drive_state] ?? 0) + 1;
-		return n;
-	});
-
-	// --- Sensors for the selected order's truck ------------------------------
-	let sensors = $state<SensorReading[]>([]);
-	let sensorVehicle = $state<LiveVehicle | null>(null);
-	$effect(() => {
-		const o = selectedOrder;
-		const v = o ? liveFor(o) : undefined;
-		sensors = [];
-		sensorVehicle = null;
-		if (!v) return;
-		fetchLiveVehicle(v.vehicle_id).then((full) => {
-			if (!full) return;
-			sensorVehicle = full;
-			sensors = curatedSensors(full.position?.metadata);
-		}).catch(() => {});
-	});
-
-	/** The selected order's lane, drawn straight — the planned geometry needs the routes endpoint. */
-	let lines = $derived.by(() => {
-		if (!selectedOrder) return [];
-		const a = coordsOf(selectedOrder.originWarehouseId);
-		const b = coordsOf(selectedOrder.destinationWarehouseId);
-		return a && b ? [{ id: selectedOrder.id, coordinates: [a, b] as [number, number][], dashed: true }] : [];
-	});
-
-	function selectCategory(key: string) {
-		activeCategory = key;
-		statusFilter = '';
-		selectedId = '';
-	}
+	let needsClient = $derived(isStaff && !$actingFor.companyId);
+	let num = (v: any) => (v === undefined || v === null || v === '' ? undefined : Number(v));
 </script>
 
-<div class="card ct-shell">
-	<div class="ct-kpi-strip">
-		{#each CATEGORIES as c (c.key)}
-			<button
-				type="button"
-				class="ct-kpi {activeCategory === c.key ? 'active' : ''}"
-				onclick={() => selectCategory(c.key)}
-			>
-				<div class="ct-kpi-num">{counts[c.key] ?? 0}</div>
-				<div class="ct-kpi-label">{c.label}</div>
-			</button>
-		{/each}
+<div class="ct2">
+	<!-- Toolbar: client (FMS-style), search, legend -->
+	<div class="ct2-toolbar">
+		{#if isStaff}
+			<select class="ct2-client" value={$actingFor.companyId} onchange={(e) => chooseClient((e.target as HTMLSelectElement).value)}>
+				<option value="">Pilih klien…</option>
+				{#each clients as c (c.id)}
+					<option value={c.id}>{c.name}{c.vehicles !== undefined ? ` (${c.vehicles})` : ''}</option>
+				{/each}
+			</select>
+		{:else}
+			<span class="ct2-client ct2-client--fixed">{$authStore.user?.companyName ?? 'Armada'} ({live.length})</span>
+		{/if}
+		<div class="ct2-search">
+			<Search size={14} />
+			<input placeholder="Cari nomor polisi atau pengemudi" bind:value={search} />
+		</div>
+		<div class="ct2-legend">
+			{#each ORDER as s}
+				<button type="button" class="ct2-legend-item {stateFilter === s ? 'active' : ''}" onclick={() => (stateFilter = stateFilter === s ? '' : s)}>
+					<span class="ct2-dot" style="background:{STATE_COLOUR[s]}"></span>{STATE_LABEL[s]} <b>{fleetSummary[s]}</b>
+				</button>
+			{/each}
+		</div>
+		<span class="hint" style="margin-left:auto;">
+			{#if liveAt}GPS dari FMS · {liveAt.toLocaleTimeString('id-ID')}{:else if liveError}{liveError}{/if}
+		</span>
 	</div>
 
-	{#if needsClient}
-		<div class="note-banner" role="status" style="margin:12px 16px;">
-			<span>🏢</span>
-			<div>
-				You are acting as <b>Karlo</b> with no client selected, and Karlo has no orders of its
-				own — so there is nothing to show. Choose a client in the bar above to see theirs.
-			</div>
-		</div>
-	{:else if $orderStore.error}
-		<div class="note-banner note-banner-error" role="alert" style="margin:12px 16px;">
-			<span>⛔</span><div>{$orderStore.error}</div>
-		</div>
-	{/if}
-
-	<div class="ct-middle">
-		<div class="ct-oc-panel" style="width:340px;">
-			<div class="ct-oc-head">
-				<div class="ct-oc-head-row">
-					<h3>Order Control</h3>
-					{#if statusOptions.length > 1}
-						<div style="width:140px;">
-							<Select bind:value={statusFilter} options={statusOptions} placeholder="Semua" />
-						</div>
-					{/if}
-				</div>
-				<div class="ct-oc-sub"><span class="cat">{category?.label}</span></div>
-			</div>
-
-			{#if $orderStore.loading}
-				<div class="ct-oc-empty">Memuat…</div>
-			{:else if needsClient}
-				<div class="ct-oc-empty">Pilih klien di bar atas untuk melihat order mereka.</div>
-			{:else if $orderStore.error}
-				<div class="ct-oc-empty">Order tidak dapat dimuat.</div>
-			{:else if visibleOrders.length === 0}
-				<div class="ct-oc-empty">
-					{statusFilter
-						? 'Tidak ada order dengan status ini.'
-						: 'Tidak ada order pada kategori ini.'}
-				</div>
+	<div class="ct2-main">
+		<!-- Vehicle list -->
+		<aside class="ct2-list">
+			{#if needsClient}
+				<div class="ct2-empty">Pilih klien untuk melihat armadanya.</div>
+			{:else if live.length === 0}
+				<div class="ct2-empty">{liveError || 'Perusahaan ini belum terhubung ke FMS.'}</div>
+			{:else if listed.length === 0}
+				<div class="ct2-empty">Tidak ada armada yang cocok.</div>
 			{:else}
-				<div class="ct-oc-list">
-					{#each visibleOrders as o (o.id)}
-						<!-- svelte-ignore a11y_click_events_have_key_events -->
-						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<div
-							class="ct-oc-row {selectedId === o.id ? 'active' : ''}"
-							onclick={() => (selectedId = selectedId === o.id ? '' : o.id)}
-						>
-							<div class="ct-oc-status">
-								<span class="badge badge-planner">{o.status ?? o.statusCode}</span>
+				{#each listed as v (v.vehicle_id)}
+					{@const o = orderFor(v)}
+					<button type="button" class="ct2-vehicle {v.vehicle_id === selectedVehicleId ? 'active' : ''}" onclick={() => selectVehicle(v)}>
+						<span class="ct2-dot" style="background:{STATE_COLOUR[v.drive_state]}"></span>
+						<span class="ct2-vehicle-main">
+							<b>{v.license_plate}</b>
+							<small>{v.driver?.name ?? '—'} · {where(v)}</small>
+							{#if o}<small class="ct2-vehicle-order">{o.orderNumber} · {klien(o)}</small>{/if}
+						</span>
+						<span class="ct2-vehicle-speed">
+							{#if !v.online}<span class="ct2-alert" title="Tidak ada sinyal {Math.round(v.stale_minutes)} menit">!</span>{/if}
+							{Math.round(v.position?.speed ?? 0)} km/j
+						</span>
+					</button>
+				{/each}
+			{/if}
+		</aside>
+
+		<!-- Map -->
+		<div class="ct2-map">
+			<MapView {markers} {lines} {flyTo} fitToMarkers={!selectedVehicleId && markers.length > 0} class="ct-map-canvas" />
+		</div>
+
+		<!-- Right panel: the selected vehicle -->
+		{#if selectedVehicle}
+			{@const v = detail ?? selectedVehicle}
+			{@const o = selectedOrder}
+			{@const pos = v.position}
+			<aside class="ct2-panel">
+				<div class="ct2-panel-head">
+					<div>
+						<h3>{o ? `${o.orderNumber} · ${klien(o)}` : v.license_plate}</h3>
+						<div class="ct2-panel-sub"><Truck size={14} /> <b>{v.license_plate}</b> <span>{v.driver?.name ?? 'Pengemudi belum ditetapkan'}</span></div>
+					</div>
+					<div class="ct2-panel-actions">
+						{#if o}<button type="button" class="mini-icon-btn" title="Detail order" onclick={() => goto(`${basePath.replace('/control-tower', '')}/order/${o.id}`)}><ZoomIn size={14} /></button>{/if}
+						<button type="button" class="mini-icon-btn" title="Tutup" onclick={clearSelection}><X size={14} /></button>
+					</div>
+				</div>
+				<div class="ct2-tabs">
+					<button type="button" class:active={tab === 'monitoring'} onclick={() => (tab = 'monitoring')}>Monitoring</button>
+					<button type="button" class:active={tab === 'notifikasi'} onclick={() => (tab = 'notifikasi')}>Notifikasi</button>
+				</div>
+
+				{#if tab === 'monitoring'}
+					<!-- Detail Muatan: TMS order (plan) and its shipment (actual) -->
+					<section class="ct2-card">
+						<header><span>Detail Muatan</span><small>{o?.detail?.itemName ?? o?.detail?.commodity ?? (o ? kindLabel(o) : 'Tidak ada order aktif')}</small></header>
+						{#if o}
+							<table class="ct2-table">
+								<thead><tr><th></th><th>Plan</th><th>Muat</th><th>Bongkar</th></tr></thead>
+								<tbody>
+									<tr><td>Tonase (Kg)</td><td>{formatNumber(num(o.weightKg))}</td><td>{formatNumber(num(shipment?.loadedWeightKg ?? shipment?.weight))}</td><td>{formatNumber(num(shipment?.unloadedWeightKg))}</td></tr>
+									<tr><td>Qty (Pcs)</td><td>{formatNumber(num(o.quantity))}</td><td>{formatNumber(num(shipment?.loadedQuantity))}</td><td>{formatNumber(num(shipment?.unloadedQuantity))}</td></tr>
+									<tr><td>Volume (m³)</td><td>{formatNumber(num(o.detail?.volumeM3 ?? o.detail?.volume))}</td><td>{formatNumber(num(shipment?.volume))}</td><td>—</td></tr>
+								</tbody>
+							</table>
+						{:else}
+							<div class="ct2-card-empty">Truk ini tidak sedang membawa order TMS.</div>
+						{/if}
+					</section>
+
+					<!-- Rute Perjalanan: plan from TMS; actual from FMS trip history when available -->
+					<section class="ct2-card">
+						<header><span>Rute Perjalanan</span>{#if o}<small>{routeLabel(o)}</small>{/if}</header>
+						{#if o}
+							<table class="ct2-table">
+								<thead><tr><th></th><th>Plan</th><th>Aktual</th></tr></thead>
+								<tbody>
+									<tr><td>Jarak</td><td>{o.detail?.distanceKm ? `${formatNumber(num(o.detail.distanceKm))} km` : '—'}</td><td>{trip?.distance_km != null ? `${formatNumber(Math.round(trip.distance_km * 10) / 10)} km` : '—'}</td></tr>
+									<tr><td>ETA</td><td>{o.deliveryAt ? new Date(o.deliveryAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</td><td>{o.statusCode === 'delivered' || o.statusCode === 'completed' ? new Date(o.updatedAt ?? '').toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : 'dalam perjalanan'}</td></tr>
+								</tbody>
+							</table>
+							{#if trip}
+								<small class="hint">
+									Jalur aktual (merah) dari GPS FMS, {tripWindow ? `${tripWindow.from.toLocaleDateString('id-ID')} – ${tripWindow.to.toLocaleDateString('id-ID')}` : ''}{#if trip.chunks_total && trip.chunks_matched !== undefined && trip.chunks_matched < trip.chunks_total}; {trip.chunks_total - trip.chunks_matched} bagian tak terpetakan ke jalan{/if}.
+								</small>
+							{/if}
+						{:else}
+							<div class="ct2-card-empty">{addressLine(pos) || 'Posisi belum diketahui.'}</div>
+						{/if}
+					</section>
+
+					<!-- Sensors & Telemetry: FMS -->
+					<section class="ct2-card">
+						<header><span>Sensors &amp; Telemetry</span><small>{pos?.time ? new Date(pos.time).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : ''}</small></header>
+						<div class="ct-telemetry-grid">
+							<div class="ct-telemetry-tile {v.online ? 'good' : 'warn'}"><Battery size={14} /><span class="ct-telemetry-value">{v.battery_v != null ? `${v.battery_v.toFixed(1)} V` : sensorValue('Tegangan Eksternal') ?? '—'}</span><small>Battery</small></div>
+							<div class="ct-telemetry-tile"><Gauge size={14} /><span class="ct-telemetry-value">{Math.round(pos?.speed ?? 0)} km/h</span><small>Speed</small></div>
+							<div class="ct-telemetry-tile"><Activity size={14} /><span class="ct-telemetry-value" style="color:{STATE_COLOUR[v.drive_state]}">{STATE_LABEL[v.drive_state]}</span><small>Movement</small></div>
+							<div class="ct-telemetry-tile"><Radio size={14} /><span class="ct-telemetry-value">{v.gsm_signal != null ? `${v.gsm_signal}/5` : sensorValue('Sinyal GSM') ?? '—'}</span><small>GSM signal</small></div>
+							<div class="ct-telemetry-tile"><Fuel size={14} /><span class="ct-telemetry-value">{fuelLevel ?? '—'}</span><small>Fuel level</small></div>
+							<div class="ct-telemetry-tile"><Mountain size={14} /><span class="ct-telemetry-value">{sensorValue('Ketinggian') ?? '—'}</span><small>Altitude</small></div>
+						</div>
+						{#if sensors.length > 0}
+							<details class="ct2-more"><summary>Semua sensor ({sensors.length})</summary>
+								<div class="ct-telemetry-grid" style="margin-top:8px;">
+									{#each sensors as r}<div class="ct-telemetry-row"><span>{r.label}</span><b>{r.value}</b></div>{/each}
+								</div>
+							</details>
+						{/if}
+						{#if addressLine(pos)}<div class="ct2-address"><MapPin size={12} /> {addressLine(pos)}</div>{/if}
+					</section>
+
+					<!-- Fuel Consumption: FMS, when its endpoint is wired -->
+					<section class="ct2-card">
+						<header><span>Fuel Consumption</span><small>estimasi FMS · {fuel?.days ?? 30} hari</small></header>
+						{#if fuel && fuel.litres != null}
+							<div class="ct2-fuel">
+								<div><small>Fuel used</small><b>{formatNumber(Math.round(fuel.litres))} L</b></div>
+								<div><small>Est. cost</small><b>{fuel.cost != null ? formatCurrency(fuel.cost) : '—'}</b></div>
+								<div><small>Efficiency</small><b>{fuel.kmpl != null ? `${fuel.kmpl} km/L` : '—'}</b></div>
+								<div><small>Distance</small><b>{fuel.distance_km != null ? `${formatNumber(Math.round(fuel.distance_km))} km` : '—'}</b></div>
+								<div><small>Rp / km</small><b>{fuel.rp_per_km != null ? formatCurrency(Math.round(fuel.rp_per_km)) : '—'}</b></div>
+								<div><small>Idle cost</small><b>{fuel.idle_cost != null ? formatCurrency(fuel.idle_cost) : '—'}{#if fuel.idle_hours != null}<span class="hint"> · {fuel.idle_hours.toFixed(1)} j idle</span>{/if}</b></div>
 							</div>
-							<div class="ct-oc-customer">{klien(o)}</div>
-							<div class="ct-oc-id mono">{o.orderNumber} · {o.orderKind ?? 'standard'}</div>
-							<div class="ct-oc-route"><MapPin size={12} /> {routeLabel(o)}</div>
-							<div class="ct-oc-fleet">
-								<Truck size={12} />
-								<span class="plate mono">{o.truckPoliceNumber || 'Belum ada armada'}</span>
-							</div>
-							<div class="ct-oc-milestones">
-								{#each milestones(o) as m (m.key)}
-									<div class="ct-oc-milestone {m.done ? 'done' : ''}">
-										<span class="ct-oc-milestone-dot">
-											{#if m.done}<Check size={9} />{/if}
-										</span>
-										<span>{m.label}</span>
+							<small class="hint">Dihitung dari jarak ÷ km/L yang dikonfigurasi di FMS, bukan dari sensor.</small>
+						{:else if fuel}
+							<div class="ct2-card-empty">Belum ada km/L atau kapasitas tangki untuk truk ini di FMS, jadi belum bisa diestimasi{fuel.distance_km != null ? ` (jarak ${formatNumber(Math.round(fuel.distance_km))} km)` : ''}.</div>
+						{:else}
+							<div class="ct2-card-empty">Memuat…</div>
+						{/if}
+					</section>
+				{:else}
+					<section class="ct2-card">
+						<header><span><Bell size={13} /> Notifikasi</span><small>{alerts.length} peringatan{tripWindow ? ` · ${tripWindow.from.toLocaleDateString('id-ID')} – ${tripWindow.to.toLocaleDateString('id-ID')}` : ''}</small></header>
+						{#if alerts.length === 0}
+							<div class="ct2-card-empty">Tidak ada peringatan FMS untuk truk ini pada rentang ini.</div>
+						{:else}
+							<div class="ct2-alerts">
+								{#each alerts as a (a.id)}
+									<div class="ct2-alert-row">
+										<span class="ct2-dot" style="background:{SEVERITY_COLOUR[a.severity] ?? '#94a3b8'}"></span>
+										<div>
+											<b>{a.alert_name}</b>
+											{#if a.actual_value != null}<span class="hint"> · {a.actual_value}{a.limit_value != null ? ` / ${a.limit_value}` : ''}</span>{/if}
+											<small>{new Date(a.occurred_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}{a.address ? ` · ${a.address}` : ''}{a.check_status && a.check_status !== 'unchecked' ? ` · ${a.check_status === 'checked' ? 'diperiksa' : 'alarm palsu'}` : ''}</small>
+											{#if a.media_url}<a href={a.media_url} target="_blank" rel="noopener" class="ct2-clip">Lihat rekaman</a>{/if}
+										</div>
 									</div>
 								{/each}
 							</div>
-						</div>
-					{/each}
-				</div>
-			{/if}
-		</div>
-
-		<div class="ct-map-card">
-			<MapView {markers} {lines} fitToMarkers={markers.length > 0} class="ct-map-canvas" />
-			<div class="ct-map-caption">
-				{#if live.length > 0}
-					<Truck size={13} />
-					<span>
-						Posisi GPS dari FMS{liveAt ? `, ${liveAt.toLocaleTimeString('id-ID')}` : ''} —
-						<span style="color:{STATE_COLOUR.moving}">●</span> {fleetSummary.moving} bergerak
-						<span style="color:{STATE_COLOUR.idle}">●</span> {fleetSummary.idle} idle
-						<span style="color:{STATE_COLOUR.parking}">●</span> {fleetSummary.parking} parkir
-						<span style="color:{STATE_COLOUR.offline}">●</span> {fleetSummary.offline} offline.
-						{liveOnOrders} dari {visibleOrders.length} order kategori ini terpetakan lewat GPS;
-						sisanya di lokasi gudang.
-					</span>
-					<label class="ct-fleet-toggle">
-						<input type="checkbox" bind:checked={showWholeFleet} /> seluruh armada
-					</label>
-				{:else}
-					<AlertCircle size={13} />
-					<span>
-						{liveError || `Menampilkan ${markers.length} armada dari kategori "${category?.label}" — posisi berbasis lokasi gudang order; telemetri FMS tidak tersedia untuk perusahaan ini.`}
-					</span>
+						{/if}
+					</section>
 				{/if}
-			</div>
-		</div>
+			</aside>
+		{/if}
 	</div>
 
-	{#if selectedOrder}
-		<div class="ct-detail-panel">
-			<div class="ct-oc-head">
-				<h3>{selectedOrder.orderNumber} · {klien(selectedOrder)}</h3>
-				<div class="ct-detail-head-actions">
-					<button
-						type="button"
-						class="mini-icon-btn ct-widget-toggle"
-						onclick={() => goto(`${basePath.replace('/control-tower', '')}/order/${selectedOrder.id}`)}
-					>
-						<span>Detail Order</span>
-					</button>
-					<button type="button" class="mini-icon-btn" title="Tutup" onclick={() => (selectedId = '')}>
-						×
-					</button>
-				</div>
-			</div>
-			<div class="ct-detail-body">
-				<div class="ct-detail-cards">
-					<div class="ct-detail-card">
-						<div class="ct-cargo-head"><h4>Rute</h4></div>
-						<div class="ct-route-table">
-							<div class="ct-route-row">
-								<span class="ct-route-field">Muat</span>
-								<span class="ct-route-value">{selectedOrder.originWarehouseName || '—'}</span>
-							</div>
-							<div class="ct-route-row">
-								<span class="ct-route-field">Bongkar</span>
-								<span class="ct-route-value">{selectedOrder.destinationWarehouseName || '—'}</span>
-							</div>
-						</div>
-					</div>
-					<div class="ct-detail-card">
-						<div class="ct-cargo-head"><h4>Armada</h4></div>
-						<div class="ct-route-table">
-							<div class="ct-route-row">
-								<span class="ct-route-field">Nomor Polisi</span>
-								<span class="ct-route-value mono">{selectedOrder.truckPoliceNumber || 'Belum ditugaskan'}</span>
-							</div>
-							<div class="ct-route-row">
-								<span class="ct-route-field">Status</span>
-								<span class="ct-route-value">{selectedOrder.status ?? selectedOrder.statusCode}</span>
-							</div>
-						</div>
-					</div>
-					<div class="ct-detail-card">
-						<div class="ct-telemetry-head"><span class="ct-telemetry-head-title">Sensors &amp; Telemetry</span></div>
-						{#if sensorVehicle}
-							{@const pos = sensorVehicle.position}
-							<div class="ct-telemetry-grid">
-								<div class="ct-telemetry-row"><span>Status</span><b style="color:{STATE_COLOUR[sensorVehicle.drive_state]}">{STATE_LABEL[sensorVehicle.drive_state]}</b></div>
-								{#if pos?.speed != null}<div class="ct-telemetry-row"><span>Kecepatan</span><b>{Math.round(pos.speed)} km/j</b></div>{/if}
-								{#if pos?.ignition != null}<div class="ct-telemetry-row"><span>Mesin</span><b>{pos.ignition ? 'Hidup' : 'Mati'}</b></div>{/if}
-								{#if pos?.time}<div class="ct-telemetry-row"><span>Posisi terakhir</span><b>{new Date(pos.time).toLocaleString('id-ID')}</b></div>{/if}
-								{#if addressLine(pos)}<div class="ct-telemetry-row ct-telemetry-wide"><span>Lokasi</span><b>{addressLine(pos)}</b></div>{/if}
-								{#if sensorVehicle.driver?.name}<div class="ct-telemetry-row"><span>Pengemudi (FMS)</span><b>{sensorVehicle.driver.name}</b></div>{/if}
-								{#if sensorVehicle.tracker?.imei}<div class="ct-telemetry-row"><span>Perangkat</span><b class="mono">{sensorVehicle.tracker.imei}</b></div>{/if}
-								{#each sensors as r}
-									<div class="ct-telemetry-row"><span>{r.label}</span><b>{r.value}</b></div>
-								{/each}
-							</div>
-						{:else}
-							<div class="ct-detail-card-empty">
-								{#if live.length === 0}
-									Telemetri belum tersedia — perusahaan ini belum terhubung ke FMS.
-								{:else}
-									Truk order ini belum dikenali di FMS (cocokkan nomor polisi di Master Data).
-								{/if}
-							</div>
-						{/if}
-					</div>
-				</div>
-			</div>
+	<!-- Order book -->
+	<div class="ct2-orders">
+		<div class="order-tabs-row">
+			{#each CATEGORIES as c}
+				<button type="button" class="order-tab {activeCategory === c.key ? 'active' : ''}" onclick={() => (activeCategory = c.key)}>
+					{c.label} ({counts[c.key] ?? 0})
+				</button>
+			{/each}
 		</div>
-	{/if}
+		{#if needsClient}
+			<div class="ct2-empty">Pilih klien untuk melihat order mereka.</div>
+		{:else if categoryOrders.length === 0}
+			<div class="ct2-empty">Tidak ada order pada kategori ini.</div>
+		{:else}
+			<div class="spot-order-scroll">
+				<table class="spot-order-table" style="min-width:1000px;">
+					<thead><tr><th>Tipe Pengiriman</th><th>ID Order</th><th>Klien</th><th>Rute</th><th>Armada</th><th>Status</th><th>Posisi (FMS)</th><th></th></tr></thead>
+					<tbody>
+						{#each categoryOrders as o (o.id)}
+							{@const v = liveFor(o)}
+							<tr class={o.id === selectedOrder?.id ? 'ct2-row-active' : ''} onclick={() => selectOrderRow(o)} style="cursor:pointer;">
+								<td><span class="badge badge-active">{kindLabel(o)}</span></td>
+								<td class="mono">{o.orderNumber}</td>
+								<td>{klien(o)}</td>
+								<td>{routeLabel(o)}</td>
+								<td>{o.truckPoliceNumber ?? '—'}{v?.driver?.name ? ` · ${v.driver.name}` : ''}</td>
+								<td><span class="badge badge-wait">{o.statusAlias ?? o.status ?? o.statusCode}</span></td>
+								<td>
+									{#if v}<span class="ct2-dot" style="background:{STATE_COLOUR[v.drive_state]}"></span> {where(v)} · {Math.round(v.position?.speed ?? 0)} km/j
+									{:else}<span class="hint">tidak di FMS</span>{/if}
+								</td>
+								<td><button type="button" class="frozen-icon-btn" title="Lihat di peta" onclick={(e) => { e.stopPropagation(); selectOrderRow(o); }}><ZoomIn size={14} /></button></td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{/if}
+	</div>
 </div>
