@@ -34,6 +34,8 @@
 		createdAt?: string;
 		/** Present once the company has been sold FMS: its bigint identity there. */
 		fmsTenantId?: number;
+		/** Which products the company actually holds, resolved server-side. */
+		products?: string[];
 		legalName?: string;
 		npwp?: string;
 		address?: string;
@@ -278,8 +280,9 @@
 							<td class="mono">{c.abbreviation ?? '—'}</td>
 							<td><span class="badge {c.role === 'admin' ? 'badge-self' : 'badge-planner'}">{c.role}</span></td>
 							<td>
-								<span class="badge badge-self">TMS</span>
-								{#if c.fmsTenantId}<span class="badge badge-planner" title="FMS tenant {c.fmsTenantId}">FMS</span>{/if}
+								{#if c.products?.includes('tms')}<span class="badge badge-self">TMS</span>{/if}
+								{#if c.products?.includes('fms')}<span class="badge badge-planner" title="FMS tenant {c.fmsTenantId ?? ''}">FMS</span>{/if}
+								{#if !c.products?.length}<span class="hint">—</span>{/if}
 							</td>
 							<td>
 								{#if c.isSuspended}<span class="badge badge-fail">Ditangguhkan</span>
