@@ -2339,3 +2339,10 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 
 /* MapLibre's attribution sits bottom-right; keep it small and unobtrusive. */
 .maplibregl-ctrl-attrib{font-size:10px;}
+
+/* Control Tower — live telemetry rows and the whole-fleet toggle */
+.ct-telemetry-row{display:flex; flex-direction:column; gap:2px; padding:8px 10px; background:var(--surface-container-low, #f4f6fa); border-radius:8px; font-size:12px;}
+.ct-telemetry-row span{color:var(--on-surface-variant); font-size:11px;}
+.ct-telemetry-row b{font-weight:600; word-break:break-word;}
+.ct-telemetry-wide{grid-column:1 / -1;}
+.ct-fleet-toggle{margin-left:auto; display:flex; align-items:center; gap:6px; white-space:nowrap; font-size:12px; cursor:pointer;}

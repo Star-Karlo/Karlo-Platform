@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { MapPin, Truck, Check, AlertCircle } from 'lucide-svelte';
 	import { orderStore, orderActions } from '$lib/stores/orders';
@@ -9,6 +9,10 @@
 	import { authStore } from '$lib/stores/auth';
 	import { actingFor } from '$lib/stores/actingFor';
 	import { TRUCK_MARKER } from '$lib/constants/assets';
+	import {
+		fetchLiveFleet, fetchLiveVehicle, truckIcon, plateKey, addressLine, curatedSensors,
+		STATE_LABEL, STATE_COLOUR, LIVE_POLL_MS, type LiveVehicle, type SensorReading
+	} from '$lib/fms/live';
 
 	/**
 	 * Control Tower — every live order, and where its truck is.
@@ -52,6 +56,54 @@
 	});
 
 	let allOrders = $derived($orderStore.orders ?? []);
+
+	// --- The live fleet, from FMS -------------------------------------------
+	//
+	// FMS owns telemetry. Once a minute (its own map's cadence; the route is
+	// uncached) the whole fleet for the company in view is fetched through
+	// the console's proxy, and every truck with a fix is drawn where it is —
+	// not where its order's warehouse is. A company without FMS gets the
+	// warehouse fallback, and the caption says which is which.
+	let live = $state<LiveVehicle[]>([]);
+	let liveError = $state('');
+	let liveAt = $state<Date | null>(null);
+	let liveTimer: ReturnType<typeof setInterval> | undefined;
+
+	async function refreshLive() {
+		try {
+			live = await fetchLiveFleet();
+			liveAt = new Date();
+			liveError = '';
+		} catch (e: any) {
+			// 403/404 = this company is not on FMS; anything else is a fault.
+			live = [];
+			liveError = /403|404/.test(String(e?.message)) ? '' : 'Telemetri FMS tidak dapat dimuat.';
+		}
+	}
+
+	onMount(() => {
+		void refreshLive();
+		liveTimer = setInterval(() => void refreshLive(), LIVE_POLL_MS);
+	});
+	onDestroy(() => clearInterval(liveTimer));
+
+	// Acting for a different company means a different fleet.
+	let lastActing = $state('');
+	$effect(() => {
+		const id = $actingFor.companyId;
+		if (id !== lastActing) {
+			lastActing = id;
+			void refreshLive();
+		}
+	});
+
+	/** Live vehicle by master-data id (when FMS publishes it) and by plate (always). */
+	let liveById = $derived(new Map(live.filter((v) => v.master_data_id).map((v) => [v.master_data_id as string, v])));
+	let liveByPlate = $derived(new Map(live.map((v) => [plateKey(v.license_plate), v])));
+
+	function liveFor(o: { truckId?: string; truckPoliceNumber?: string }): LiveVehicle | undefined {
+		return (o.truckId && liveById.get(o.truckId)) || liveByPlate.get(plateKey(o.truckPoliceNumber));
+	}
 
 	/**
 	 * Karlo staff carry no company of their own, so every company-scoped read
@@ -140,9 +192,27 @@
 	 * coordinate to plot. The caption under the map says so, because a marker
 	 * that looks live but is not is worse than no marker.
 	 */
+	/** Orders in view drawn at their truck's GPS fix when FMS has one, else at the warehouse. */
 	let markers = $derived.by<MapMarker[]>(() => {
 		const out: MapMarker[] = [];
+		const placed = new Set<number>();
 		for (const o of visibleOrders) {
+			const v = liveFor(o);
+			if (v?.position?.lat != null && v.position.lon != null) {
+				placed.add(v.vehicle_id);
+				out.push({
+					id: o.id,
+					lng: v.position.lon,
+					lat: v.position.lat,
+					icon: truckIcon(v.drive_state),
+					iconWidth: 22,
+					iconHeight: 44,
+					heading: v.position.bearing ?? 0,
+					title: v.license_plate,
+					subtitle: `${klien(o)} · ${STATE_LABEL[v.drive_state]}${v.position.speed != null ? ` · ${Math.round(v.position.speed)} km/j` : ''}`
+				});
+				continue;
+			}
 			const atOrigin = o.statusCode === 'assigned' || o.statusCode === 'approved' || o.statusCode === 'readyToPlan';
 			const c = coordsOf(atOrigin ? o.originWarehouseId : o.destinationWarehouseId) ?? coordsOf(o.originWarehouseId);
 			if (!c) continue;
@@ -154,10 +224,53 @@
 				iconWidth: 34,
 				iconHeight: 34,
 				title: o.truckPoliceNumber || o.orderNumber,
-				subtitle: `${klien(o)} · ${o.status ?? o.statusCode}`
+				subtitle: `${klien(o)} · ${o.status ?? o.statusCode} · posisi gudang`
 			});
 		}
+		// The rest of the fleet, so the map is the whole yard and not only the
+		// trucks with an order in this category — an idle truck is a fact a
+		// planner wants to see.
+		if (showWholeFleet) {
+			for (const v of live) {
+				if (placed.has(v.vehicle_id) || v.position?.lat == null || v.position.lon == null) continue;
+				out.push({
+					id: `fms-${v.vehicle_id}`,
+					lng: v.position.lon,
+					lat: v.position.lat,
+					icon: truckIcon(v.drive_state),
+					iconWidth: 18,
+					iconHeight: 36,
+					heading: v.position.bearing ?? 0,
+					title: v.license_plate,
+					subtitle: `${STATE_LABEL[v.drive_state]}${v.driver?.name ? ` · ${v.driver.name}` : ''}`
+				});
+			}
+		}
 		return out;
+	});
+
+	let showWholeFleet = $state(true);
+	let liveOnOrders = $derived(visibleOrders.filter((o) => liveFor(o)?.position?.lat != null).length);
+	let fleetSummary = $derived.by(() => {
+		const n: Record<string, number> = { moving: 0, idle: 0, parking: 0, offline: 0 };
+		for (const v of live) n[v.drive_state] = (n[v.drive_state] ?? 0) + 1;
+		return n;
+	});
+
+	// --- Sensors for the selected order's truck ------------------------------
+	let sensors = $state<SensorReading[]>([]);
+	let sensorVehicle = $state<LiveVehicle | null>(null);
+	$effect(() => {
+		const o = selectedOrder;
+		const v = o ? liveFor(o) : undefined;
+		sensors = [];
+		sensorVehicle = null;
+		if (!v) return;
+		fetchLiveVehicle(v.vehicle_id).then((full) => {
+			if (!full) return;
+			sensorVehicle = full;
+			sensors = curatedSensors(full.position?.metadata);
+		}).catch(() => {});
 	});
 
 	/** The selected order's lane, drawn straight — the planned geometry needs the routes endpoint. */
@@ -267,15 +380,26 @@
 		<div class="ct-map-card">
 			<MapView {markers} {lines} fitToMarkers={markers.length > 0} class="ct-map-canvas" />
 			<div class="ct-map-caption">
-				<AlertCircle size={13} />
-				<span>
-					Menampilkan {markers.length} armada dari kategori "{category?.label}" — posisi
-					berbasis lokasi gudang order, bukan koordinat GPS langsung.
-					{#if visibleOrders.length > markers.length}
-						{visibleOrders.length - markers.length} order tidak dipetakan karena gudangnya
-						belum punya koordinat.
-					{/if}
-				</span>
+				{#if live.length > 0}
+					<Truck size={13} />
+					<span>
+						Posisi GPS dari FMS{liveAt ? `, ${liveAt.toLocaleTimeString('id-ID')}` : ''} —
+						<span style="color:{STATE_COLOUR.moving}">●</span> {fleetSummary.moving} bergerak
+						<span style="color:{STATE_COLOUR.idle}">●</span> {fleetSummary.idle} idle
+						<span style="color:{STATE_COLOUR.parking}">●</span> {fleetSummary.parking} parkir
+						<span style="color:{STATE_COLOUR.offline}">●</span> {fleetSummary.offline} offline.
+						{liveOnOrders} dari {visibleOrders.length} order kategori ini terpetakan lewat GPS;
+						sisanya di lokasi gudang.
+					</span>
+					<label class="ct-fleet-toggle">
+						<input type="checkbox" bind:checked={showWholeFleet} /> seluruh armada
+					</label>
+				{:else}
+					<AlertCircle size={13} />
+					<span>
+						{liveError || `Menampilkan ${markers.length} armada dari kategori "${category?.label}" — posisi berbasis lokasi gudang order; telemetri FMS tidak tersedia untuk perusahaan ini.`}
+					</span>
+				{/if}
 			</div>
 		</div>
 	</div>
@@ -327,11 +451,29 @@
 					</div>
 					<div class="ct-detail-card">
 						<div class="ct-telemetry-head"><span class="ct-telemetry-head-title">Sensors &amp; Telemetry</span></div>
-						<!-- Honest empty state: no tracker has a producer yet, so
-						     there is no telemetry to show for any truck. -->
-						<div class="ct-detail-card-empty">
-							Telemetri belum tersedia — perangkat GPS belum terhubung ke armada ini.
-						</div>
+						{#if sensorVehicle}
+							{@const pos = sensorVehicle.position}
+							<div class="ct-telemetry-grid">
+								<div class="ct-telemetry-row"><span>Status</span><b style="color:{STATE_COLOUR[sensorVehicle.drive_state]}">{STATE_LABEL[sensorVehicle.drive_state]}</b></div>
+								{#if pos?.speed != null}<div class="ct-telemetry-row"><span>Kecepatan</span><b>{Math.round(pos.speed)} km/j</b></div>{/if}
+								{#if pos?.ignition != null}<div class="ct-telemetry-row"><span>Mesin</span><b>{pos.ignition ? 'Hidup' : 'Mati'}</b></div>{/if}
+								{#if pos?.time}<div class="ct-telemetry-row"><span>Posisi terakhir</span><b>{new Date(pos.time).toLocaleString('id-ID')}</b></div>{/if}
+								{#if addressLine(pos)}<div class="ct-telemetry-row ct-telemetry-wide"><span>Lokasi</span><b>{addressLine(pos)}</b></div>{/if}
+								{#if sensorVehicle.driver?.name}<div class="ct-telemetry-row"><span>Pengemudi (FMS)</span><b>{sensorVehicle.driver.name}</b></div>{/if}
+								{#if sensorVehicle.tracker?.imei}<div class="ct-telemetry-row"><span>Perangkat</span><b class="mono">{sensorVehicle.tracker.imei}</b></div>{/if}
+								{#each sensors as r}
+									<div class="ct-telemetry-row"><span>{r.label}</span><b>{r.value}</b></div>
+								{/each}
+							</div>
+						{:else}
+							<div class="ct-detail-card-empty">
+								{#if live.length === 0}
+									Telemetri belum tersedia — perusahaan ini belum terhubung ke FMS.
+								{:else}
+									Truk order ini belum dikenali di FMS (cocokkan nomor polisi di Master Data).
+								{/if}
+							</div>
+						{/if}
 					</div>
 				</div>
 			</div>
