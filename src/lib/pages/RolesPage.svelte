@@ -10,7 +10,8 @@
 	 */
 	import { onMount } from 'svelte';
 	import { UserCog, Pencil, Trash2, Lock } from 'lucide-svelte';
-	import { roleStore, roleActions, bareKey, type Role, type PermissionSpec } from '$lib/stores/iam';
+	import { roleStore, roleActions, bareKey, PRODUCTS, type Product, type Role, type PermissionSpec } from '$lib/stores/iam';
+	import { authStore } from '$lib/stores/auth';
 	import {
 		Button,
 		Card,
@@ -31,7 +32,25 @@
 	let form = $state({ name: '', description: '', grantsAll: false });
 	let chosen = $state<Set<string>>(new Set());
 
-	onMount(() => void roleActions.load());
+	/**
+	 * Which product's keys the editor shows. A role holds both products'
+	 * keys; the editor works on one at a time and the server leaves the
+	 * other product's keys alone. The FMS tab appears only where FMS is in
+	 * play: Karlo staff, or a company that holds an FMS product.
+	 */
+	let product = $state<Product>('tms');
+	let showProducts = $derived(
+		($authStore.user?.isPlatformStaff ?? false) || Boolean($authStore.user?.access?.fms)
+	);
+
+	onMount(() => void roleActions.load(product));
+
+	async function switchProduct(p: Product) {
+		if (p === product) return;
+		product = p;
+		showForm = false;
+		await roleActions.load(product);
+	}
 
 	/** The assignable catalogue, grouped the way the editor reads. */
 	let groups = $derived(
@@ -77,10 +96,10 @@
 			description: form.description,
 			grantsAll: form.grantsAll,
 			permissions: form.grantsAll ? [] : [...chosen]
-		});
+		}, product);
 		if (ok) {
 			showForm = false;
-			await roleActions.load();
+			await roleActions.load(product);
 		}
 	}
 
@@ -88,7 +107,7 @@
 		if (!confirmingDelete) return;
 		if (await roleActions.remove(confirmingDelete.id)) {
 			confirmingDelete = null;
-			await roleActions.load();
+			await roleActions.load(product);
 		}
 	}
 
@@ -115,6 +134,22 @@
 			<Button onclick={openCreate}>+ Add Role</Button>
 		{/snippet}
 	</PageHeader>
+
+	{#if showProducts}
+		<div class="order-tabs-row" role="tablist" aria-label="Product">
+			{#each PRODUCTS as p}
+				<button
+					type="button"
+					role="tab"
+					aria-selected={product === p.value}
+					class="order-tab {product === p.value ? 'active' : ''}"
+					onclick={() => switchProduct(p.value)}
+				>
+					{p.label} permissions
+				</button>
+			{/each}
+		</div>
+	{/if}
 
 	{#if $roleStore.error}
 		<p class="rounded-card bg-danger/10 px-4 py-3 text-xs text-danger" role="alert">

@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { Plus, Search, KeyRound, Users, Building2 } from 'lucide-svelte';
+	import { Plus, Search, KeyRound, Users, Building2, Pencil } from 'lucide-svelte';
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { formatDate, getInitials } from '$lib/utils/format';
 	import { Button, Field, FormGrid, Input, Modal, Select } from '$lib/components/ui';
 	import { actingFor } from '$lib/stores/actingFor';
+	import { entitlementActions } from '$lib/stores/iam';
 
 	/**
 	 * Karlo Clients — platform staff onboarding a company.
@@ -31,6 +32,18 @@
 		isVerified?: boolean;
 		maxUsers?: number;
 		createdAt?: string;
+		/** Present once the company has been sold FMS: its bigint identity there. */
+		fmsTenantId?: number;
+		legalName?: string;
+		npwp?: string;
+		address?: string;
+		city?: string;
+		province?: string;
+		postalCode?: string;
+		country?: string;
+		phone?: string;
+		email?: string;
+		website?: string;
 	}
 
 	let rows = $state<Client[]>([]);
@@ -72,7 +85,7 @@
 	let showCreate = $state(false);
 	let saving = $state(false);
 	let createError = $state('');
-	let created = $state<{ company: string; email: string } | null>(null);
+	let created = $state<{ company: string; email: string; fmsNote?: string } | null>(null);
 
 	function blank() {
 		return {
@@ -82,8 +95,22 @@
 			fullName: '',
 			email: '',
 			password: '',
-			confirm: ''
+			confirm: '',
+			/** TMS is what /auth/register grants by default; FMS is a second sale. */
+			withFMS: false
 		};
+	}
+
+	/**
+	 * Everything sellable for FMS that is actually built. A new FMS customer
+	 * gets the whole product; Karlo narrows it from Company Management if a
+	 * deal says otherwise. Granting the first module is also what gives the
+	 * company its FMS tenant id.
+	 */
+	async function fmsCatalogue(): Promise<string[]> {
+		const res = await api.get(ENDPOINTS.entitlements.catalogue, { product: 'fms' });
+		const rows: { name: string; roadmap?: boolean }[] = res.data?.data?.features ?? res.data?.data ?? [];
+		return rows.filter((f) => !f.roadmap).map((f) => f.name);
 	}
 	let form = $state(blank());
 
@@ -123,7 +150,7 @@
 
 		saving = true;
 		try {
-			await api.post(ENDPOINTS.auth.register, {
+			const res = await api.post(ENDPOINTS.auth.register, {
 				companyName: form.companyName.trim(),
 				companyAbbreviation: form.companyAbbreviation.trim(),
 				role: form.role,
@@ -131,15 +158,57 @@
 				email: form.email.trim(),
 				password: form.password
 			});
+			let fmsNote = '';
+			if (form.withFMS) {
+				const companyId: string | undefined = res.data?.data?.companyId;
+				if (companyId) {
+					const ok = await entitlementActions.grant(companyId, await fmsCatalogue(), 'fms');
+					fmsNote = ok
+						? 'FMS is enabled with every built feature.'
+						: 'The company was created but FMS could not be enabled — do it from Akses fitur.';
+				}
+			}
 			// Shown rather than closed: the person creating this account has to
 			// hand the password to somebody, and a dialog that vanishes on
 			// success takes the reminder with it.
-			created = { company: form.companyName.trim(), email: form.email.trim() };
+			created = { company: form.companyName.trim(), email: form.email.trim(), fmsNote };
 			await load(0);
 		} catch (e: any) {
 			createError = e?.response?.data?.message ?? 'Klien tidak dapat dibuat.';
 		} finally {
 			saving = false;
+		}
+	}
+
+	// --- Profile -------------------------------------------------------------
+
+	let editing = $state<Client | null>(null);
+	let profile = $state({ name: '', legalName: '', address: '', city: '', province: '', postalCode: '', country: 'ID', phone: '', email: '', website: '' });
+	let profileError = $state('');
+	let savingProfile = $state(false);
+
+	function openProfile(c: Client) {
+		editing = c;
+		profileError = '';
+		profile = {
+			name: c.name ?? '', legalName: c.legalName ?? '', address: c.address ?? '',
+			city: c.city ?? '', province: c.province ?? '', postalCode: c.postalCode ?? '',
+			country: c.country ?? 'ID', phone: c.phone ?? '', email: c.email ?? '', website: c.website ?? ''
+		};
+	}
+
+	async function saveProfile() {
+		if (!editing) return;
+		profileError = '';
+		savingProfile = true;
+		try {
+			await api.put(ENDPOINTS.adminCompany(editing.id), profile);
+			editing = null;
+			await load(page);
+		} catch (e: any) {
+			profileError = e?.response?.data?.message ?? 'Profil tidak dapat disimpan.';
+		} finally {
+			savingProfile = false;
 		}
 	}
 
@@ -194,7 +263,7 @@
 					<col style="width:15%" /><col style="width:13%" /><col style="width:12%" /><col style="width:13%" />
 				</colgroup>
 				<thead>
-					<tr><th>No</th><th>Perusahaan</th><th>Kode</th><th>Peran</th><th>Status</th><th>Maks. User</th><th>Dibuat</th></tr>
+					<tr><th>No</th><th>Perusahaan</th><th>Kode</th><th>Peran</th><th>Produk</th><th>Status</th><th>Dibuat</th></tr>
 				</thead>
 				<tbody>
 					{#each rows as c, i (c.id)}
@@ -209,10 +278,13 @@
 							<td class="mono">{c.abbreviation ?? '—'}</td>
 							<td><span class="badge {c.role === 'admin' ? 'badge-self' : 'badge-planner'}">{c.role}</span></td>
 							<td>
+								<span class="badge badge-self">TMS</span>
+								{#if c.fmsTenantId}<span class="badge badge-planner" title="FMS tenant {c.fmsTenantId}">FMS</span>{/if}
+							</td>
+							<td>
 								{#if c.isSuspended}<span class="badge badge-fail">Ditangguhkan</span>
 								{:else}<span class="badge badge-active">Aktif</span>{/if}
 							</td>
-							<td>{c.maxUsers ?? '—'}</td>
 							<td>{formatDate(c.createdAt)}</td>
 						</tr>
 					{/each}
@@ -220,14 +292,18 @@
 			</table>
 		</div>
 
-		<table class="spot-order-table spot-order-table-frozen" style="width:110px;">
-			<colgroup><col style="width:110px" /></colgroup>
+		<table class="spot-order-table spot-order-table-frozen" style="width:140px;">
+			<colgroup><col style="width:140px" /></colgroup>
 			<thead><tr><th>Kontrol</th></tr></thead>
 			<tbody>
 				{#each rows as c (c.id)}
 					<tr>
 						<td>
 							<div class="action-cell">
+								<button type="button" class="frozen-icon-btn" title="Profil perusahaan" aria-label="Profil {c.name}"
+									onclick={() => openProfile(c)}>
+									<Pencil size={14} />
+								</button>
 								<button type="button" class="frozen-icon-btn" title="Akses fitur" aria-label="Akses fitur {c.name}"
 									onclick={() => goto(`${basePath}/company-management?company=${c.id}`)}>
 									<KeyRound size={14} />
@@ -260,7 +336,7 @@
 		<div class="note-banner" style="margin-top:0;">
 			<span>✅</span>
 			<div>
-				<b>{created.company}</b> sudah dibuat dengan fitur bawaan TMS.<br />
+				<b>{created.company}</b> sudah dibuat dengan fitur bawaan TMS. {created.fmsNote ?? ''}<br />
 				Admin pertamanya: <b class="mono">{created.email}</b> — sampaikan password yang tadi diisi
 				kepada mereka; password itu tidak tersimpan di mana pun selain akun tersebut.
 			</div>
@@ -280,9 +356,17 @@
 					oninput={() => (abbrTouched = true)} />
 			</Field>
 		</FormGrid>
-		<Field label="Peran di Platform" id="kc-role" required help="Menentukan konsol yang mereka lihat: transporter merencanakan & mengirim, shipper memesan.">
-			<Select id="kc-role" bind:value={form.role} options={ROLES} />
-		</Field>
+		<FormGrid>
+			<Field label="Peran di Platform" id="kc-role" required help="Menentukan konsol yang mereka lihat: transporter merencanakan & mengirim, shipper memesan.">
+				<Select id="kc-role" bind:value={form.role} options={ROLES} />
+			</Field>
+			<Field label="Produk" id="kc-products" help="TMS selalu aktif. FMS menyalakan seluruh fitur armada yang sudah dibangun; sesuaikan dari Akses fitur.">
+				<div style="display:flex; gap:18px; padding-top:8px;">
+					<label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" checked disabled /> TMS</label>
+					<label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" bind:checked={form.withFMS} /> FMS (fleet)</label>
+				</div>
+			</Field>
+		</FormGrid>
 
 		<div class="section-title"><h2><Users size={15} /> Admin Pertama</h2></div>
 		<p class="hint" style="margin-bottom:12px;">
@@ -315,5 +399,30 @@
 			<button type="button" class="btn btn-outline" onclick={() => (showCreate = false)}>Batal</button>
 			<Button onclick={create} loading={saving}>Buat Klien</Button>
 		{/if}
+	{/snippet}
+</Modal>
+
+<Modal open={editing !== null} size="lg" title="Profil {editing?.name ?? ''}" onClose={() => (editing = null)}>
+	<p class="hint" style="margin-bottom:12px;">Yang tercetak di dokumen: nama resmi, alamat, kontak. Peran, NPWP dan status tetap keputusan platform.</p>
+	<FormGrid>
+		<Field label="Nama Tampilan" id="cp-name" required><Input id="cp-name" bind:value={profile.name} /></Field>
+		<Field label="Nama Resmi" id="cp-legal" help="cth. PT Maju Jaya Logistik"><Input id="cp-legal" bind:value={profile.legalName} /></Field>
+		<Field label="Telepon" id="cp-phone"><Input id="cp-phone" bind:value={profile.phone} /></Field>
+		<Field label="Email" id="cp-email"><Input id="cp-email" type="email" bind:value={profile.email} /></Field>
+		<Field label="Website" id="cp-web"><Input id="cp-web" bind:value={profile.website} /></Field>
+		<Field label="Negara (ISO-2)" id="cp-country"><Input id="cp-country" bind:value={profile.country} placeholder="ID" /></Field>
+	</FormGrid>
+	<Field label="Alamat" id="cp-address"><Input id="cp-address" bind:value={profile.address} /></Field>
+	<FormGrid>
+		<Field label="Kota" id="cp-city"><Input id="cp-city" bind:value={profile.city} /></Field>
+		<Field label="Provinsi" id="cp-prov"><Input id="cp-prov" bind:value={profile.province} /></Field>
+		<Field label="Kode Pos" id="cp-post" class="!mb-0"><Input id="cp-post" bind:value={profile.postalCode} /></Field>
+	</FormGrid>
+	{#if profileError}
+		<div class="note-banner note-banner-error" role="alert"><span>⛔</span><div>{profileError}</div></div>
+	{/if}
+	{#snippet footer()}
+		<button type="button" class="btn btn-outline" onclick={() => (editing = null)}>Batal</button>
+		<Button onclick={saveProfile} loading={savingProfile}>Simpan</Button>
 	{/snippet}
 </Modal>

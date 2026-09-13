@@ -32,11 +32,18 @@ export const ENDPOINTS = {
 	 *  has an account with it. Derived listings from /users could only show
 	 *  companies that had a member, so unclaimed placeholders were invisible. */
 	adminCompanies: '/admin/companies',
+	/** Karlo staff: a company's printable profile. */
+	adminCompany: (id: string) => `/admin/companies/${id}`,
+	/** A company's own profile — what its documents print. */
+	companyMe: '/companies/me',
 
 	/** Karlo staff: what a company may be sold, and what it currently holds. */
 	entitlements: {
 		catalogue: '/admin/features',
 		forCompany: (id: string) => `/admin/companies/${id}/entitlements`,
+		/** What a company actually holds for one product — what its tokens
+		 *  carry — which the physical rows cannot show under revoke mode. */
+		effective: (id: string) => `/admin/companies/${id}/entitlements/effective`,
 		history: (id: string) => `/admin/companies/${id}/entitlements/history`,
 		revoke: (id: string, product: string, module: string) =>
 			`/admin/companies/${id}/entitlements/${product}/${module}`

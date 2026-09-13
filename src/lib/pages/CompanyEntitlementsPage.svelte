@@ -13,11 +13,12 @@
 	import { Building2, Search } from 'lucide-svelte';
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
-	import { entitlementStore, entitlementActions, type Feature } from '$lib/stores/iam';
+	import { entitlementStore, entitlementActions, PRODUCTS, type Product } from '$lib/stores/iam';
 	import { Button, Card, Input, PageHeader, Select, Spinner } from '$lib/components/ui';
 
 	let companies = $state<{ id: string; name: string; role?: string; abbreviation?: string }[]>([]);
 	let selected = $state('');
+	let product = $state<Product>('tms');
 	let search = $state('');
 	let held = $state<Set<string>>(new Set());
 	let notice = $state('');
@@ -38,8 +39,19 @@
 		selected = id;
 		notice = '';
 		if (!id) return;
-		await entitlementActions.load(id);
+		await reload();
+	}
+
+	async function reload() {
+		await entitlementActions.load(selected, product);
 		held = new Set($entitlementStore.held);
+	}
+
+	async function switchProduct(p: Product) {
+		if (p === product) return;
+		product = p;
+		notice = '';
+		if (selected) await reload();
 	}
 
 	function toggle(name: string) {
@@ -50,8 +62,8 @@
 
 	async function save() {
 		if (!selected) return;
-		if (await entitlementActions.grant(selected, [...held])) {
-			notice = 'Entitlements saved. Their people see the change on their next sign-in.';
+		if (await entitlementActions.save(selected, product, [...held])) {
+			notice = `${product.toUpperCase()} entitlements saved. Their people see the change on their next request.`;
 		}
 	}
 
@@ -108,7 +120,28 @@
 	{/if}
 
 	{#if selected}
-		<Card title="Features for {chosenCompany?.name ?? ''}" header="accent">
+		<!-- One product at a time. The two catalogues share module names that
+		     mean different things, so they are never shown side by side. -->
+		<div class="order-tabs-row" role="tablist" aria-label="Product">
+			{#each PRODUCTS as p}
+				<button
+					type="button"
+					role="tab"
+					aria-selected={product === p.value}
+					class="order-tab {product === p.value ? 'active' : ''}"
+					onclick={() => switchProduct(p.value)}
+				>
+					{p.label}
+				</button>
+			{/each}
+			{#if $entitlementStore.mode === 'revoke'}
+				<span class="hint" style="margin-left:auto;">
+					Opt-out company: holds every {product.toUpperCase()} feature unless withdrawn here.
+				</span>
+			{/if}
+		</div>
+
+		<Card title="{product.toUpperCase()} features for {chosenCompany?.name ?? ''}" header="accent">
 			{#if $entitlementStore.loading}
 				<div class="flex justify-center py-10"><Spinner /></div>
 			{:else if catalogue.length === 0}

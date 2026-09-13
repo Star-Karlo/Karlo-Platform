@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Settings } from 'lucide-svelte';
-	import { currentUser } from '$lib/stores/auth';
+	import { onMount } from 'svelte';
+	import { currentUser, can } from '$lib/stores/auth';
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { ROLES } from '$lib/constants/status';
@@ -17,6 +18,42 @@
 	let passwords = $state({ current: '', next: '', confirm: '' });
 	let saving = $state('');
 	let message = $state<{ tone: 'ok' | 'error'; text: string } | null>(null);
+
+	/**
+	 * The company's own profile — what its documents print. Editable by
+	 * whoever may manage members; everyone else sees it read-only.
+	 */
+	let company = $state({ name: '', legalName: '', address: '', city: '', province: '', postalCode: '', country: 'ID', phone: '', email: '', website: '' });
+	let companyLoaded = $state(false);
+	let mayEditCompany = $derived($can('collaboration.manageMember'));
+
+	onMount(async () => {
+		try {
+			const res = await api.get(ENDPOINTS.companyMe);
+			const c = res.data?.data ?? {};
+			company = {
+				name: c.name ?? '', legalName: c.legalName ?? '', address: c.address ?? '',
+				city: c.city ?? '', province: c.province ?? '', postalCode: c.postalCode ?? '',
+				country: c.country ?? 'ID', phone: c.phone ?? '', email: c.email ?? '', website: c.website ?? ''
+			};
+			companyLoaded = true;
+		} catch {
+			companyLoaded = false; // no company on this account (platform staff acting for nobody)
+		}
+	});
+
+	async function saveCompany() {
+		saving = 'company';
+		message = null;
+		try {
+			await api.put(ENDPOINTS.companyMe, company);
+			message = { tone: 'ok', text: 'Company profile saved.' };
+		} catch (e: any) {
+			message = { tone: 'error', text: e?.response?.data?.message ?? 'Could not save the company profile.' };
+		} finally {
+			saving = '';
+		}
+	}
 
 	/** Client-level switches. Persisted per company, not per user. */
 	let preferences = $state({ cancelValidation: false, agreementRequired: false });
@@ -99,6 +136,28 @@
 			<Button variant="primary" loading={saving === 'profile'} onclick={saveProfile}>Save Changes</Button>
 		</div>
 	</Card>
+
+	{#if companyLoaded}
+		<Card title="Company">
+			<p class="mb-4 text-xs text-muted">What your documents print — the legal name, address and contact details.</p>
+			<div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+				<div><label for="co-name" class="form-label">Display Name</label><Input id="co-name" bind:value={company.name} disabled={!mayEditCompany} /></div>
+				<div><label for="co-legal" class="form-label">Legal Name</label><Input id="co-legal" bind:value={company.legalName} placeholder="PT …" disabled={!mayEditCompany} /></div>
+				<div><label for="co-phone" class="form-label">Phone</label><Input id="co-phone" bind:value={company.phone} disabled={!mayEditCompany} /></div>
+				<div><label for="co-email" class="form-label">Email</label><Input id="co-email" type="email" bind:value={company.email} disabled={!mayEditCompany} /></div>
+				<div class="md:col-span-2"><label for="co-address" class="form-label">Address</label><Input id="co-address" bind:value={company.address} disabled={!mayEditCompany} /></div>
+				<div><label for="co-city" class="form-label">City</label><Input id="co-city" bind:value={company.city} disabled={!mayEditCompany} /></div>
+				<div><label for="co-prov" class="form-label">Province</label><Input id="co-prov" bind:value={company.province} disabled={!mayEditCompany} /></div>
+				<div><label for="co-post" class="form-label">Postal Code</label><Input id="co-post" bind:value={company.postalCode} disabled={!mayEditCompany} /></div>
+				<div><label for="co-web" class="form-label">Website</label><Input id="co-web" bind:value={company.website} disabled={!mayEditCompany} /></div>
+			</div>
+			{#if mayEditCompany}
+				<div class="mt-5 flex justify-end">
+					<Button onclick={saveCompany} loading={saving === 'company'}>Save Company</Button>
+				</div>
+			{/if}
+		</Card>
+	{/if}
 
 	<Card title="Change Password">
 		<div class="grid grid-cols-1 gap-4 md:grid-cols-3">
