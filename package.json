@@ -1,38 +1,40 @@
 {
-  "name": "karlo-platform",
-  "version": "2.0.0",
-  "private": true,
-  "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
-  },
-  "devDependencies": {
-    "@sveltejs/adapter-auto": "^3.3.1",
-    "@sveltejs/adapter-node": "^5.2.9",
-    "@sveltejs/kit": "^2.8.5",
-    "@sveltejs/vite-plugin-svelte": "^5.1.1",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
-    "svelte": "^5.14.0",
-    "svelte-check": "^4.1.1",
-    "tailwindcss": "^3.4.17",
-    "typescript": "^5.7.2",
-    "vite": "^6.0.5"
-  },
-  "dependencies": {
-    "axios": "^1.7.9",
-    "chart.js": "^4.4.7",
-    "date-picker-svelte": "^2.13.0",
-    "lucide-svelte": "^0.469.0",
-    "maplibre-gl": "^6.9.0",
-    "socket.io-client": "^4.8.1",
-    "svelte-select": "^5.8.3",
-    "sweetalert2": "^11.14.5"
-  },
-  "type": "module",
-  "engines": {
-    "node": ">=20.0.0"
-  }
+	"name": "karlo-platform",
+	"version": "2.0.0",
+	"private": true,
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"maplibre:worker": "mkdir -p static/maplibre && cp node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs static/maplibre/",
+		"postinstall": "npm run maplibre:worker"
+	},
+	"devDependencies": {
+		"@sveltejs/adapter-auto": "^3.3.1",
+		"@sveltejs/adapter-node": "^5.2.9",
+		"@sveltejs/kit": "^2.8.5",
+		"@sveltejs/vite-plugin-svelte": "^5.1.1",
+		"autoprefixer": "^10.4.20",
+		"postcss": "^8.4.49",
+		"svelte": "^5.14.0",
+		"svelte-check": "^4.1.1",
+		"tailwindcss": "^3.4.17",
+		"typescript": "^5.7.2",
+		"vite": "^6.0.5"
+	},
+	"dependencies": {
+		"axios": "^1.7.9",
+		"chart.js": "^4.4.7",
+		"date-picker-svelte": "^2.13.0",
+		"lucide-svelte": "^0.469.0",
+		"maplibre-gl": "^6.9.0",
+		"socket.io-client": "^4.8.1",
+		"svelte-select": "^5.8.3",
+		"sweetalert2": "^11.14.5"
+	},
+	"type": "module",
+	"engines": {
+		"node": ">=20.0.0"
+	}
 }

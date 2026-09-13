@@ -135,9 +135,14 @@
 			// blank while raster layers and controls look perfectly healthy.
 			// `new URL(..., import.meta.url)` is a form the bundler resolves
 			// and emits at build time.
-			gl.setWorkerUrl(
-				new URL('maplibre-gl/dist/maplibre-gl-worker.mjs', import.meta.url).href
-			);
+			//
+			// The worker is served as a plain static file, next to the shared
+			// chunk it imports by RELATIVE name. Letting the bundler emit it as
+			// a hashed asset broke exactly that import in production: the worker
+			// loaded, asked for ./maplibre-gl-shared.mjs, got a 404, and the map
+			// never fired `load` — tiles drew, markers never did. `postinstall`
+			// copies both files from the pinned package into static/maplibre.
+			gl.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
 
 			map = new gl.Map({
 				container,
