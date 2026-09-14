@@ -11,6 +11,7 @@
 	import { authStore, consoleKey, currentUser } from '$lib/stores/auth';
 	import { notificationStore, notificationActions } from '$lib/stores/invoice_notification_dashboard';
 	import { BRAND } from '$lib/constants/assets';
+	import ActingForBar from './ActingForBar.svelte';
 
 	let menuOpen = $state(false);
 
@@ -43,6 +44,8 @@
 	</div>
 
 	<div class="app-header-right">
+		<ActingForBar />
+
 		<a href={supportHref} class="ah-link">
 			<MessageCircleQuestion size={16} /> Customer Help
 		</a>

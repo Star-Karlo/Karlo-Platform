@@ -2406,3 +2406,11 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .ct2-empty{padding:28px; text-align:center; color:var(--on-surface-variant); font-size:13px;}
 .ct2-row-active td{background:var(--primary-container, #e8f0fe);}
 @media (max-width: 1100px){ .ct2-main{grid-template-columns:1fr;} .ct2-panel{width:auto;} .ct2-list{max-height:260px;} }
+
+/* Header: the staff "act as" control */
+.ah-acting{display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); border-radius:999px; padding:4px 8px 4px 10px; color:#E7ECFB;}
+.ah-acting--client{background:#FFC107; border-color:#FFC107; color:#1A1C22;}
+.ah-acting-select{background:transparent; border:none; color:inherit; font:inherit; font-size:13px; font-weight:600; max-width:260px; cursor:pointer; outline:none;}
+.ah-acting-select option{color:#1A1C22;}
+.ah-acting-stop{display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; border:none; background:rgba(0,0,0,.15); color:inherit; cursor:pointer;}
+.ah-acting-stop:hover{background:rgba(0,0,0,.3);}

@@ -5,7 +5,6 @@
 	import { authStore } from '$lib/stores/auth';
 	import AppHeader from '$lib/components/layout/AppHeader.svelte';
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
-	import ActingForBar from '$lib/components/layout/ActingForBar.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 
 	let { children } = $props();
@@ -24,9 +23,6 @@
 	<div class="shell">
 		<Sidebar />
 		<div class="main">
-			<div class="topbar" style="height:auto; padding:0; display:block;">
-				<ActingForBar />
-			</div>
 			<main class="content">
 				{@render children()}
 			</main>

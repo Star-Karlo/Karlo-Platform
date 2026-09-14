@@ -17,7 +17,6 @@
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { authStore } from '$lib/stores/auth';
 	import { actingFor } from '$lib/stores/actingFor';
-	import Select from '$lib/components/ui/Select.svelte';
 
 	let companies = $state<{ value: string; label: string; role: string }[]>([]);
 	let isStaff = $derived($authStore.user?.isPlatformStaff ?? false);
@@ -53,40 +52,26 @@
 </script>
 
 {#if isStaff}
-	<div
-		class="flex flex-wrap items-center gap-3 px-gutter py-2 text-xs
-		       {$actingFor.companyId ? 'bg-warning/15 text-ink' : 'bg-zebra text-muted'}"
-	>
-		<span class="flex items-center gap-1.5 font-medium">
-			<Building2 size={14} />
-			{#if $actingFor.companyId}
-				Acting for <span class="text-ink-dark">{$actingFor.companyName}</span>
-			{:else}
-				Acting as Karlo
-			{/if}
-		</span>
-
-		<div class="w-72">
-			<Select
-				value={$actingFor.companyId}
-				options={companies}
-				placeholder="Act as Karlo (no client)"
-				onchange={(e) => choose((e.target as HTMLSelectElement).value)}
-			/>
-		</div>
-
+	<!-- Compact, in the navy bar. Amber when acting for a client so it stays
+	     hard to miss — acting as somebody and forgetting is how a record lands
+	     on the wrong company's books. -->
+	<div class="ah-acting {$actingFor.companyId ? 'ah-acting--client' : ''}" title={$actingFor.companyId ? `Acting for ${$actingFor.companyName}` : 'Acting as Karlo'}>
+		<Building2 size={14} />
+		<select
+			class="ah-acting-select"
+			value={$actingFor.companyId}
+			aria-label="Act as client"
+			onchange={(e) => choose((e.target as HTMLSelectElement).value)}
+		>
+			<option value="">Act as Karlo</option>
+			{#each companies as c (c.value)}
+				<option value={c.value}>{c.label}</option>
+			{/each}
+		</select>
 		{#if $actingFor.companyId}
-			<button
-				type="button"
-				class="flex items-center gap-1 rounded-btn border border-line-input bg-surface px-2.5 py-1 hover:border-cyan"
-				onclick={() => choose('')}
-			>
-				<X size={12} /> Stop
+			<button type="button" class="ah-acting-stop" title="Stop acting for this client" aria-label="Stop" onclick={() => choose('')}>
+				<X size={12} />
 			</button>
-			<span class="text-muted">
-				Showing the {$actingFor.companyRole || 'client'} console. Agreements and orders you
-				create are recorded as this company's.
-			</span>
 		{/if}
 	</div>
 {/if}
