@@ -1,0 +1,6 @@
+build/
+.svelte-kit/
+node_modules/
+static/maplibre/
+package-lock.json
+src/lib/styles/revamp.css

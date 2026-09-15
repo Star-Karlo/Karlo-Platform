@@ -111,7 +111,7 @@ export function plateKey(plate: string | undefined | null): string {
 /** The reverse-geocoded address FMS carries as five admin fields, as one line. */
 export function addressLine(p: LivePosition | null | undefined): string {
 	if (!p) return '';
-	return [p.jalan, p.kecamatan, p.kabupaten ?? p.kota, p.provinsi].filter(Boolean).join(', ');
+	return [p.jalan, p.kecamatan, p.kabupaten || p.kota, p.provinsi].filter(Boolean).join(", ");
 }
 
 // ---------------------------------------------------------------------------
