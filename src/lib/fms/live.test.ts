@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-
 import { hasFix, plateKey, addressLine, curatedSensors, STATE_COLOUR } from './live';
 
 describe('FMS live-fleet adapter', () => {
@@ -18,13 +17,31 @@ describe('FMS live-fleet adapter', () => {
 	});
 
 	it('joins the Indonesian admin fields into one line, skipping blanks', () => {
-		expect(addressLine({ jalan: '', kecamatan: 'Genuk', kabupaten: '', kota: 'Semarang', provinsi: 'Jawa Tengah' } as any)).toBe(
+		expect(
+			addressLine({
+				jalan: '',
+				kecamatan: 'Genuk',
+				kabupaten: '',
+				kota: 'Semarang',
+				provinsi: 'Jawa Tengah'
+			} as any)
+		).toBe('Genuk, Semarang, Jawa Tengah');
+	});
+
+	it("prefers FMS's composed address when present", () => {
+		expect(addressLine({ address: 'Genuk, Semarang, Jawa Tengah', jalan: 'Jl. X' } as any)).toBe(
 			'Genuk, Semarang, Jawa Tengah'
 		);
+		expect(addressLine({ address: '', jalan: '', kecamatan: '', kota: '', provinsi: '' } as any)).toBe('');
 	});
 
 	it('curates only the sensors present, converting units', () => {
-		const rows = curatedSensors({ 'External Voltage': 24500, 'Total Odometer': 123456789, 'LLS Fuel Level': 61, junk: 'x' });
+		const rows = curatedSensors({
+			'External Voltage': 24500,
+			'Total Odometer': 123456789,
+			'LLS Fuel Level': 61,
+			junk: 'x'
+		});
 		expect(rows).toEqual(
 			expect.arrayContaining([
 				{ label: 'Tegangan Eksternal', value: '24.5 V' },

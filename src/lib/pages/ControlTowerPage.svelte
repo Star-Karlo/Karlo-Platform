@@ -290,7 +290,7 @@
 	});
 	function where(v: LiveVehicle): string {
 		const p = v.position;
-		return p?.kota || p?.kabupaten || p?.kecamatan || '—';
+		return p?.kota || p?.kabupaten || p?.kecamatan || p?.address || '—';
 	}
 
 	// ------------------------------------------------------------------------

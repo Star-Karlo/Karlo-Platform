@@ -23,6 +23,13 @@ export interface LivePosition {
 	bearing: number | null;
 	ignition: boolean | null;
 	time: string | null;
+	/**
+	 * FMS's own one-line label: street when there is one, else district, then
+	 * kota (or kabupaten), then province. Added because a third of positions
+	 * have no named street — yards, ports, plantation roads — and only the
+	 * district and city say where the truck is.
+	 */
+	address?: string | null;
 	jalan?: string | null;
 	kecamatan?: string | null;
 	kabupaten?: string | null;
@@ -108,10 +115,15 @@ export function plateKey(plate: string | undefined | null): string {
 	return (plate ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
-/** The reverse-geocoded address FMS carries as five admin fields, as one line. */
+/**
+ * The reverse-geocoded address as one line. FMS's composed `address` when it
+ * sends one; the same precedence over the five admin fields otherwise, for
+ * an FMS that predates the field. Empty only when nothing is known.
+ */
 export function addressLine(p: LivePosition | null | undefined): string {
 	if (!p) return '';
-	return [p.jalan, p.kecamatan, p.kabupaten || p.kota, p.provinsi].filter(Boolean).join(", ");
+	if (p.address) return p.address;
+	return [p.jalan, p.kecamatan, p.kota || p.kabupaten, p.provinsi].filter(Boolean).join(', ');
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +144,11 @@ export interface SensorReading {
 const CURATED: { key: string; label: string; format: (v: number) => string }[] = [
 	{ key: 'External Voltage', label: 'Tegangan Eksternal', format: (v) => `${(v / 1000).toFixed(1)} V` },
 	{ key: 'Battery Voltage', label: 'Tegangan Baterai', format: (v) => `${(v / 1000).toFixed(2)} V` },
-	{ key: 'Total Odometer', label: 'Odometer', format: (v) => `${Math.round(v / 1000).toLocaleString('id-ID')} km` },
+	{
+		key: 'Total Odometer',
+		label: 'Odometer',
+		format: (v) => `${Math.round(v / 1000).toLocaleString('id-ID')} km`
+	},
 	{ key: 'GSM Signal', label: 'Sinyal GSM', format: (v) => `${v}/5` },
 	{ key: 'satellites', label: 'Satelit', format: (v) => `${v}` },
 	{ key: 'altitude', label: 'Ketinggian', format: (v) => `${Math.round(v)} m` },
@@ -160,7 +176,10 @@ export function curatedSensors(metadata: Record<string, unknown> | null | undefi
 	if (typeof metadata['Movement'] === 'number' || typeof metadata['Movement'] === 'boolean') {
 		out.push({ label: 'Gerakan', value: metadata['Movement'] ? 'Ya' : 'Tidak' });
 	}
-	if (typeof metadata['Active GSM Operator'] === 'number' || typeof metadata['Active GSM Operator'] === 'string') {
+	if (
+		typeof metadata['Active GSM Operator'] === 'number' ||
+		typeof metadata['Active GSM Operator'] === 'string'
+	) {
 		out.push({ label: 'Operator GSM', value: String(metadata['Active GSM Operator']) });
 	}
 	return out;
@@ -336,12 +355,24 @@ export async function fetchSnappedTrip(vehicleId: number, from: Date, to: Date):
 	);
 	const raw: any[] = res.items ?? res.points ?? res.coordinates ?? [];
 	const points: [number, number][] = raw
-		.map((p: any) => (Array.isArray(p) ? [Number(p[0]), Number(p[1])] : [Number(p.lon ?? p.lng), Number(p.lat)]))
+		.map((p: any) =>
+			Array.isArray(p) ? [Number(p[0]), Number(p[1])] : [Number(p.lon ?? p.lng), Number(p.lat)]
+		)
 		.filter((c) => Number.isFinite(c[0]) && Number.isFinite(c[1])) as [number, number][];
-	return { points, distance_km: res.distance_km ?? null, chunks_matched: res.chunks_matched, chunks_total: res.chunks_total };
+	return {
+		points,
+		distance_km: res.distance_km ?? null,
+		chunks_matched: res.chunks_matched,
+		chunks_total: res.chunks_total
+	};
 }
 
-export async function fetchTrip(vehicleId: number, from: Date, to: Date, maxPoints = 2000): Promise<TripPoint[]> {
+export async function fetchTrip(
+	vehicleId: number,
+	from: Date,
+	to: Date,
+	maxPoints = 2000
+): Promise<TripPoint[]> {
 	const res = await fmsGet<{ items?: TripPoint[] }>(
 		`/vehicles/${vehicleId}/history?from=${encodeURIComponent(rfc(from))}&to=${encodeURIComponent(rfc(to))}&max_points=${maxPoints}`
 	);
