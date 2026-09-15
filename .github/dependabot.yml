@@ -1,0 +1,21 @@
+# Weekly dependency PRs, grouped so one PR lands on Monday rather than
+# dozens. CI (svelte-check, eslint, vitest, build) runs on each.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      npm-deps:
+        patterns: ["*"]
+    # Majors need a human: SvelteKit and Vite majors are migrations, not bumps.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
