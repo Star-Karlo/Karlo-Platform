@@ -52,6 +52,8 @@ export interface Order {
 	transporterCompanyId?: string;
 	createdByUserId?: string;
 	/** Set once a planner has assigned the work. */
+	/** Master-data driver (Mongo id); driverUserId is their optional login. */
+	driverId?: string;
 	driverUserId?: string;
 	/**
 	 * When the order must be actioned by. Distinct from pickupAt: pickup is
@@ -153,6 +155,8 @@ export interface Agreement {
 	transporterCompanyName?: string;
 	createdByUserId?: string;
 	/** Set once a planner has assigned the work. */
+	/** Master-data driver (Mongo id); driverUserId is their optional login. */
+	driverId?: string;
 	driverUserId?: string;
 	/**
 	 * When the order must be actioned by. Distinct from pickupAt: pickup is

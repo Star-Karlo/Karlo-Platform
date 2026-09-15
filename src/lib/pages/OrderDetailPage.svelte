@@ -57,8 +57,12 @@
 	 */
 	let mayDispatch = $derived($can('dispatch.read'));
 	let maySeeAllowance = $derived($can('order.allowance.read'));
-	/** Once a driver is on the order there is nothing left to pick. */
-	let isAssigned = $derived(!!order?.driverUserId);
+	/**
+	 * Once a driver is on the order there is nothing left to pick. `driverId`
+	 * is the master-data driver; `driverUserId` is their login, present only
+	 * for the minority who have one (and the only field older orders carry).
+	 */
+	let isAssigned = $derived(!!(order?.driverId || order?.driverUserId));
 
 	onMount(() => refresh(true));
 
