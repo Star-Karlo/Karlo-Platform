@@ -37,7 +37,7 @@
 		brandId: '',
 		status: 'active' as 'active' | 'maintenance' | 'inactive',
 		isAvailable: true,
-		driverIds: [] as string[],
+		currentDriverId: '',
 		stnkNumber: '',
 		stnkValidFrom: '',
 		stnkValidUntil: '',
@@ -57,43 +57,56 @@
 	});
 
 	let drivers = $state<{ value: string; label: string }[]>([]);
+	/** Document ids already on record, so a save updates rather than duplicates. */
+	let existingDocs: Record<string, string> = { stnk: '', kir: '' };
 
 	onMount(async () => {
 		await loadCatalogs(['truckType', 'truckHead', 'truckBody', 'brand']);
+		// Drivers are master data — employees, not logins — so the list comes
+		// from the driver register, and a truck names exactly one.
 		try {
-			const res = await api.get(ENDPOINTS.users.list, { page: 0, pageSize: 200 });
-			drivers = (res.data.data ?? [])
-				.filter((u: any) => (u.role ?? '').toLowerCase() === 'driver')
-				.map((u: any) => ({ value: u.id, label: u.fullName ?? u.username ?? u.email }));
+			const res = await api.get(ENDPOINTS.drivers.list, { page: 0, pageSize: 500, status: 'active' });
+			drivers = (res.data.data ?? []).map((d: any) => ({
+				value: d.id,
+				label: `${d.fullName}${d.phone ? ` · ${d.phone}` : ''}${d.employeeNo ? ` · ${d.employeeNo}` : ''}`
+			}));
 		} catch {
 			drivers = [];
 		}
 
 		if (id) {
 			try {
-				const res = await api.get(ENDPOINTS.trucks.one(id));
+				const res = await api.get(ENDPOINTS.vehicles.one(id));
 				const t = res.data.data;
+				const a = t.attributes ?? {};
 				form = {
-					policeNumber: t.policeNumber ?? '',
+					policeNumber: t.licensePlate ?? '',
 					chassisNumber: t.chassisNumber ?? '',
 					engineNumber: t.engineNumber ?? '',
-					year: t.year ? String(t.year) : '',
-					truckTypeId: t.truckTypeId ?? '',
+					year: t.unitYear ? String(t.unitYear) : '',
+					truckTypeId: a.truckTypeId ?? '',
 					truckHeadId: t.truckHeadId ?? '',
 					truckBodyId: t.truckBodyId ?? '',
 					brandId: t.brandId ?? '',
 					status: (t.status ?? 'active') as 'active' | 'maintenance' | 'inactive',
 					isAvailable: t.isAvailable ?? true,
-					driverIds: t.driverIds ?? [],
-					stnkNumber: t.documents?.stnkNumber ?? '',
-					stnkValidFrom: t.documents?.stnkValidFrom ?? '',
-					stnkValidUntil: t.documents?.stnkValidUntil ?? '',
-					kirNumber: t.documents?.kirNumber ?? '',
-					kirValidFrom: t.documents?.kirValidFrom ?? '',
-					kirValidUntil: t.documents?.kirValidUntil ?? ''
+					currentDriverId: t.currentDriverId ?? '',
+					stnkNumber: '', stnkValidFrom: '', stnkValidUntil: '',
+					kirNumber: '', kirValidFrom: '', kirValidUntil: ''
 				};
-				for (const slot of Object.keys(docs)) {
-					docs[slot] = t.documents?.[slot] ?? null;
+				for (const slot of ['photoFront', 'photoBack', 'photoRight', 'photoLeft']) {
+					docs[slot] = a.photos?.[slot] ?? null;
+				}
+				// The papers live in the documents register, one row per document.
+				const docsRes = await api.get(ENDPOINTS.documents.list, { vehicleId: id, pageSize: 50 });
+				for (const d of docsRes.data?.data ?? []) {
+					const key = d.docType === 'STNK' ? 'stnk' : d.docType === 'KIR' ? 'kir' : null;
+					if (!key) continue;
+					existingDocs[key] = d.id;
+					form[`${key}Number` as 'stnkNumber'] = d.number ?? '';
+					form[`${key}ValidFrom` as 'stnkValidFrom'] = d.issuedOn ? d.issuedOn.slice(0, 10) : '';
+					form[`${key}ValidUntil` as 'stnkValidUntil'] = d.expiresOn ? d.expiresOn.slice(0, 10) : '';
+					if (d.fileKey) docs[key] = { key: d.fileKey, name: d.number ?? d.docType } as any;
 				}
 			} catch {
 				error = 'Could not load this truck.';
@@ -110,31 +123,38 @@
 		}
 		saving = true;
 		error = '';
-		const {
-			stnkNumber, stnkValidFrom, stnkValidUntil,
-			kirNumber, kirValidFrom, kirValidUntil,
-			...truck
-		} = form;
-
-		const payload = {
-			...truck,
-			// The service expects a number; an empty field means "not recorded".
-			year: form.year ? Number(form.year) : undefined,
-			// `documents` is a free-form object on the model. Files are stored as
-			// keys, never as URLs — a signed URL expires and would rot on the record.
-			documents: {
-				stnkNumber: stnkNumber || undefined,
-				stnkValidFrom: stnkValidFrom || undefined,
-				stnkValidUntil: stnkValidUntil || undefined,
-				kirNumber: kirNumber || undefined,
-				kirValidFrom: kirValidFrom || undefined,
-				kirValidUntil: kirValidUntil || undefined,
-				...Object.fromEntries(Object.entries(docs).filter(([, f]) => f))
-			}
+		// The vehicle record, in the register's own vocabulary. Photos travel
+		// as storage keys in attributes; never as URLs, which would rot.
+		const photos = Object.fromEntries(
+			['photoFront', 'photoBack', 'photoRight', 'photoLeft'].filter((k) => docs[k]).map((k) => [k, docs[k]?.key ?? docs[k]])
+		);
+		const vehicle = {
+			licensePlate: form.policeNumber.trim(),
+			chassisNumber: form.chassisNumber || '',
+			engineNumber: form.engineNumber || '',
+			unitYear: form.year ? Number(form.year) : 0,
+			truckHeadId: form.truckHeadId || '',
+			truckBodyId: form.truckBodyId || '',
+			brandId: form.brandId || '',
+			status: form.status,
+			isAvailable: form.isAvailable,
+			currentDriverId: form.currentDriverId || '',
+			attributes: { truckTypeId: form.truckTypeId || null, photos }
 		};
 		try {
-			if (id) await truckActions.update(id, payload);
-			else await truckActions.create(payload);
+			const saved = id ? await truckActions.update(id, vehicle) : await truckActions.create(vehicle);
+			const vehicleId = id || saved?.data?.id;
+			// The papers: one document row each, updated in place when known.
+			for (const [key, docType] of [['stnk', 'STNK'], ['kir', 'KIR']] as const) {
+				const number = form[`${key}Number`];
+				const from = form[`${key}ValidFrom`];
+				const until = form[`${key}ValidUntil`];
+				const file = docs[key];
+				if (!number && !from && !until && !file) continue;
+				const body = { docType, number, issuedOn: from, expiresOn: until, fileKey: file?.key ?? (file as any) ?? '' };
+				if (existingDocs[key]) await api.put(ENDPOINTS.documents.update(existingDocs[key]), body);
+				else await api.post(ENDPOINTS.documents.create, { vehicleId, ...body });
+			}
 			goto(basePath);
 		} catch (e: any) {
 			error = e?.response?.data?.message ?? 'Could not save this truck.';
@@ -224,26 +244,16 @@
 			<Card title="Driver">
 				{#if drivers.length === 0}
 					<p class="text-xs text-muted">
-						No driver accounts in this company yet. A truck can be saved without one and paired
-						later.
+						No drivers in this company yet — add them under Master Data → Vehicles → Drivers.
+						A truck can be saved without one and assigned later.
 					</p>
 				{:else}
-					<div class="grid grid-cols-1 gap-2 md:grid-cols-3">
-						{#each drivers as driver}
-							<label class="flex items-center gap-2 rounded-nav border border-line-card p-3 text-xs">
-								<input
-									type="checkbox"
-									class="accent-cyan"
-									checked={form.driverIds.includes(driver.value)}
-									onchange={(e) => {
-										form.driverIds = e.currentTarget.checked
-											? [...form.driverIds, driver.value]
-											: form.driverIds.filter((d) => d !== driver.value);
-									}}
-								/>
-								{driver.label}
-							</label>
-						{/each}
+					<div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+						<div>
+							<label for="currentDriverId" class="form-label">Assigned Driver</label>
+							<Select id="currentDriverId" bind:value={form.currentDriverId} options={drivers} placeholder="— No driver —" />
+							<p class="mt-1 text-xs text-muted">One driver per truck. The same assignment shows in FMS.</p>
+						</div>
 					</div>
 				{/if}
 			</Card>

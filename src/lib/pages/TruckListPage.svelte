@@ -31,7 +31,6 @@
 
 	const FILTERS: FilterField[] = [
 		{ group: 'Truck', id: 'policeNumber', label: 'Police Number' },
-		{ group: 'Truck', id: 'year', label: 'Year' },
 		{
 			group: 'Status',
 			id: 'status',
@@ -56,22 +55,27 @@
 	];
 
 	const columns: Column[] = [
-		{ key: 'policeNumber', label: 'Police Number' },
+		{ key: 'licensePlate', label: 'Police Number' },
+		// The register resolves the driver and the fitted device inline.
+		{ key: 'driver', label: 'Driver', format: (row) => row.driver?.fullName ?? '—' },
+		{ key: 'tracker', label: 'Device', format: (row) => row.tracker?.deviceId ?? '—' },
 		{ key: 'status', label: 'Status' },
 		{ key: 'isAvailable', label: 'Available', format: (row) => (row.isAvailable ? 'Yes' : 'No') },
-		// The record holds brandId / truckTypeId, not names. Showing the ids
-		// would be worse than leaving the columns out until /catalog is joined.
-		{ key: 'year', label: 'Year' },
-		// driverIds holds authentication-service user ids; master data does not
-		// resolve them to names, so the count is what can honestly be shown.
-		{ key: 'driverIds', label: 'Drivers', align: 'right', format: (row) => String(row.driverIds?.length ?? 0) }
+		{ key: 'unitYear', label: 'Year', format: (row) => row.unitYear ?? '—' },
+		{ key: 'actions', label: '', align: 'right' }
 	];
 
 	onMount(() => load());
 
 	function load(page = 0, extraFilters: any[] = []) {
-		const tabFilter = activeTab !== 'all' ? [{ id: 'status', value: activeTab, type: 'equal' }] : [];
-		truckActions.getAll({ page, pageSize, filtered: [...tabFilter, ...extraFilters] });
+		const pick = (id: string) => extraFilters.find((f) => f.id === id)?.value as string | undefined;
+		truckActions.getAll({
+			page,
+			pageSize,
+			status: activeTab !== 'all' ? activeTab : pick('status'),
+			isAvailable: pick('isAvailable'),
+			search: pick('policeNumber')
+		});
 	}
 </script>
 
@@ -115,6 +119,8 @@
 		{#snippet cell(row: any, column: Column, text: string)}
 			{#if column.key === 'status'}
 				<StatusBadge statusCode={row.status ?? ''} label={row.status ?? ''} />
+			{:else if column.key === 'actions'}
+				<a href="{basePath}/{row.id}" class="frozen-icon-btn" title="Edit" style="text-decoration:none;">✎</a>
 			{:else}
 				{text}
 			{/if}

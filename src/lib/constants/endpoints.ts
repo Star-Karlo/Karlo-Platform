@@ -166,6 +166,32 @@ export const ENDPOINTS = {
 		status: (id: string) => `/invoices/${id}/status`
 	},
 
+	/**
+	 * The fleet register — vehicles, the people who drive them, their papers.
+	 * Drivers are master data: a person with a name, a phone and a licence,
+	 * not a login. A driver who does get a login is linked by userId.
+	 */
+	vehicles: {
+		list: '/vehicles',
+		one: (id: string) => `/vehicles/${id}`,
+		create: '/vehicles',
+		update: (id: string) => `/vehicles/${id}`,
+		remove: (id: string) => `/vehicles/${id}`
+	},
+	drivers: {
+		list: '/drivers',
+		one: (id: string) => `/drivers/${id}`,
+		create: '/drivers',
+		update: (id: string) => `/drivers/${id}`,
+		remove: (id: string) => `/drivers/${id}`
+	},
+	documents: {
+		list: '/documents',
+		create: '/documents',
+		update: (id: string) => `/documents/${id}`,
+		remove: (id: string) => `/documents/${id}`
+	},
+
 	trucks: {
 		list: '/trucks',
 		one: (id: string) => `/trucks/${id}`,

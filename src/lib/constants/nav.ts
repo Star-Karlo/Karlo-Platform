@@ -132,6 +132,7 @@ export const navItems: Record<string, NavItem[]> = {
 					name: 'Vehicles',
 					children: [
 						{ name: 'Truck List', url: '/a/fleet/truck-list' },
+						{ name: 'Drivers', url: '/a/drivers', permission: 'masterData.read' },
 						{ name: 'Truck Head', url: '/a/truck-head' },
 						{ name: 'Truck Body', url: '/a/truck-body' },
 						{ name: 'Truck Class', url: '/a/truck-class' },
@@ -265,6 +266,7 @@ export const navItems: Record<string, NavItem[]> = {
 					name: 'Vehicles',
 					children: [
 						{ name: 'Truck List', url: '/t/fleet/truck-list' },
+						{ name: 'Drivers', url: '/t/drivers', permission: 'masterData.read' },
 						{ name: 'Truck Head', url: '/t/truck-head' },
 						{ name: 'Truck Body', url: '/t/truck-body' },
 						{ name: 'Truck Class', url: '/t/truck-class' },

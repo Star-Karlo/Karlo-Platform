@@ -31,6 +31,11 @@ const SERVICES = {
 	// masterdata-service :5002
 	'/api/v1/catalog': 'http://localhost:5002',
 	'/api/v1/trucks': 'http://localhost:5002',
+	'/api/v1/vehicles': 'http://localhost:5002',
+	'/api/v1/drivers': 'http://localhost:5002',
+	'/api/v1/documents': 'http://localhost:5002',
+	'/api/v1/vehicle-groups': 'http://localhost:5002',
+	'/api/v1/sites': 'http://localhost:5002',
 	'/api/v1/warehouses': 'http://localhost:5002',
 	// Telematics devices, and the plate-to-IMEI link both products read.
 	'/api/v1/trackers': 'http://localhost:5002',
