@@ -125,7 +125,6 @@ export const navItems: Record<string, NavItem[]> = {
 				{ name: 'Spot Order', url: '/a/order/spot' },
 				{ name: 'Order Kontrak', url: '/a/order/kontrak' },
 				{ name: 'Empty Order', url: '/a/empty-order' },
-				{ name: 'Orders (legacy)', url: '/a/order' },
 				{ name: 'Share My Orders', url: '/a/share-orders' },
 				{ name: 'Uang Sangu', url: '/a/uang-sangu' },
 				{ name: 'Invoices', url: '/a/invoice' }
@@ -260,7 +259,6 @@ export const navItems: Record<string, NavItem[]> = {
 				{ name: 'Spot Order', url: '/t/order/spot' },
 				{ name: 'Order Kontrak', url: '/t/order/kontrak' },
 				{ name: 'Empty Order', url: '/t/empty-order' },
-				{ name: 'Orders (legacy)', url: '/t/order' },
 				{ name: 'Share My Orders', url: '/t/share-orders' },
 				{ name: 'Uang Sangu', url: '/t/uang-sangu' },
 				{ name: 'Invoices', url: '/t/invoice' }
@@ -329,7 +327,6 @@ export const navItems: Record<string, NavItem[]> = {
 				{ name: 'Spot Order', url: '/m/order/spot' },
 				{ name: 'Order Kontrak', url: '/m/order/kontrak' },
 				{ name: 'Empty Order', url: '/m/empty-order' },
-				{ name: 'Orders (legacy)', url: '/m/order' },
 				{ name: 'Share My Orders', url: '/m/share-orders' },
 				{ name: 'Uang Sangu', url: '/m/uang-sangu' },
 				{ name: 'Invoices', url: '/m/invoice' }
@@ -402,7 +399,7 @@ export const quickActions: Record<string, QuickAction[]> = {
 	// Staff act FOR clients: the two things they most often record on a
 	// client's behalf, plus the reference list they maintain.
 	admin: [
-		{ label: 'Internal Order', url: '/a/order/create', icon: PackagePlus },
+		{ label: 'Internal Order', url: '/a/internal-order', icon: PackagePlus },
 		{ label: 'Create Agreement', url: '/a/agreement/create', icon: Handshake },
 		{ label: 'Cargo Type', url: '/a/cargo-type', icon: Database }
 	],
@@ -411,11 +408,11 @@ export const quickActions: Record<string, QuickAction[]> = {
 		{ label: 'Create Agreement', url: '/s/agreement/create', icon: Handshake }
 	],
 	transporter: [
-		{ label: 'Internal Order', url: '/t/order/create', icon: PackagePlus },
+		{ label: 'Internal Order', url: '/t/internal-order', icon: PackagePlus },
 		{ label: 'Create Agreement', url: '/t/agreement/create', icon: Handshake }
 	],
 	manager: [
-		{ label: 'Internal Order', url: '/m/order/create', icon: PackagePlus },
+		{ label: 'Internal Order', url: '/m/internal-order', icon: PackagePlus },
 		{ label: 'Create Agreement', url: '/m/agreement/create', icon: Handshake }
 	],
 	warehousepic: [],
