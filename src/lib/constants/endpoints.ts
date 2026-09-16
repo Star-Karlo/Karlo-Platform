@@ -24,6 +24,10 @@ export const ENDPOINTS = {
 		logout: '/auth/logout',
 		refresh: '/auth/refresh',
 		me: '/auth/me',
+		/** Ends every session of the caller, on every device. */
+		logoutAll: '/auth/logout-all',
+		/** Is this email / username / phone still free? */
+		checkAvailable: (kind: 'email' | 'username' | 'phone') => `/auth/check-available/${kind}`,
 		changePassword: '/auth/change-password',
 		register: '/auth/register'
 	},
@@ -56,6 +60,9 @@ export const ENDPOINTS = {
 	 * Planner, Finance — and the keys it may grant are the catalogue narrowed to
 	 * the features Karlo has sold it.
 	 */
+	/** The permission catalogue's display labels; rewording is staff-only. */
+	permissionLabel: (key: string) => `/permissions/catalog/${encodeURIComponent(key)}/label`,
+
 	roles: {
 		list: '/roles',
 		create: '/roles',
@@ -70,6 +77,12 @@ export const ENDPOINTS = {
 		/** Move a colleague to another role. Validated against their company. */
 		role: (id: string) => `/users/${id}/role`,
 		suspend: (id: string) => `/users/${id}/suspend`,
+		/**
+		 * Per-product access on top of the role: extra permission keys for one
+		 * person, and the switch that removes a product from them entirely.
+		 */
+		access: (id: string) => `/users/${id}/access`,
+		revokeAccess: (id: string, product: string) => `/users/${id}/access/${product}`,
 		/** A new company AND its first administrator, in one call. */
 		register: '/auth/register',
 		registerMember: '/auth/register-member'

@@ -10,18 +10,19 @@
 	 */
 	import { onMount } from 'svelte';
 	import { UserCog, Pencil, Trash2, Lock } from 'lucide-svelte';
-	import { roleStore, roleActions, bareKey, PRODUCTS, type Product, type Role, type PermissionSpec } from '$lib/stores/iam';
-	import { authStore } from '$lib/stores/auth';
 	import {
-		Button,
-		Card,
-		DataTable,
-		Field,
-		Input,
-		Modal,
-		PageHeader,
-		type Column
-	} from '$lib/components/ui';
+		roleStore,
+		roleActions,
+		bareKey,
+		PRODUCTS,
+		type Product,
+		type Role,
+		type PermissionSpec
+	} from '$lib/stores/iam';
+	import { authStore } from '$lib/stores/auth';
+	import { api } from '$lib/utils/api';
+	import { ENDPOINTS } from '$lib/constants/endpoints';
+	import { Button, Card, DataTable, Field, Input, Modal, PageHeader, type Column } from '$lib/components/ui';
 
 	let { title = 'Roles & Permissions' }: { title?: string } = $props();
 
@@ -31,6 +32,29 @@
 
 	let form = $state({ name: '', description: '', grantsAll: false });
 	let chosen = $state<Set<string>>(new Set());
+
+	// Rewording a permission changes what every company on this deployment
+	// reads, so only Karlo staff see the pencil (PUT /permissions/catalog/:key/label).
+	let isStaff = $derived($authStore.user?.isPlatformStaff ?? false);
+	let renaming = $state<PermissionSpec | null>(null);
+	let newLabel = $state('');
+	let renameSaving = $state(false);
+	async function saveLabel() {
+		if (!renaming || !newLabel.trim()) return;
+		renameSaving = true;
+		try {
+			await api.put(ENDPOINTS.permissionLabel(renaming.key), { product, label: newLabel.trim() });
+			renaming = null;
+			await roleActions.load(product);
+		} catch (e: any) {
+			roleStore.update((st) => ({
+				...st,
+				error: e?.response?.data?.message ?? 'Could not rename that permission.'
+			}));
+		} finally {
+			renameSaving = false;
+		}
+	}
 
 	/**
 	 * Which product's keys the editor shows. A role holds both products'
@@ -85,18 +109,21 @@
 		const keys = groups[group].map((s) => s.key);
 		const all = keys.every((k) => chosen.has(k));
 		const next = new Set(chosen);
-		for (const k of keys) (all ? next.delete(k) : next.add(k));
+		for (const k of keys) all ? next.delete(k) : next.add(k);
 		chosen = next;
 	}
 
 	async function save() {
-		const ok = await roleActions.save({
-			id: editing?.id,
-			name: form.name,
-			description: form.description,
-			grantsAll: form.grantsAll,
-			permissions: form.grantsAll ? [] : [...chosen]
-		}, product);
+		const ok = await roleActions.save(
+			{
+				id: editing?.id,
+				name: form.name,
+				description: form.description,
+				grantsAll: form.grantsAll,
+				permissions: form.grantsAll ? [] : [...chosen]
+			},
+			product
+		);
 		if (ok) {
 			showForm = false;
 			await roleActions.load(product);
@@ -203,7 +230,12 @@
 	</Card>
 </div>
 
-<Modal open={showForm} title={editing ? `Edit ${editing.name}` : 'Add Role'} size="lg" onClose={() => (showForm = false)}>
+<Modal
+	open={showForm}
+	title={editing ? `Edit ${editing.name}` : 'Add Role'}
+	size="lg"
+	onClose={() => (showForm = false)}
+>
 	<div class="space-y-5">
 		<div class="grid grid-cols-1 gap-5 md:grid-cols-2">
 			<Field id="role-name" label="Name" required>
@@ -219,9 +251,8 @@
 			<span class="text-xs">
 				<span class="font-medium text-ink">Administrator — grants everything</span>
 				<span class="mt-1 block leading-relaxed text-muted">
-					Everything the company is entitled to, now and after the next purchase. Listing
-					permissions instead would go stale the day you buy another module, and the
-					administrator would silently not have it.
+					Everything the company is entitled to, now and after the next purchase. Listing permissions instead
+					would go stale the day you buy another module, and the administrator would silently not have it.
 				</span>
 			</span>
 		</label>
@@ -229,8 +260,8 @@
 		{#if !form.grantsAll}
 			<div class="space-y-4">
 				<p class="text-xs text-muted">
-					{chosen.size} of {$roleStore.assignable.length} permissions selected. Only what
-					Karlo has enabled for your company is listed.
+					{chosen.size} of {$roleStore.assignable.length} permissions selected. Only what Karlo has enabled for
+					your company is listed.
 				</p>
 
 				{#each Object.keys(groups).sort() as group}
@@ -257,6 +288,18 @@
 									<span>
 										<span class="text-ink">{spec.label}</span>
 										<span class="ml-1 font-mono text-[10px] text-muted">{spec.key}</span>
+										{#if isStaff}
+											<button
+												type="button"
+												class="ml-1 align-middle text-muted hover:text-cyan"
+												title="Rename this permission for everyone"
+												onclick={(e) => {
+													e.preventDefault();
+													renaming = spec;
+													newLabel = spec.label;
+												}}><Pencil size={10} /></button
+											>
+										{/if}
 									</span>
 								</label>
 							{/each}
@@ -284,11 +327,25 @@
 		Remove <span class="font-medium">{confirmingDelete?.name}</span>?
 	</p>
 	<p class="mt-2 text-xs text-muted">
-		Anyone still holding it must be moved to another role first — the server refuses otherwise,
-		because an account pointing at a deleted role reads as having no permissions at all.
+		Anyone still holding it must be moved to another role first — the server refuses otherwise, because an
+		account pointing at a deleted role reads as having no permissions at all.
 	</p>
 	<div class="mt-4 flex justify-end gap-2">
 		<Button variant="ghost" onclick={() => (confirmingDelete = null)}>Cancel</Button>
 		<Button variant="danger" onclick={remove} loading={$roleStore.saving}>Remove</Button>
+	</div>
+</Modal>
+
+<Modal open={!!renaming} title="Rename permission" onClose={() => (renaming = null)}>
+	<p class="mb-4 text-xs text-muted">
+		<span class="font-mono">{renaming?.key}</span> — the new wording is what every company on this deployment reads
+		on its permission screen.
+	</p>
+	<Field id="perm-label" label="Label" required>
+		<Input id="perm-label" bind:value={newLabel} />
+	</Field>
+	<div class="mt-5 flex justify-end gap-2 border-t border-line-card pt-5">
+		<Button variant="ghost" onclick={() => (renaming = null)}>Cancel</Button>
+		<Button onclick={saveLabel} loading={renameSaving} disabled={!newLabel.trim()}>Save</Button>
 	</div>
 </Modal>

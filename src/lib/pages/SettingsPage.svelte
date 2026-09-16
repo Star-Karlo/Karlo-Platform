@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Settings } from 'lucide-svelte';
 	import { onMount } from 'svelte';
-	import { currentUser, can } from '$lib/stores/auth';
+	import { currentUser, can, authStore } from '$lib/stores/auth';
+	import { goto } from '$app/navigation';
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { ROLES } from '$lib/constants/status';
@@ -23,7 +24,18 @@
 	 * The company's own profile — what its documents print. Editable by
 	 * whoever may manage members; everyone else sees it read-only.
 	 */
-	let company = $state({ name: '', legalName: '', address: '', city: '', province: '', postalCode: '', country: 'ID', phone: '', email: '', website: '' });
+	let company = $state({
+		name: '',
+		legalName: '',
+		address: '',
+		city: '',
+		province: '',
+		postalCode: '',
+		country: 'ID',
+		phone: '',
+		email: '',
+		website: ''
+	});
 	let companyLoaded = $state(false);
 	let mayEditCompany = $derived($can('collaboration.manageMember'));
 
@@ -32,9 +44,16 @@
 			const res = await api.get(ENDPOINTS.companyMe);
 			const c = res.data?.data ?? {};
 			company = {
-				name: c.name ?? '', legalName: c.legalName ?? '', address: c.address ?? '',
-				city: c.city ?? '', province: c.province ?? '', postalCode: c.postalCode ?? '',
-				country: c.country ?? 'ID', phone: c.phone ?? '', email: c.email ?? '', website: c.website ?? ''
+				name: c.name ?? '',
+				legalName: c.legalName ?? '',
+				address: c.address ?? '',
+				city: c.city ?? '',
+				province: c.province ?? '',
+				postalCode: c.postalCode ?? '',
+				country: c.country ?? 'ID',
+				phone: c.phone ?? '',
+				email: c.email ?? '',
+				website: c.website ?? ''
 			};
 			companyLoaded = true;
 		} catch {
@@ -69,6 +88,20 @@
 		} finally {
 			saving = '';
 		}
+	}
+
+	// Every session, every device — a lost phone, a shared laptop. The
+	// service revokes them all (POST /auth/logout-all); this one follows.
+	async function signOutEverywhere() {
+		if (!confirm('Sign out of every device, including this one?')) return;
+		saving = 'logout-all';
+		try {
+			await api.post(ENDPOINTS.auth.logoutAll);
+		} catch {
+			/* the local session goes regardless */
+		}
+		authStore.logout();
+		goto('/auth');
 	}
 
 	async function changePassword() {
@@ -139,17 +172,75 @@
 
 	{#if companyLoaded}
 		<Card title="Company">
-			<p class="mb-4 text-xs text-muted">What your documents print — the legal name, address and contact details.</p>
+			<p class="mb-4 text-xs text-muted">
+				What your documents print — the legal name, address and contact details.
+			</p>
 			<div class="grid grid-cols-1 gap-5 md:grid-cols-2">
-				<div><label for="co-name" class="form-label">Display Name</label><Input id="co-name" bind:value={company.name} disabled={!mayEditCompany} /></div>
-				<div><label for="co-legal" class="form-label">Legal Name</label><Input id="co-legal" bind:value={company.legalName} placeholder="PT …" disabled={!mayEditCompany} /></div>
-				<div><label for="co-phone" class="form-label">Phone</label><Input id="co-phone" bind:value={company.phone} disabled={!mayEditCompany} /></div>
-				<div><label for="co-email" class="form-label">Email</label><Input id="co-email" type="email" bind:value={company.email} disabled={!mayEditCompany} /></div>
-				<div class="md:col-span-2"><label for="co-address" class="form-label">Address</label><Input id="co-address" bind:value={company.address} disabled={!mayEditCompany} /></div>
-				<div><label for="co-city" class="form-label">City</label><Input id="co-city" bind:value={company.city} disabled={!mayEditCompany} /></div>
-				<div><label for="co-prov" class="form-label">Province</label><Input id="co-prov" bind:value={company.province} disabled={!mayEditCompany} /></div>
-				<div><label for="co-post" class="form-label">Postal Code</label><Input id="co-post" bind:value={company.postalCode} disabled={!mayEditCompany} /></div>
-				<div><label for="co-web" class="form-label">Website</label><Input id="co-web" bind:value={company.website} disabled={!mayEditCompany} /></div>
+				<div>
+					<label for="co-name" class="form-label">Display Name</label><Input
+						id="co-name"
+						bind:value={company.name}
+						disabled={!mayEditCompany}
+					/>
+				</div>
+				<div>
+					<label for="co-legal" class="form-label">Legal Name</label><Input
+						id="co-legal"
+						bind:value={company.legalName}
+						placeholder="PT …"
+						disabled={!mayEditCompany}
+					/>
+				</div>
+				<div>
+					<label for="co-phone" class="form-label">Phone</label><Input
+						id="co-phone"
+						bind:value={company.phone}
+						disabled={!mayEditCompany}
+					/>
+				</div>
+				<div>
+					<label for="co-email" class="form-label">Email</label><Input
+						id="co-email"
+						type="email"
+						bind:value={company.email}
+						disabled={!mayEditCompany}
+					/>
+				</div>
+				<div class="md:col-span-2">
+					<label for="co-address" class="form-label">Address</label><Input
+						id="co-address"
+						bind:value={company.address}
+						disabled={!mayEditCompany}
+					/>
+				</div>
+				<div>
+					<label for="co-city" class="form-label">City</label><Input
+						id="co-city"
+						bind:value={company.city}
+						disabled={!mayEditCompany}
+					/>
+				</div>
+				<div>
+					<label for="co-prov" class="form-label">Province</label><Input
+						id="co-prov"
+						bind:value={company.province}
+						disabled={!mayEditCompany}
+					/>
+				</div>
+				<div>
+					<label for="co-post" class="form-label">Postal Code</label><Input
+						id="co-post"
+						bind:value={company.postalCode}
+						disabled={!mayEditCompany}
+					/>
+				</div>
+				<div>
+					<label for="co-web" class="form-label">Website</label><Input
+						id="co-web"
+						bind:value={company.website}
+						disabled={!mayEditCompany}
+					/>
+				</div>
 			</div>
 			{#if mayEditCompany}
 				<div class="mt-5 flex justify-end">
@@ -182,6 +273,17 @@
 				onclick={changePassword}>Update Password</Button
 			>
 		</div>
+		<div class="mt-6 flex items-center justify-between gap-6 rounded-card border border-line-card p-4">
+			<div>
+				<p class="text-xs font-medium text-ink">Sign out everywhere</p>
+				<p class="text-xs italic text-muted">
+					Ends every session of your account on every device, including this one.
+				</p>
+			</div>
+			<Button variant="outline" loading={saving === 'logout-all'} onclick={signOutEverywhere}
+				>Sign out of all devices</Button
+			>
+		</div>
 	</Card>
 
 	<Card title="Preferences">
@@ -189,9 +291,7 @@
 			<li class="flex items-center justify-between gap-6 rounded-card border border-line-card p-4">
 				<div>
 					<p class="text-xs font-medium text-ink">Pengaturan Cancel Validation</p>
-					<p class="text-xs italic text-muted">
-						Require a second approval before an order can be cancelled.
-					</p>
+					<p class="text-xs italic text-muted">Require a second approval before an order can be cancelled.</p>
 				</div>
 				<Toggle bind:checked={preferences.cancelValidation} />
 			</li>
@@ -206,8 +306,8 @@
 			</li>
 		</ul>
 		<p class="mt-4 text-xs italic text-muted">
-			These switches are stored per company. They are not wired to an endpoint yet — the client
-			settings service does not expose one.
+			These switches are stored per company. They are not wired to an endpoint yet — the client settings
+			service does not expose one.
 		</p>
 	</Card>
 </div>
