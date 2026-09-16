@@ -515,9 +515,23 @@ export function quickActionsFor(role: string): QuickAction[] {
 
 /** Where each role lands after signing in — the first item of its navigation. */
 export function homeFor(role: string): string {
-	const items = navItems[navKey(role)] ?? [];
-	const first = items.find((item) => item.url) ?? items[0]?.children?.[0];
-	return first?.url ?? '/auth';
+	return firstInternalUrl(navItems[navKey(role)] ?? []) ?? '/auth';
+}
+
+/**
+ * The first place the navigation can take someone, in menu order: a top-level
+ * link, or the first child of the first group. External links (FMS) never
+ * count — landing a fresh login on another product's domain is not a home,
+ * and `goto` refuses the URL anyway, which left the sign-in stuck on
+ * "Memuat…" when the sidebar's only top-level link was the FMS one.
+ */
+function firstInternalUrl(items: NavItem[]): string | undefined {
+	for (const item of items) {
+		if (item.url && !item.external) return item.url;
+		const child = item.children?.find((c) => c.url && !c.external);
+		if (child?.url) return child.url;
+	}
+	return undefined;
 }
 
 /**
@@ -535,9 +549,7 @@ export function homeForIdentity(identity: {
 	isPlatformStaff?: boolean;
 }): string {
 	const key = consoleKeyFor(identity) || 'shipper';
-	const items = navItems[key] ?? [];
-	const first = items.find((item) => item.url) ?? items[0]?.children?.[0];
-	return first?.url ?? '/s/insight';
+	return firstInternalUrl(navItems[key] ?? []) ?? '/s/insight';
 }
 
 /** URL prefix owned by a role, used to build links inside shared page components. */

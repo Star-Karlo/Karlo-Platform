@@ -32,3 +32,18 @@ describe('nav visibility', () => {
 		expect(visibleNav(items, () => true)).toHaveLength(3);
 	});
 });
+
+import { homeForIdentity } from './nav';
+
+describe('homeForIdentity', () => {
+	it('lands a transporter on the first internal page, never the external FMS link', () => {
+		const home = homeForIdentity({ companyRole: 'transporter' });
+		expect(home.startsWith('/t/')).toBe(true);
+		expect(home.startsWith('http')).toBe(false);
+	});
+	it('lands platform staff on an internal admin page', () => {
+		const home = homeForIdentity({ isPlatformStaff: true, role: 'admin' });
+		expect(home.startsWith('/')).toBe(true);
+		expect(home.startsWith('http')).toBe(false);
+	});
+});
