@@ -1,5 +1,5 @@
 <script lang="ts">
-	import NotBuiltPage from '$lib/pages/NotBuiltPage.svelte';
+	import OrderKontrakPage from '$lib/pages/OrderKontrakPage.svelte';
 </script>
 
-<NotBuiltPage title="Order Kontrak" note="Agreement-backed orders. Not built yet." />
+<OrderKontrakPage basePath="/t" />

@@ -57,11 +57,14 @@ export interface NavItem {
  * how three of them end up agreeing and the fourth does not.
  */
 const PERMISSION_BY_PATH: { match: RegExp; permission: string }[] = [
-	{ match: /\/(insight|dashboard|investor-dashboard|report-order|monitoring)$/, permission: 'dashboard.read' },
+	{
+		match: /\/(insight|dashboard|investor-dashboard|report-order|monitoring)$/,
+		permission: 'dashboard.read'
+	},
 	{ match: /\/control-tower$/, permission: 'dispatch.read' },
 	{ match: /\/planner|\/allocate$/, permission: 'dispatch.read' },
 	{ match: /\/agreement/, permission: 'agreement.read' },
-	{ match: /\/(order|spot-order|empty-order|order-kontrak)/, permission: 'order.read' },
+	{ match: /\/(order|spot-order|empty-order|order-kontrak|internal-order)/, permission: 'order.read' },
 	{ match: /\/invoice|\/finance|\/jurnal|\/laporan|\/coa$/, permission: 'invoice.read' },
 	{ match: /\/(truck-list|fleet)/, permission: 'truck.read' },
 	{ match: /\/warehouse/, permission: 'warehouse.read' },
@@ -70,7 +73,8 @@ const PERMISSION_BY_PATH: { match: RegExp; permission: string }[] = [
 	{ match: /\/support$/, permission: 'notification.read' },
 	// Everything else under Master Data: the catalogues.
 	{
-		match: /\/(cargo-type|item|item-category|item-sub-category|truck-head|truck-body|truck-class|brand|tracker|sensor-type|vehicle-group|my-cargo|form-config)/,
+		match:
+			/\/(cargo-type|item|item-category|item-sub-category|truck-head|truck-body|truck-class|brand|tracker|sensor-type|vehicle-group|my-cargo|form-config)/,
 		permission: 'masterData.read'
 	}
 ];
@@ -116,9 +120,12 @@ export const navItems: Record<string, NavItem[]> = {
 			name: 'Operations',
 			icon: ClipboardList,
 			children: [
-				{ name: 'Agreements', url: '/a/agreement' },
-				{ name: 'Orders', url: '/a/order' },
-				{ name: 'Empty Orders', url: '/a/empty-order' },
+				// The revamp's Orders group: Spot Order (submitted by shippers),
+				// Order Kontrak (entered by us against an agreement), Empty Order.
+				{ name: 'Spot Order', url: '/a/order/spot' },
+				{ name: 'Order Kontrak', url: '/a/order/kontrak' },
+				{ name: 'Empty Order', url: '/a/empty-order' },
+				{ name: 'Orders (legacy)', url: '/a/order' },
 				{ name: 'Share My Orders', url: '/a/share-orders' },
 				{ name: 'Uang Sangu', url: '/a/uang-sangu' },
 				{ name: 'Invoices', url: '/a/invoice' }
@@ -152,6 +159,7 @@ export const navItems: Record<string, NavItem[]> = {
 						{ name: 'Sensor Type', url: '/a/sensor-type' }
 					]
 				},
+				{ name: 'MyAgreement', url: '/a/agreement' },
 				{ name: 'Warehouses', url: '/a/my-shipper' },
 				// Own customers (consignees) and the 3PL vendors that carry for us.
 				{ name: 'Customer List', url: '/a/customer-list' },
@@ -247,9 +255,12 @@ export const navItems: Record<string, NavItem[]> = {
 			name: 'Operations',
 			icon: ClipboardList,
 			children: [
-				{ name: 'Agreements', url: '/t/agreement' },
-				{ name: 'Orders', url: '/t/order' },
-				{ name: 'Empty Orders', url: '/t/empty-order' },
+				// The revamp's Orders group: Spot Order (submitted by shippers),
+				// Order Kontrak (entered by us against an agreement), Empty Order.
+				{ name: 'Spot Order', url: '/t/order/spot' },
+				{ name: 'Order Kontrak', url: '/t/order/kontrak' },
+				{ name: 'Empty Order', url: '/t/empty-order' },
+				{ name: 'Orders (legacy)', url: '/t/order' },
 				{ name: 'Share My Orders', url: '/t/share-orders' },
 				{ name: 'Uang Sangu', url: '/t/uang-sangu' },
 				{ name: 'Invoices', url: '/t/invoice' }
@@ -283,6 +294,7 @@ export const navItems: Record<string, NavItem[]> = {
 						{ name: 'Sensor Type', url: '/t/sensor-type' }
 					]
 				},
+				{ name: 'MyAgreement', url: '/t/agreement' },
 				{ name: 'Warehouses', url: '/t/my-shipper' },
 				// Own customers (consignees) and the 3PL vendors that carry for us.
 				{ name: 'Customer List', url: '/t/customer-list' },
@@ -312,9 +324,12 @@ export const navItems: Record<string, NavItem[]> = {
 			name: 'Operations',
 			icon: ClipboardList,
 			children: [
-				{ name: 'Agreements', url: '/m/agreement' },
-				{ name: 'Orders', url: '/m/order' },
-				{ name: 'Empty Orders', url: '/m/empty-order' },
+				// The revamp's Orders group: Spot Order (submitted by shippers),
+				// Order Kontrak (entered by us against an agreement), Empty Order.
+				{ name: 'Spot Order', url: '/m/order/spot' },
+				{ name: 'Order Kontrak', url: '/m/order/kontrak' },
+				{ name: 'Empty Order', url: '/m/empty-order' },
+				{ name: 'Orders (legacy)', url: '/m/order' },
 				{ name: 'Share My Orders', url: '/m/share-orders' },
 				{ name: 'Uang Sangu', url: '/m/uang-sangu' },
 				{ name: 'Invoices', url: '/m/invoice' }
@@ -347,6 +362,7 @@ export const navItems: Record<string, NavItem[]> = {
 						{ name: 'Sensor Type', url: '/m/sensor-type' }
 					]
 				},
+				{ name: 'MyAgreement', url: '/m/agreement' },
 				{ name: 'Warehouses', url: '/m/my-shipper' },
 				// Own customers (consignees) and the 3PL vendors that carry for us.
 				{ name: 'Customer List', url: '/m/customer-list' },

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import AgreementListPage from '$lib/pages/AgreementListPage.svelte';
+	import AgreementRevampPage from '$lib/pages/AgreementRevampPage.svelte';
 </script>
 
-<AgreementListPage basePath="/a" />
+<AgreementRevampPage basePath="/a" />

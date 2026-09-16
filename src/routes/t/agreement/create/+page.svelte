@@ -1,5 +1,5 @@
 <script lang="ts">
-	import AgreementFormPage from '$lib/pages/AgreementFormPage.svelte';
+	import AgreementRevampFormPage from '$lib/pages/AgreementRevampFormPage.svelte';
 </script>
 
-<AgreementFormPage basePath="/t/agreement" />
+<AgreementRevampFormPage basePath="/t" />

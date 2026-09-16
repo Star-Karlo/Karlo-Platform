@@ -2414,3 +2414,6 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .ah-acting-select option{color:#1A1C22;}
 .ah-acting-stop{display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; border:none; background:rgba(0,0,0,.15); color:inherit; cursor:pointer;}
 .ah-acting-stop:hover{background:rgba(0,0,0,.3);}
+
+/* Spot Order pages — the prototype Icon.vue wrapper (scoped there, global here) */
+.icon-wrap{display:inline-flex; align-items:center; justify-content:center; line-height:0;}

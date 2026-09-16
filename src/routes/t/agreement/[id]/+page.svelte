@@ -1,5 +1,8 @@
 <script lang="ts">
-	import AgreementDetailPage from '$lib/pages/AgreementDetailPage.svelte';
+	import { page } from '$app/stores';
+	import AgreementRevampDocumentPage from '$lib/pages/AgreementRevampDocumentPage.svelte';
 </script>
 
-<AgreementDetailPage basePath="/t" />
+{#key $page.params.id}
+	<AgreementRevampDocumentPage basePath="/t" id={$page.params.id ?? ''} />
+{/key}
