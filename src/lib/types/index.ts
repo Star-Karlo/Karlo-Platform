@@ -182,7 +182,11 @@ export interface Agreement {
 export interface Truck {
 	id: string;
 	companyId?: string;
+	/** /trucks calls it policeNumber, /vehicles licensePlate; the store reads /vehicles. */
 	policeNumber?: string;
+	licensePlate?: string;
+	/** /vehicles: the one driver currently paired (driverIds is the /trucks form). */
+	currentDriverId?: string;
 	year?: number;
 	/** Catalogue ids. Join against /catalog to render names. */
 	truckTypeId?: string;

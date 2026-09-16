@@ -6,6 +6,16 @@
 	import { orderStore, orderActions } from '$lib/stores/orders';
 	import { formatDate, truckMarkerColor } from '$lib/utils/format';
 	import { asset, TRUCK_MARKER } from '$lib/constants/assets';
+	import { api } from '$lib/utils/api';
+	import { ENDPOINTS } from '$lib/constants/endpoints';
+	import {
+		fetchLiveFleet,
+		hasFix,
+		plateKey,
+		STATE_LABEL,
+		addressLine,
+		type LiveVehicle
+	} from '$lib/fms/live';
 	import {
 		Card,
 		EmptyState,
@@ -18,11 +28,56 @@
 
 	let { basePath, title = 'Planner' }: { basePath: string; title?: string } = $props();
 
-	onMount(async () => {
-		await Promise.all([
+	interface FleetPosition {
+		truckId: string;
+		policeNumber: string;
+		status: string;
+		isAvailable: boolean;
+		lat: number;
+		lon: number;
+		at: string;
+		source: 'live' | 'lastDrop';
+		city?: string;
+	}
+	let positions = $state<FleetPosition[]>([]);
+	let fmsFleet = $state<LiveVehicle[]>([]);
+	let positionsError = $state('');
+
+	/** Every 60s, the same cadence Control Tower and the geofence watcher use. */
+	const REFRESH_MS = 60_000;
+
+	/**
+	 * Two sources, same as the rest of the console: FMS's live view first (the
+	 * one Control Tower draws, through the console's proxy with the caller's
+	 * own token), then the business service's /fleet/live, which adds the last
+	 * unloading point for a truck FMS has no fix for. Either may be down
+	 * without taking the other with it.
+	 */
+	async function loadPositions() {
+		const [fms, ours] = await Promise.allSettled([fetchLiveFleet(), api.get(ENDPOINTS.fleet.live)]);
+		if (fms.status === 'fulfilled') fmsFleet = fms.value;
+		if (ours.status === 'fulfilled') {
+			positions = Array.isArray(ours.value.data) ? ours.value.data : [];
+		}
+		positionsError =
+			fms.status === 'rejected' && ours.status === 'rejected'
+				? ours.reason instanceof Error
+					? ours.reason.message
+					: 'Fleet positions unavailable'
+				: '';
+	}
+
+	onMount(() => {
+		void Promise.all([
 			truckActions.getAll({ pageSize: 100 }),
-			warehouseActions.getAll({ pageSize: 100 })
+			warehouseActions.getAll({ pageSize: 100 }),
+			loadPositions()
 		]);
+		const timer = setInterval(loadPositions, REFRESH_MS);
+		return () => clearInterval(timer);
+	});
+
+	onMount(async () => {
 		// Orders that still need a truck: everything the machine allows to be
 		// planned, before a driver has been assigned.
 		await orderActions.getAll({
@@ -32,14 +87,6 @@
 		});
 	});
 
-	/**
-	 * Truck positions.
-	 *
-	 * A truck record from master data carries no position — telematics lives on
-	 * /api/v1/trackers, which is not wired up here yet and currently returns no
-	 * devices. Until it is, this filter yields nothing and the map is empty,
-	 * which the card below says out loud rather than looking broken.
-	 */
 	/** Loading and unloading points. These carry real coordinates today. */
 	let warehouseMarkers = $derived<MapMarker[]>(
 		$warehouseStore.warehouses
@@ -54,23 +101,54 @@
 			}))
 	);
 
-	let truckMarkers = $derived<MapMarker[]>(
-		($truckStore.trucks as any[])
-			.filter((t: any) => t.lastLocation?.latitude && t.lastLocation?.longitude)
-			.map((t: any) => ({
-				id: t.id,
-				lat: t.lastLocation.latitude,
-				lng: t.lastLocation.longitude,
-				color: truckMarkerColor(t.status ?? t.statusCode ?? ''),
-				// The pin artwork from the old app; the colour above is the
-				// fallback if the image cannot be fetched.
-				icon: TRUCK_MARKER[t.status ?? t.statusCode ?? ''] ?? TRUCK_MARKER.unpaired,
+	/**
+	 * Truck positions come from /fleet/live: a live telemetry fix where the
+	 * truck has a reporting device, otherwise the last unloading point it was
+	 * seen at. A truck with neither is not drawn — no guess at the depot.
+	 */
+	let truckMarkers = $derived.by<MapMarker[]>(() => {
+		const seen = new Set<string>();
+		const out: MapMarker[] = [];
+		for (const v of fmsFleet) {
+			if (!hasFix(v.position)) continue;
+			seen.add(plateKey(v.license_plate));
+			const status =
+				v.drive_state === 'offline' ? 'inactive' : v.drive_state === 'moving' ? 'onDuty' : 'active';
+			out.push({
+				id: `fms-${v.vehicle_id}`,
+				lat: v.position.lat,
+				lng: v.position.lon,
+				color: truckMarkerColor(status),
+				icon: TRUCK_MARKER[status] ?? TRUCK_MARKER.unpaired,
 				iconWidth: 18,
 				iconHeight: 40,
-				title: t.policeNumber,
-				subtitle: t.status ?? t.statusCode ?? 'unknown'
-			}))
-	);
+				title: v.license_plate,
+				subtitle: [STATE_LABEL[v.drive_state], v.driver?.name, addressLine(v.position)]
+					.filter(Boolean)
+					.join(' · ')
+			});
+		}
+		for (const p of positions) {
+			if (seen.has(plateKey(p.policeNumber))) continue;
+			// An active truck that is busy is on duty; an available one is idle.
+			const status = p.status === 'active' && !p.isAvailable ? 'onDuty' : p.status;
+			out.push({
+				id: p.truckId,
+				lat: p.lat,
+				lng: p.lon,
+				color: truckMarkerColor(status),
+				icon: TRUCK_MARKER[status] ?? TRUCK_MARKER.unpaired,
+				iconWidth: 18,
+				iconHeight: 40,
+				title: p.policeNumber,
+				subtitle:
+					(p.source === 'live' ? 'Live' : 'Last drop') +
+					(p.city ? ` · ${p.city}` : '') +
+					` · ${formatDate(p.at)}`
+			});
+		}
+		return out;
+	});
 
 	let markers = $derived([...warehouseMarkers, ...truckMarkers]);
 
@@ -89,7 +167,8 @@
 	<PageHeader
 		{title}
 		icon={Map}
-		subtitle="{$truckStore.trucks.length} trucks · {truckMarkers.length} reporting a position · {warehouseMarkers.length} points"
+		subtitle="{$truckStore.trucks
+			.length} trucks · {truckMarkers.length} reporting a position · {warehouseMarkers.length} points"
 	/>
 
 	<div class="grid grid-cols-1 gap-gutter lg:grid-cols-3">
@@ -97,11 +176,13 @@
 			<Card title="Fleet Map" padded={false}>
 				<div class="space-y-3 px-6 pb-6 pt-4">
 					<MapView {markers} fitToMarkers class="h-[500px]" />
-					{#if truckMarkers.length === 0}
+					{#if positionsError}
+						<p class="text-xs italic text-danger">Fleet positions: {positionsError}</p>
+					{:else if truckMarkers.length === 0}
 						<p class="text-xs italic text-muted">
-							Loading and unloading points are shown. Truck positions are not: the
-							telemetry service that reports them is not built yet, so the fleet layer
-							stays empty rather than showing trucks in the wrong place.
+							Loading and unloading points are shown. No truck has reported a position yet: a truck appears
+							here once its tracker sends a fix to the telemetry service, or once it completes a shipment and
+							its last unloading point is known.
 						</p>
 					{/if}
 				</div>

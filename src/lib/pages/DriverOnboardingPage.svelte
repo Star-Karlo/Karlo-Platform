@@ -328,6 +328,7 @@
 		<DataTable
 			{columns}
 			data={accounts}
+			totalRows={accounts.length}
 			loading={loadingAccounts}
 			emptyMessage="Belum ada akun driver"
 			pageSize={50}

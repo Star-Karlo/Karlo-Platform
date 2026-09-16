@@ -50,9 +50,7 @@
 	}
 
 	/** Only what actually changed is sent; the server stores nothing else. */
-	let changed = $derived(
-		fields.filter((f) => draft[f.key] !== undefined && draft[f.key] !== f.requirement)
-	);
+	let changed = $derived(fields.filter((f) => draft[f.key] !== undefined && draft[f.key] !== f.requirement));
 
 	async function save() {
 		const payload = changed.map((f) => ({ key: f.key, requirement: draft[f.key] }));
@@ -78,9 +76,8 @@
 		     is meaningless without saying whose. Karlo's own configuration is a
 		     real thing to edit, just rarely the intended one. -->
 		<p class="rounded-card bg-warning/15 px-4 py-3 text-xs leading-relaxed text-ink" role="status">
-			You are editing <span class="font-medium">Karlo's own</span> forms. To change what a
-			client's agreement or order asks for, choose that client in the bar above — each one
-			can require different fields.
+			You are editing <span class="font-medium">Karlo's own</span> forms. To change what a client's agreement or
+			order asks for, choose that client in the bar above — each one can require different fields.
 		</p>
 	{/if}
 
@@ -91,10 +88,7 @@
 		>
 			Agreement
 		</Button>
-		<Button
-			variant={entity === 'order' ? 'primary' : 'outline'}
-			onclick={() => switchEntity('order')}
-		>
+		<Button variant={entity === 'order' ? 'primary' : 'outline'} onclick={() => switchEntity('order')}>
 			Order
 		</Button>
 	</div>
@@ -132,12 +126,10 @@
 							<div class="w-40 shrink-0">
 								{#if field.locked}
 									<p class="text-right text-xs text-muted">Required</p>
-								{:else}
-									<Select
-										bind:value={draft[field.key]}
-										options={REQUIREMENTS}
-										disabled={!mayEdit}
-									/>
+								{:else if draft[field.key] !== undefined}
+									<!-- The store publishes the fields a tick before the draft is
+									     filled from them; binding an undefined value is a Svelte error. -->
+									<Select bind:value={draft[field.key]} options={REQUIREMENTS} disabled={!mayEdit} />
 								{/if}
 							</div>
 						</li>

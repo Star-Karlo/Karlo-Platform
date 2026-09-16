@@ -51,7 +51,13 @@
 		<p class="rounded-card bg-danger/10 px-4 py-3 text-xs text-danger" role="alert">{error}</p>
 	{/if}
 
-	<DataTable {columns} data={rows} {loading} emptyMessage="No transporters linked to your company yet">
+	<DataTable
+		{columns}
+		data={rows}
+		totalRows={rows.length}
+		{loading}
+		emptyMessage="No transporters linked to your company yet"
+	>
 		{#snippet cell(row: any, column: Column, text: string)}
 			{#if column.key === 'status'}
 				<StatusBadge statusCode={row.status ?? 'active'} label={row.status ?? 'active'} />

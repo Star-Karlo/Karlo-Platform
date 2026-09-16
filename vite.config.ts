@@ -25,6 +25,10 @@ const SERVICES = {
 	// behalf before it ever signs in.
 	'/api/v1/shippers': 'http://localhost:5001',
 	'/api/v1/transporters': 'http://localhost:5001',
+	// The caller's own company profile (Settings, order/agreement documents)
+	// and the client claim link a transporter hands its shipper.
+	'/api/v1/companies': 'http://localhost:5001',
+	'/api/v1/claim': 'http://localhost:5001',
 	// A company's own roles, and the permission catalogue a role editor reads.
 	'/api/v1/roles': 'http://localhost:5001',
 	'/api/v1/permissions': 'http://localhost:5001',

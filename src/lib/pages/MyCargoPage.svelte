@@ -306,6 +306,7 @@
 				<DataTable
 					{columns}
 					data={items.map((it, i) => ({ ...it, no: i + 1 }))}
+					totalRows={items.length}
 					loading={loadingItems}
 					emptyMessage="No items under this cargo type yet"
 					pageSize={200}

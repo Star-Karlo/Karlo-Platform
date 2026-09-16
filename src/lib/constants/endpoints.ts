@@ -171,6 +171,17 @@ export const ENDPOINTS = {
 	 * Drivers are master data: a person with a name, a phone and a licence,
 	 * not a login. A driver who does get a login is linked by userId.
 	 */
+	/**
+	 * Where the fleet is. The business service asks the telemetry service for
+	 * a live fix per device and falls back to the last unloading point, so the
+	 * console never talks to telemetry directly and no ingest key reaches the
+	 * browser.
+	 */
+	fleet: {
+		live: '/fleet/live',
+		driverActivity: '/fleet/driver-activity'
+	},
+
 	vehicles: {
 		list: '/vehicles',
 		one: (id: string) => `/vehicles/${id}`,

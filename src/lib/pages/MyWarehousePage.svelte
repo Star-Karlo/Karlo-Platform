@@ -293,6 +293,7 @@
 			<DataTable
 				{columns}
 				data={visible}
+				totalRows={visible.length}
 				loading={loadingSites}
 				emptyMessage="Belum ada warehouse untuk {selectedName}"
 				pageSize={200}

@@ -31,7 +31,8 @@
 			const s = t.status ?? 'inactive';
 			by[s] = (by[s] ?? 0) + 1;
 			if (t.isAvailable) available += 1;
-			if (t.driverIds?.length) paired += 1;
+			// The register is /vehicles: one current driver, not the legacy driverIds list.
+			if (t.currentDriverId || t.driverIds?.length) paired += 1;
 		}
 		return { by, available, paired, total: trucks.length };
 	});
@@ -60,11 +61,21 @@
 		<Card><EmptyState message="No trucks registered" /></Card>
 	{:else}
 		<div class="flex flex-wrap gap-gutter">
-			<div class="min-w-[170px] flex-1"><StatCard label="Total Truck" value={formatNumber(counts.total)} /></div>
-			<div class="min-w-[170px] flex-1"><StatCard label="Active" value={formatNumber(counts.by.active)} accent="success" /></div>
-			<div class="min-w-[170px] flex-1"><StatCard label="Available Now" value={formatNumber(counts.available)} accent="cyan" /></div>
 			<div class="min-w-[170px] flex-1">
-				<StatCard label="In Use" value={`${utilisation}%`} hint="Registered trucks not currently marked available" />
+				<StatCard label="Total Truck" value={formatNumber(counts.total)} />
+			</div>
+			<div class="min-w-[170px] flex-1">
+				<StatCard label="Active" value={formatNumber(counts.by.active)} accent="success" />
+			</div>
+			<div class="min-w-[170px] flex-1">
+				<StatCard label="Available Now" value={formatNumber(counts.available)} accent="cyan" />
+			</div>
+			<div class="min-w-[170px] flex-1">
+				<StatCard
+					label="In Use"
+					value={`${utilisation}%`}
+					hint="Registered trucks not currently marked available"
+				/>
 			</div>
 			<div class="min-w-[170px] flex-1">
 				<StatCard label="Driver Paired" value={`${counts.paired} / ${counts.total}`} />
@@ -109,7 +120,7 @@
 									height="27"
 									class="shrink-0"
 								/>
-								<span class="text-xs font-medium text-ink">{truck.policeNumber}</span>
+								<span class="text-xs font-medium text-ink">{truck.licensePlate ?? truck.policeNumber}</span>
 								<span class="ml-auto text-xs text-muted">
 									{truck.isAvailable ? 'Available' : 'In use'} · {truck.status}
 								</span>
@@ -121,8 +132,8 @@
 		</div>
 
 		<p class="text-xs italic text-muted">
-			Utilisation over time, distance travelled and idle hours are not shown: they need trip
-			history, which no service exposes yet.
+			Utilisation over time, distance travelled and idle hours are not shown: they need trip history, which no
+			service exposes yet.
 		</p>
 	{/if}
 </div>
