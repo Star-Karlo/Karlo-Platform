@@ -1,8 +1,5 @@
 <script lang="ts">
-	import NotBuiltPage from '$lib/pages/NotBuiltPage.svelte';
+	import TripAllowanceReconciliationPage from '$lib/pages/TripAllowanceReconciliationPage.svelte';
 </script>
 
-<NotBuiltPage
-	title="Trip Allowance — Reconciliation"
-	note="Rekonsiliasi post-trip lintas order. Segera hadir."
-/>
+<TripAllowanceReconciliationPage basePath="/m" />
