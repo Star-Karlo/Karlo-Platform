@@ -1,5 +1,5 @@
 <script lang="ts">
-	import TruckListPage from '$lib/pages/TruckListPage.svelte';
+	import FleetPairingPage from '$lib/pages/FleetPairingPage.svelte';
 </script>
 
-<TruckListPage basePath="/t/fleet/truck-list" />
+<FleetPairingPage basePath="/t" />

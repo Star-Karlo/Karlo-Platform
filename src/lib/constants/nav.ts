@@ -137,8 +137,8 @@ export const navItems: Record<string, NavItem[]> = {
 				{
 					name: 'Vehicles',
 					children: [
-						{ name: 'Truck List', url: '/a/fleet/truck-list' },
-						{ name: 'Data Armada', url: '/a/fleet/pairing', permission: 'masterData.read' },
+						// Trucks and drivers on one page: the register, the pairing, the actions.
+						{ name: 'Data Armada', url: '/a/fleet/truck-list' },
 						{ name: 'Drivers', url: '/a/drivers', permission: 'masterData.read' },
 						{ name: 'Truck Head', url: '/a/truck-head' },
 						{ name: 'Truck Body', url: '/a/truck-body' },
@@ -271,8 +271,8 @@ export const navItems: Record<string, NavItem[]> = {
 				{
 					name: 'Vehicles',
 					children: [
-						{ name: 'Truck List', url: '/t/fleet/truck-list' },
-						{ name: 'Data Armada', url: '/t/fleet/pairing', permission: 'masterData.read' },
+						// Trucks and drivers on one page: the register, the pairing, the actions.
+						{ name: 'Data Armada', url: '/t/fleet/truck-list' },
 						{ name: 'Drivers', url: '/t/drivers', permission: 'masterData.read' },
 						{ name: 'Truck Head', url: '/t/truck-head' },
 						{ name: 'Truck Body', url: '/t/truck-body' },
@@ -339,8 +339,8 @@ export const navItems: Record<string, NavItem[]> = {
 				{
 					name: 'Vehicles',
 					children: [
-						{ name: 'Truck List', url: '/m/fleet/truck-list' },
-						{ name: 'Data Armada', url: '/m/fleet/pairing', permission: 'masterData.read' },
+						// Trucks and drivers on one page: the register, the pairing, the actions.
+						{ name: 'Data Armada', url: '/m/fleet/truck-list' },
 						{ name: 'Truck Head', url: '/m/truck-head' },
 						{ name: 'Truck Body', url: '/m/truck-body' },
 						{ name: 'Truck Class', url: '/m/truck-class' },

@@ -9,10 +9,10 @@
 	 * been off the road longest. Master data holds the pairing itself.
 	 */
 	import { onMount } from 'svelte';
-	import { Truck, Users, Plus, Search, Check, X, Link2Off, Pencil } from 'lucide-svelte';
+	import { Truck, Users, Plus, Search, Check, Link2Off, Pencil, Trash2 } from 'lucide-svelte';
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
-	import { Button, PageHeader, Select, StatusBadge } from '$lib/components/ui';
+	import { Button, Modal, PageHeader, Select, StatusBadge } from '$lib/components/ui';
 	import { formatDate } from '$lib/utils/format';
 
 	let { basePath = '/t' }: { basePath?: string } = $props();
@@ -27,6 +27,8 @@
 		truckBody?: { name: string } | null;
 		truckHead?: { name: string } | null;
 		attributes?: Record<string, any>;
+		tracker?: { deviceId?: string } | null;
+		unitYear?: number | null;
 	};
 	type Driver = { id: string; fullName: string; phone?: string; status?: string; userId?: string };
 	type Activity = { driverId: string; truckId: string; trips: number; lastActiveAt?: string };
@@ -154,6 +156,24 @@
 		assigning = null;
 		chosenDriver = '';
 	}
+	// The truck list's own actions live here now: this page IS the fleet
+	// register (review A.3 — trucks and drivers on one page).
+	let confirmingDelete = $state<Vehicle | null>(null);
+	async function removeTruck() {
+		if (!confirmingDelete) return;
+		saving = true;
+		try {
+			await api.delete(ENDPOINTS.vehicles.remove(confirmingDelete.id));
+			notice = `${confirmingDelete.licensePlate} dihapus dari armada.`;
+			confirmingDelete = null;
+			await load();
+		} catch (e: any) {
+			error = e?.response?.data?.message ?? 'Could not remove the truck.';
+		} finally {
+			saving = false;
+		}
+	}
+
 	async function setDriver(vehicleId: string, driverId: string) {
 		saving = true;
 		error = '';
@@ -233,12 +253,15 @@
 			</div>
 			<div class="fleet-table-wrap">
 				<table class="fleet-table">
-					<thead><tr><th>Truck</th><th>Driver</th><th>Status</th><th class="right">Action</th></tr></thead>
+					<thead
+						><tr><th>Truck</th><th>Driver</th><th>Device</th><th>Status</th><th class="right">Action</th></tr
+						></thead
+					>
 					<tbody>
 						{#if loading}
-							<tr><td colspan="4" class="muted">Loading…</td></tr>
+							<tr><td colspan="5" class="muted">Loading…</td></tr>
 						{:else if filteredTrucks.length === 0}
-							<tr><td colspan="4" class="muted">No trucks match.</td></tr>
+							<tr><td colspan="5" class="muted">No trucks match.</td></tr>
 						{/if}
 						{#each filteredTrucks as v (v.id)}
 							<tr class:assigning={assigning === v.id}>
@@ -272,6 +295,10 @@
 										{v.driver?.fullName ?? '—'}
 									{/if}
 								</td>
+								<td class="sub"
+									>{v.tracker?.deviceId ?? '—'}{#if v.unitYear}
+										· {v.unitYear}{/if}</td
+								>
 								<td><StatusBadge statusCode={v.status ?? 'active'} label={v.status ?? 'active'} /></td>
 								<td class="right">
 									<div class="action-cell" style="justify-content:flex-end;">
@@ -290,6 +317,12 @@
 												onclick={() => startAssign(v)}><Check size={14} /></button
 											>
 										{/if}
+										<button
+											type="button"
+											class="frozen-icon-btn"
+											title="Hapus truck"
+											onclick={() => (confirmingDelete = v)}><Trash2 size={14} /></button
+										>
 										<a class="frozen-icon-btn" title="Edit truck" href="{basePath}/fleet/truck-list/{v.id}"
 											><Pencil size={14} /></a
 										>
@@ -383,6 +416,21 @@
 		</section>
 	</div>
 </div>
+
+<Modal
+	open={confirmingDelete !== null}
+	size="sm"
+	title="Hapus truck"
+	onClose={() => (confirmingDelete = null)}
+>
+	<p class="text-sm">
+		Hapus <b>{confirmingDelete?.licensePlate}</b> dari armada? Riwayat order tetap tersimpan.
+	</p>
+	{#snippet footer()}
+		<button type="button" class="btn btn-outline" onclick={() => (confirmingDelete = null)}>Batal</button>
+		<Button variant="danger" onclick={removeTruck} loading={saving}>Hapus</Button>
+	{/snippet}
+</Modal>
 
 <style>
 	.fleet-search {
