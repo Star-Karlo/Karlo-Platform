@@ -9,7 +9,11 @@
 
 	let { children } = $props();
 
-	let isAuthPage = $derived($page.url.pathname.startsWith('/auth'));
+	// Pages a person reaches before they have an account: login, and the
+	// claim link a transporter sends a new client.
+	let isAuthPage = $derived(
+		$page.url.pathname.startsWith('/auth') || $page.url.pathname.startsWith('/claim/')
+	);
 
 	onMount(() => authStore.init());
 </script>

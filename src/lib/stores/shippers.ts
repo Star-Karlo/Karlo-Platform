@@ -37,7 +37,11 @@ interface ShipperState {
 }
 
 export const shipperStore = writable<ShipperState>({
-	shippers: [], loading: false, saving: false, error: '', claimLink: ''
+	shippers: [],
+	loading: false,
+	saving: false,
+	error: '',
+	claimLink: ''
 });
 
 function message(e: any, fallback: string): string {
@@ -52,7 +56,9 @@ export const shipperActions = {
 			shipperStore.update((s) => ({ ...s, shippers: res.data?.data ?? [], loading: false }));
 		} catch (e: any) {
 			shipperStore.update((s) => ({
-				...s, shippers: [], loading: false,
+				...s,
+				shippers: [],
+				loading: false,
 				error: message(e, 'Could not load your clients.')
 			}));
 		}
@@ -93,14 +99,21 @@ export const shipperActions = {
 		try {
 			const res = await api.post(ENDPOINTS.shippers.claimLink(id));
 			const d = res.data?.data ?? {};
+			// The service returns the bare token; the link is this console's own
+			// claim page, so it lands wherever the console is served from.
+			const token = d.token ?? '';
+			const origin = typeof window !== 'undefined' ? window.location.origin : '';
 			shipperStore.update((s) => ({
-				...s, saving: false,
-				claimLink: d.url ?? d.link ?? d.token ?? ''
+				...s,
+				saving: false,
+				claimLink: d.url ?? d.link ?? (token ? `${origin}/claim/${token}` : '')
 			}));
 			return true;
 		} catch (e: any) {
 			shipperStore.update((s) => ({
-				...s, saving: false, error: message(e, 'Could not issue a claim link.')
+				...s,
+				saving: false,
+				error: message(e, 'Could not issue a claim link.')
 			}));
 			return false;
 		}
