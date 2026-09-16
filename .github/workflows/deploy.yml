@@ -1,4 +1,4 @@
-# Build, push, deploy — on every push to main.
+# Build, push, deploy — after CI has passed on a push to main.
 #
 # This replaces CodePipeline, which cannot read from GitHub in ap-southeast-3.
 # Authentication is OIDC: no AWS access key is stored anywhere in GitHub. The
@@ -11,8 +11,14 @@
 
 name: Deploy
 
+# Runs after CI, not alongside it, exactly like the Go services: a red
+# svelte-check or test run must not roll to production. A manual dispatch
+# skips the gate deliberately — for a rollback or a redeploy of a commit
+# CI has already passed.
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -38,11 +44,16 @@ env:
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
+      # On a workflow_run the checkout must name the commit CI tested; the
+      # default would be whatever main points at by the time this starts.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Assume the deploy role
         uses: aws-actions/configure-aws-credentials@v4
@@ -61,10 +72,17 @@ jobs:
         id: build
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
-          IMAGE="$REGISTRY/$ECR_REPOSITORY:sha-${GITHUB_SHA::12}"
-          docker build -t "$IMAGE" .
-          docker push "$IMAGE"
+          IMAGE="$REGISTRY/$ECR_REPOSITORY:sha-${DEPLOY_SHA::12}"
+          # Immutable tags: a redeploy of a commit already built reuses its image.
+          if aws ecr describe-images --repository-name "$ECR_REPOSITORY" \
+               --image-ids imageTag="sha-${DEPLOY_SHA::12}" >/dev/null 2>&1; then
+            echo "image already in ECR, reusing: $IMAGE"
+          else
+            docker build -t "$IMAGE" .
+            docker push "$IMAGE"
+          fi
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
 
       # The task definition is owned by Terraform, which ignores changes to its
