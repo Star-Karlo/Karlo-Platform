@@ -42,5 +42,8 @@ export default [
 			'no-empty': ['error', { allowEmptyCatch: true }]
 		}
 	},
-	{ ignores: ['build/', '.svelte-kit/', 'node_modules/', 'static/maplibre/', 'dist/'] }
+	{ ignores: ['build/', '.svelte-kit/', 'node_modules/', 'static/maplibre/', 'dist/'] },
+	// Utilities ported verbatim from the Karlo-TMS-Revamp prototype. Kept as
+	// written so the two stay comparable; the console's own code is typed.
+	{ files: ['src/lib/revamp/*.js'], rules: { '@typescript-eslint/ban-ts-comment': 'off' } }
 ];
