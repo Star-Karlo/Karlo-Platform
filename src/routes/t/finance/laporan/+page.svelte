@@ -1,5 +1,5 @@
 <script lang="ts">
-	import ReportOrderPage from '$lib/pages/ReportOrderPage.svelte';
+	import FinanceLaporanPage from '$lib/pages/FinanceLaporanPage.svelte';
 </script>
 
-<ReportOrderPage />
+<FinanceLaporanPage basePath="/t" />

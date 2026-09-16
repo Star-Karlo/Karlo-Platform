@@ -2,4 +2,4 @@
 	import FinanceJurnalPage from '$lib/pages/FinanceJurnalPage.svelte';
 </script>
 
-<FinanceJurnalPage basePath="/t" />
+<FinanceJurnalPage basePath="/m" />

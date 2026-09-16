@@ -51,6 +51,8 @@ const SERVICES = {
 	// business-service :5003
 	'/api/v1/orders': 'http://localhost:5003',
 	'/api/v1/fleet': 'http://localhost:5003',
+	// Finance: chart of accounts and manual journal lines.
+	'/api/v1/ledger': 'http://localhost:5003',
 	'/api/v1/shipments': 'http://localhost:5003',
 	'/api/v1/agreements': 'http://localhost:5003',
 	'/api/v1/invoices': 'http://localhost:5003',
