@@ -91,6 +91,11 @@ files under `src/routes/` are three-line wrappers:
 | `AgreementListPage` | `/s`, `/t`, `/m`, `/a` |
 | `InvoiceListPage` | `/s`, `/t`, `/m`, `/a` |
 | `InsightPage` | `/s`, `/t`, `/m` |
+| `DashboardPage` (Insight > Overview, the login landing) | `/t`, `/m`, `/a` |
+| `CompanyProfilePage` (Profil Perusahaan, `GET/PUT /companies/me`) | `/t`, `/m`, `/a` |
+| `TruckDetailPage` (`/fleet/truck/[id]`, `?edit=1` for Edit Truck), `DriverDetailPage` (`/fleet/driver/[id]`) | `/t`, `/m`, `/a` |
+| `TripAllowanceConfigurationPage` (company `settings.tripAllowance`), `TripAllowanceDriverAllowancePage`, `TripAllowanceReconciliationPage` | `/t`, `/m`, `/a` |
+| `FinanceCoaPage`, `FinanceJurnalPage`, `FinanceLaporanPage` (`/ledger` for what a person types; automatic postings derived by `lib/revamp/jurnal.js`) | `/t`, `/m`, `/a` |
 | `TruckListPage` | `/t`, `/m`, `/a` |
 | `PlannerPage` | `/t`, `/m` |
 | `SettingsPage` | `/s`, `/t`, `/m` |
@@ -117,9 +122,12 @@ calls a mutation. Still to build:
 - Truck and warehouse CRUD
 
 ### Screens
-46 routes render `NotBuiltPage`. They are reachable and correctly shelled, but
-have no content — the admin master-data set, the user lists, every report, draft
-order, my-shipper, client management, fleet insight, and the `…/create` forms.
+20 routes render `NotBuiltPage`. They are reachable and correctly shelled, but
+have no content — API keys, trackers, share-orders and the fleet/performance
+reports on each persona, plus draft order (`/s`), collaboration (`/m`),
+document verification and general settings (`/a`) and the planner's control
+tower (`/t`). The dashboard, company profile, truck and driver detail, trip
+allowance and finance screens are built now (see the shared-page table above).
 
 ### Integrations
 None of these exist yet: Socket.IO notifications, Firebase push, PDF export, and
