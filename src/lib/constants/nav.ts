@@ -193,7 +193,8 @@ export const navItems: Record<string, NavItem[]> = {
 			icon: Settings,
 			dividerBefore: true,
 			children: [
-				{ name: 'Company', url: '/a/settings' },
+				{ name: 'Company', url: '/a/profile/company' },
+				{ name: 'Settings', url: '/a/settings' },
 				{ name: 'Child Account', url: '/a/users' },
 				{ name: 'Roles', url: '/a/roles' },
 				{ name: 'API Keys', url: '/a/api-keys' },
@@ -330,7 +331,8 @@ export const navItems: Record<string, NavItem[]> = {
 			icon: Settings,
 			dividerBefore: true,
 			children: [
-				{ name: 'Company', url: '/t/settings' },
+				{ name: 'Company', url: '/t/profile/company' },
+				{ name: 'Settings', url: '/t/settings' },
 				{ name: 'Child Account', url: '/t/users' },
 				{ name: 'Roles', url: '/t/roles' },
 				{ name: 'API Keys', url: '/t/api-keys' },
@@ -409,7 +411,8 @@ export const navItems: Record<string, NavItem[]> = {
 			icon: Settings,
 			dividerBefore: true,
 			children: [
-				{ name: 'Company', url: '/m/settings' },
+				{ name: 'Company', url: '/m/profile/company' },
+				{ name: 'Settings', url: '/m/settings' },
 				{ name: 'Child Account', url: '/m/users' },
 				{ name: 'Roles', url: '/m/roles' },
 				{ name: 'API Keys', url: '/m/api-keys' },
