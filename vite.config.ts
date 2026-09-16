@@ -40,7 +40,6 @@ const SERVICES = {
 	'/api/v1/drivers/accounts': 'http://localhost:5001',
 	'/api/v1/drivers': 'http://localhost:5002',
 	'/api/v1/documents': 'http://localhost:5002',
-	'/api/v1/vehicle-groups': 'http://localhost:5002',
 	'/api/v1/sites': 'http://localhost:5002',
 	'/api/v1/warehouses': 'http://localhost:5002',
 	// Telematics devices, and the plate-to-IMEI link both products read.

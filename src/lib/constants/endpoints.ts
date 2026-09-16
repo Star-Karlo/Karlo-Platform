@@ -208,8 +208,7 @@ export const ENDPOINTS = {
 		one: (id: string) => `/trucks/${id}`,
 		create: '/trucks',
 		update: (id: string) => `/trucks/${id}`,
-		remove: (id: string) => `/trucks/${id}`,
-		drivers: (id: string) => `/trucks/${id}/drivers`
+		remove: (id: string) => `/trucks/${id}`
 	},
 
 	warehouses: {
