@@ -140,6 +140,9 @@ export const navItems: Record<string, NavItem[]> = {
 						// Trucks and drivers on one page: the register, the pairing, the actions.
 						{ name: 'Data Armada', url: '/a/fleet/truck-list' },
 						{ name: 'Drivers', url: '/a/drivers', permission: 'masterData.read' },
+						// Karlo-maintained reference lists (review A.1): companies select
+						// from them, only platform staff edit them, so only the admin
+						// menu shows them.
 						{ name: 'Truck Head', url: '/a/truck-head' },
 						{ name: 'Truck Body', url: '/a/truck-body' },
 						{ name: 'Truck Class', url: '/a/truck-class' },
@@ -207,10 +210,6 @@ export const navItems: Record<string, NavItem[]> = {
 					name: 'Vehicles',
 					children: [
 						{ name: 'Truck List', url: '/s/fleet/truck-list' },
-						{ name: 'Truck Head', url: '/s/truck-head' },
-						{ name: 'Truck Body', url: '/s/truck-body' },
-						{ name: 'Truck Class', url: '/s/truck-class' },
-						{ name: 'Brand', url: '/s/brand' }
 					]
 				},
 				// Cargo types and their items on one page; the category and
@@ -274,10 +273,6 @@ export const navItems: Record<string, NavItem[]> = {
 						// Trucks and drivers on one page: the register, the pairing, the actions.
 						{ name: 'Data Armada', url: '/t/fleet/truck-list' },
 						{ name: 'Drivers', url: '/t/drivers', permission: 'masterData.read' },
-						{ name: 'Truck Head', url: '/t/truck-head' },
-						{ name: 'Truck Body', url: '/t/truck-body' },
-						{ name: 'Truck Class', url: '/t/truck-class' },
-						{ name: 'Brand', url: '/t/brand' }
 					]
 				},
 				// Cargo types and their items on one page; the category and
@@ -341,10 +336,6 @@ export const navItems: Record<string, NavItem[]> = {
 					children: [
 						// Trucks and drivers on one page: the register, the pairing, the actions.
 						{ name: 'Data Armada', url: '/m/fleet/truck-list' },
-						{ name: 'Truck Head', url: '/m/truck-head' },
-						{ name: 'Truck Body', url: '/m/truck-body' },
-						{ name: 'Truck Class', url: '/m/truck-class' },
-						{ name: 'Brand', url: '/m/brand' }
 					]
 				},
 				// Cargo types and their items on one page; the category and
