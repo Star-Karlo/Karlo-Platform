@@ -1,5 +1,5 @@
 <script lang="ts">
-	import MyShipperPage from '$lib/pages/MyShipperPage.svelte';
+	import MyWarehousePage from '$lib/pages/MyWarehousePage.svelte';
 </script>
 
-<MyShipperPage basePath="/t" />
+<MyWarehousePage />

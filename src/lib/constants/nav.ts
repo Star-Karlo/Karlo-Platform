@@ -113,79 +113,90 @@ export interface QuickAction {
 }
 
 export const navItems: Record<string, NavItem[]> = {
+	// The sidebar of the Karlo-TMS-Revamp prototype (src/components/layout/
+	// Sidebar.vue), group for group, wired to the pages this console has.
+	// Profile is the prototype's profile menu (Company, Child Account) plus
+	// the settings a company needs to administer itself.
 	admin: [
-		{ name: 'Dashboards', url: '/a/insight', icon: Lightbulb },
-		{ name: 'Control Tower', url: '/a/control-tower', icon: MonitorDot },
 		{
-			name: 'Operations',
+			name: 'Planner',
+			icon: MonitorDot,
+			children: [
+				{ name: 'Allocate', url: '/a/planner' },
+				{ name: 'Control Tower', url: '/a/control-tower' }
+			]
+		},
+		{
+			name: 'Orders',
 			icon: ClipboardList,
 			children: [
-				// The revamp's Orders group: Spot Order (submitted by shippers),
-				// Order Kontrak (entered by us against an agreement), Empty Order.
 				{ name: 'Spot Order', url: '/a/order/spot' },
 				{ name: 'Order Kontrak', url: '/a/order/kontrak' },
-				{ name: 'Empty Order', url: '/a/empty-order' },
-				{ name: 'Share My Orders', url: '/a/share-orders' },
-				{ name: 'Uang Sangu', url: '/a/uang-sangu' },
-				{ name: 'Invoices', url: '/a/invoice' }
+				{ name: 'Empty Order', url: '/a/empty-order' }
+			]
+		},
+		{
+			name: 'Finance',
+			icon: Receipt,
+			children: [
+				{ name: 'Invoice', url: '/a/finance/invoice' },
+				{ name: 'Jurnal', url: '/a/finance/jurnal' },
+				{ name: 'Laporan', url: '/a/finance/laporan' },
+				{ name: 'COA', url: '/a/finance/coa' }
 			]
 		},
 		{
 			name: 'Master Data',
 			icon: Database,
 			children: [
-				{
-					name: 'Vehicles',
-					children: [
-						// Trucks and drivers on one page: the register, the pairing, the actions.
-						{ name: 'Data Armada', url: '/a/fleet/truck-list' },
-						{ name: 'Drivers', url: '/a/drivers', permission: 'masterData.read' },
-						// Karlo-maintained reference lists (review A.1): companies select
-						// from them, only platform staff edit them, so only the admin
-						// menu shows them.
-						{ name: 'Truck Head', url: '/a/truck-head' },
-						{ name: 'Truck Body', url: '/a/truck-body' },
-						{ name: 'Truck Class', url: '/a/truck-class' },
-						{ name: 'Brand', url: '/a/brand' }
-					]
-				},
-				// Cargo types and their items on one page; the category and
-				// sub-category screens still exist at their old URLs but are no
-				// longer part of the menu — three lists became one taxonomy.
-				{ name: 'My Cargo', url: '/a/my-cargo' },
-				{
-					name: 'Trackers',
-					children: [
-						{ name: 'Trackers', url: '/a/trackers' },
-						{ name: 'Tracker Model', url: '/a/tracker-model' },
-						{ name: 'Sensor Type', url: '/a/sensor-type' }
-					]
-				},
-				{ name: 'MyAgreement', url: '/a/agreement' },
-				{ name: 'Warehouses', url: '/a/my-shipper' },
-				// Own customers (consignees) and the 3PL vendors that carry for us.
 				{ name: 'Customer List', url: '/a/customer-list' },
-				{ name: 'Transporter List', url: '/a/transporter-list' }
+				{ name: 'MyWarehouse', url: '/a/my-shipper' },
+				{ name: 'MyCargo', url: '/a/my-cargo' },
+				{ name: 'MyAgreement', url: '/a/agreement' },
+				{ name: 'MyTransporter', url: '/a/transporter-list' },
+				// Karlo-maintained reference lists (review A.1): companies select
+				// from them, only platform staff edit them, so only the admin
+				// menu shows them.
+				{ name: 'Truck Head', url: '/a/truck-head' },
+				{ name: 'Truck Body', url: '/a/truck-body' },
+				{ name: 'Truck Class', url: '/a/truck-class' },
+				{ name: 'Brand', url: '/a/brand' },
+				{ name: 'Trackers', url: '/a/trackers' },
+				{ name: 'Tracker Model', url: '/a/tracker-model' },
+				{ name: 'Sensor Type', url: '/a/sensor-type' }
 			]
 		},
-		// The fleet console is a separate product on its own domain, so this
-		// leaves the app rather than routing inside it.
-		{ name: 'FMS', url: 'https://fms.karlo.id', icon: Truck, external: true, dividerBefore: true },
-		{ name: 'Customer Help', url: '/a/support', icon: MessageCircleQuestion },
 		{
-			name: 'Settings',
-			icon: Settings,
+			name: 'My Fleet',
+			icon: Truck,
 			children: [
-				// Platform staff only: a new client company, its feature access and
-				// its first administrator, in one place.
-				{ name: 'Karlo Clients', url: '/a/clients', permission: 'collaboration.inviteMember' },
-				{ name: 'User Management', url: '/a/users' },
-				{ name: 'API Key Management', url: '/a/api-keys' },
-				{ name: 'Customers', url: '/a/customer-list' },
-				{ name: 'Form Configuration', url: '/a/form-config' },
-				{ name: 'General', url: '/a/settings' }
+				{ name: 'Insight Truk', url: '/a/fleet/insight' },
+				{ name: 'Data Armada', url: '/a/fleet/truck-list' }
 			]
-		}
+		},
+		{
+			name: 'Trip Allowance',
+			icon: Handshake,
+			children: [
+				{ name: 'Configuration', url: '/a/trip-allowance/configuration' },
+				{ name: 'Driver Allowance', url: '/a/trip-allowance/driver-allowance' },
+				{ name: 'Reconciliation', url: '/a/trip-allowance/reconciliation' }
+			]
+		},
+		{
+			name: 'Profile',
+			icon: Settings,
+			dividerBefore: true,
+			children: [
+				{ name: 'Company', url: '/a/settings' },
+				{ name: 'Child Account', url: '/a/users' },
+				{ name: 'Roles', url: '/a/roles' },
+				{ name: 'API Keys', url: '/a/api-keys' },
+				{ name: 'Form Configuration', url: '/a/form-config' },
+				{ name: 'Karlo Clients', url: '/a/clients', permission: 'collaboration.inviteMember' }
+			]
+		},
+		{ name: 'FMS', url: 'https://fms.karlo.id', icon: Truck, external: true, dividerBefore: true }
 	],
 	shipper: [
 		{ name: 'Dashboards', url: '/s/insight', icon: Lightbulb },
@@ -208,9 +219,7 @@ export const navItems: Record<string, NavItem[]> = {
 			children: [
 				{
 					name: 'Vehicles',
-					children: [
-						{ name: 'Truck List', url: '/s/fleet/truck-list' },
-					]
+					children: [{ name: 'Truck List', url: '/s/fleet/truck-list' }]
 				},
 				// Cargo types and their items on one page; the category and
 				// sub-category screens still exist at their old URLs but are no
@@ -246,132 +255,153 @@ export const navItems: Record<string, NavItem[]> = {
 			]
 		}
 	],
+	// The sidebar of the Karlo-TMS-Revamp prototype (src/components/layout/
+	// Sidebar.vue), group for group, wired to the pages this console has.
+	// Profile is the prototype's profile menu (Company, Child Account) plus
+	// the settings a company needs to administer itself.
 	transporter: [
-		{ name: 'Dashboards', url: '/t/insight', icon: Lightbulb },
-		{ name: 'Control Tower', url: '/t/control-tower', icon: MonitorDot },
 		{
-			name: 'Operations',
+			name: 'Planner',
+			icon: MonitorDot,
+			children: [
+				{ name: 'Allocate', url: '/t/planner' },
+				{ name: 'Control Tower', url: '/t/control-tower' }
+			]
+		},
+		{
+			name: 'Orders',
 			icon: ClipboardList,
 			children: [
-				// The revamp's Orders group: Spot Order (submitted by shippers),
-				// Order Kontrak (entered by us against an agreement), Empty Order.
 				{ name: 'Spot Order', url: '/t/order/spot' },
 				{ name: 'Order Kontrak', url: '/t/order/kontrak' },
-				{ name: 'Empty Order', url: '/t/empty-order' },
-				{ name: 'Share My Orders', url: '/t/share-orders' },
-				{ name: 'Uang Sangu', url: '/t/uang-sangu' },
-				{ name: 'Invoices', url: '/t/invoice' }
+				{ name: 'Empty Order', url: '/t/empty-order' }
+			]
+		},
+		{
+			name: 'Finance',
+			icon: Receipt,
+			children: [
+				{ name: 'Invoice', url: '/t/finance/invoice' },
+				{ name: 'Jurnal', url: '/t/finance/jurnal' },
+				{ name: 'Laporan', url: '/t/finance/laporan' },
+				{ name: 'COA', url: '/t/finance/coa' }
 			]
 		},
 		{
 			name: 'Master Data',
 			icon: Database,
 			children: [
-				{
-					name: 'Vehicles',
-					children: [
-						// Trucks and drivers on one page: the register, the pairing, the actions.
-						{ name: 'Data Armada', url: '/t/fleet/truck-list' },
-						{ name: 'Drivers', url: '/t/drivers', permission: 'masterData.read' },
-					]
-				},
-				// Cargo types and their items on one page; the category and
-				// sub-category screens still exist at their old URLs but are no
-				// longer part of the menu — three lists became one taxonomy.
-				{ name: 'My Cargo', url: '/t/my-cargo' },
-				{
-					name: 'Trackers',
-					children: [
-						{ name: 'Trackers', url: '/t/trackers' },
-						{ name: 'Tracker Model', url: '/t/tracker-model' },
-						{ name: 'Sensor Type', url: '/t/sensor-type' }
-					]
-				},
-				{ name: 'MyAgreement', url: '/t/agreement' },
-				{ name: 'Warehouses', url: '/t/my-shipper' },
-				// Own customers (consignees) and the 3PL vendors that carry for us.
 				{ name: 'Customer List', url: '/t/customer-list' },
-				{ name: 'Transporter List', url: '/t/transporter-list' }
+				{ name: 'MyWarehouse', url: '/t/my-shipper' },
+				{ name: 'MyCargo', url: '/t/my-cargo' },
+				{ name: 'MyAgreement', url: '/t/agreement' },
+				{ name: 'MyTransporter', url: '/t/transporter-list' }
 			]
 		},
-		// The fleet console is a separate product on its own domain, so this
-		// leaves the app rather than routing inside it.
-		{ name: 'FMS', url: 'https://fms.karlo.id', icon: Truck, external: true, dividerBefore: true },
-		{ name: 'Customer Help', url: '/t/support', icon: MessageCircleQuestion },
 		{
-			name: 'Settings',
-			icon: Settings,
+			name: 'My Fleet',
+			icon: Truck,
 			children: [
-				{ name: 'User Management', url: '/t/users' },
-				{ name: 'API Key Management', url: '/t/api-keys' },
-				{ name: 'Customers', url: '/t/customer-list' },
-				{ name: 'Form Configuration', url: '/t/form-config' },
-				{ name: 'General', url: '/t/settings' }
+				{ name: 'Insight Truk', url: '/t/fleet/insight' },
+				{ name: 'Data Armada', url: '/t/fleet/truck-list' }
 			]
-		}
-	],
-	manager: [
-		{ name: 'Dashboards', url: '/m/insight', icon: Lightbulb },
-		{ name: 'Control Tower', url: '/m/control-tower', icon: MonitorDot },
+		},
 		{
-			name: 'Operations',
+			name: 'Trip Allowance',
+			icon: Handshake,
+			children: [
+				{ name: 'Configuration', url: '/t/trip-allowance/configuration' },
+				{ name: 'Driver Allowance', url: '/t/trip-allowance/driver-allowance' },
+				{ name: 'Reconciliation', url: '/t/trip-allowance/reconciliation' }
+			]
+		},
+		{
+			name: 'Profile',
+			icon: Settings,
+			dividerBefore: true,
+			children: [
+				{ name: 'Company', url: '/t/settings' },
+				{ name: 'Child Account', url: '/t/users' },
+				{ name: 'Roles', url: '/t/roles' },
+				{ name: 'API Keys', url: '/t/api-keys' },
+				{ name: 'Form Configuration', url: '/t/form-config' }
+			]
+		},
+		{ name: 'FMS', url: 'https://fms.karlo.id', icon: Truck, external: true, dividerBefore: true }
+	],
+	// The sidebar of the Karlo-TMS-Revamp prototype (src/components/layout/
+	// Sidebar.vue), group for group, wired to the pages this console has.
+	// Profile is the prototype's profile menu (Company, Child Account) plus
+	// the settings a company needs to administer itself.
+	manager: [
+		{
+			name: 'Planner',
+			icon: MonitorDot,
+			children: [
+				{ name: 'Allocate', url: '/m/planner' },
+				{ name: 'Control Tower', url: '/m/control-tower' }
+			]
+		},
+		{
+			name: 'Orders',
 			icon: ClipboardList,
 			children: [
-				// The revamp's Orders group: Spot Order (submitted by shippers),
-				// Order Kontrak (entered by us against an agreement), Empty Order.
 				{ name: 'Spot Order', url: '/m/order/spot' },
 				{ name: 'Order Kontrak', url: '/m/order/kontrak' },
-				{ name: 'Empty Order', url: '/m/empty-order' },
-				{ name: 'Share My Orders', url: '/m/share-orders' },
-				{ name: 'Uang Sangu', url: '/m/uang-sangu' },
-				{ name: 'Invoices', url: '/m/invoice' }
+				{ name: 'Empty Order', url: '/m/empty-order' }
+			]
+		},
+		{
+			name: 'Finance',
+			icon: Receipt,
+			children: [
+				{ name: 'Invoice', url: '/m/finance/invoice' },
+				{ name: 'Jurnal', url: '/m/finance/jurnal' },
+				{ name: 'Laporan', url: '/m/finance/laporan' },
+				{ name: 'COA', url: '/m/finance/coa' }
 			]
 		},
 		{
 			name: 'Master Data',
 			icon: Database,
 			children: [
-				{
-					name: 'Vehicles',
-					children: [
-						// Trucks and drivers on one page: the register, the pairing, the actions.
-						{ name: 'Data Armada', url: '/m/fleet/truck-list' },
-					]
-				},
-				// Cargo types and their items on one page; the category and
-				// sub-category screens still exist at their old URLs but are no
-				// longer part of the menu — three lists became one taxonomy.
-				{ name: 'My Cargo', url: '/m/my-cargo' },
-				{
-					name: 'Trackers',
-					children: [
-						{ name: 'Trackers', url: '/m/trackers' },
-						{ name: 'Tracker Model', url: '/m/tracker-model' },
-						{ name: 'Sensor Type', url: '/m/sensor-type' }
-					]
-				},
-				{ name: 'MyAgreement', url: '/m/agreement' },
-				{ name: 'Warehouses', url: '/m/my-shipper' },
-				// Own customers (consignees) and the 3PL vendors that carry for us.
 				{ name: 'Customer List', url: '/m/customer-list' },
-				{ name: 'Transporter List', url: '/m/transporter-list' }
+				{ name: 'MyWarehouse', url: '/m/my-shipper' },
+				{ name: 'MyCargo', url: '/m/my-cargo' },
+				{ name: 'MyAgreement', url: '/m/agreement' },
+				{ name: 'MyTransporter', url: '/m/transporter-list' }
 			]
 		},
-		// The fleet console is a separate product on its own domain, so this
-		// leaves the app rather than routing inside it.
-		{ name: 'FMS', url: 'https://fms.karlo.id', icon: Truck, external: true, dividerBefore: true },
-		{ name: 'Customer Help', url: '/m/support', icon: MessageCircleQuestion },
 		{
-			name: 'Settings',
-			icon: Settings,
+			name: 'My Fleet',
+			icon: Truck,
 			children: [
-				{ name: 'User Management', url: '/m/users' },
-				{ name: 'API Key Management', url: '/m/api-keys' },
-				{ name: 'Customers', url: '/m/customer-list' },
-				{ name: 'Form Configuration', url: '/m/form-config' },
-				{ name: 'General', url: '/m/settings' }
+				{ name: 'Insight Truk', url: '/m/fleet/insight' },
+				{ name: 'Data Armada', url: '/m/fleet/truck-list' }
 			]
-		}
+		},
+		{
+			name: 'Trip Allowance',
+			icon: Handshake,
+			children: [
+				{ name: 'Configuration', url: '/m/trip-allowance/configuration' },
+				{ name: 'Driver Allowance', url: '/m/trip-allowance/driver-allowance' },
+				{ name: 'Reconciliation', url: '/m/trip-allowance/reconciliation' }
+			]
+		},
+		{
+			name: 'Profile',
+			icon: Settings,
+			dividerBefore: true,
+			children: [
+				{ name: 'Company', url: '/m/settings' },
+				{ name: 'Child Account', url: '/m/users' },
+				{ name: 'Roles', url: '/m/roles' },
+				{ name: 'API Keys', url: '/m/api-keys' },
+				{ name: 'Form Configuration', url: '/m/form-config' }
+			]
+		},
+		{ name: 'FMS', url: 'https://fms.karlo.id', icon: Truck, external: true, dividerBefore: true }
 	],
 	warehousepic: [{ name: 'Order', url: '/w/order', icon: ClipboardList }],
 	investor: [{ name: 'Dashboard', url: '/i/dashboard', icon: BarChart3 }]
