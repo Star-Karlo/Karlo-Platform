@@ -1,5 +1,5 @@
 <script lang="ts">
-	import UangSanguPage from '$lib/pages/UangSanguPage.svelte';
+	import TripAllowanceDriverAllowancePage from '$lib/pages/TripAllowanceDriverAllowancePage.svelte';
 </script>
 
-<UangSanguPage basePath="/m" />
+<TripAllowanceDriverAllowancePage basePath="/m" />
