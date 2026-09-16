@@ -275,7 +275,7 @@
 	{/if}
 </div>
 
-<Modal open={showForm} title="Tambah Warehouse" onClose={() => (showForm = false)}>
+<Modal open={showForm} size="lg" title="Tambah Warehouse" onClose={() => (showForm = false)}>
 	<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 		<div>
 			<label for="w-name" class="form-label">
@@ -290,7 +290,7 @@
 
 		<div class="md:col-span-2">
 			<p class="mb-1 text-xs text-muted">Titik Lokasi di Peta</p>
-			<MapView markers={pickedMarkers} onPick={(c) => (picked = c)} class="h-[260px]" />
+			<MapView markers={pickedMarkers} onPick={(c) => (picked = c)} height="260px" />
 			<p class="mt-1 text-xs text-muted">
 				Klik peta untuk menentukan titik lokasi. Tanpa titik lokasi, warehouse tetap
 				tersimpan — tetapi rute dan jarak tidak bisa dihitung sampai titiknya diisi.

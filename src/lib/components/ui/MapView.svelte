@@ -54,6 +54,13 @@
 		flyTo = null,
 		flyZoom = 12,
 		/**
+		 * A fixed height, e.g. "260px". Set it when the map sits inside a
+		 * modal or a form: the default is to fill the parent and never go
+		 * below 400px, which inside a scrolling dialog made the map grow
+		 * into the fields underneath it.
+		 */
+		height = '',
+		/**
 		 * Called with [longitude, latitude] when the map is clicked.
 		 *
 		 * GeoJSON order, matching `center` and the routing API — and the
@@ -73,6 +80,7 @@
 		/** Animate to this point whenever it changes. */
 		flyTo?: [number, number] | null;
 		flyZoom?: number;
+		height?: string;
 		onPick?: (coordinates: [number, number]) => void;
 		class?: string;
 	} = $props();
@@ -312,7 +320,10 @@
 	});
 </script>
 
-<div class="relative h-full min-h-[400px] w-full overflow-hidden rounded-card {className}">
+<div
+	class="relative w-full overflow-hidden rounded-card {height ? '' : 'h-full min-h-[400px]'} {className}"
+	style={height ? `height:${height}; min-height:${height};` : ''}
+>
 	<!-- Filled via an INLINE style, deliberately, not Tailwind classes.
 	     MapLibre stamps `.maplibregl-map { position: relative }` onto this very
 	     element, and because its stylesheet is imported at runtime it lands

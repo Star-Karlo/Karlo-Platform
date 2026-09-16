@@ -1,5 +1,5 @@
 <script lang="ts">
-	import MasterDataPage from '$lib/pages/MasterDataPage.svelte';
+	import MyCargoPage from '$lib/pages/MyCargoPage.svelte';
 </script>
 
-<MasterDataPage kind="cargoType" />
+<MyCargoPage />

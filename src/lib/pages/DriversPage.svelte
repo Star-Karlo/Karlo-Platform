@@ -11,12 +11,12 @@
 	 * vehicle, and vice versa.
 	 */
 	import { onMount } from 'svelte';
-	import { Users, Plus, Pencil, Trash2, Search } from 'lucide-svelte';
+	import { Users, Plus, Pencil, Trash2, Search, UserPlus } from 'lucide-svelte';
 	import { driverStore, driverActions, type Driver } from '$lib/stores/drivers';
 	import { Button, DataTable, Field, FormGrid, Input, Modal, PageHeader, Select, StatusBadge, Tabs, type Column } from '$lib/components/ui';
 	import { formatDate } from '$lib/utils/format';
 
-	let { title = 'Drivers' }: { title?: string } = $props();
+	let { title = 'Drivers', basePath = '/t' }: { title?: string; basePath?: string } = $props();
 
 	let activeTab = $state('all');
 	let search = $state('');
@@ -114,6 +114,7 @@
 <div class="space-y-gutter">
 	<PageHeader {title} icon={Users} subtitle="People who drive your trucks. Assign one to a truck from the truck's page; give one a login from User Management.">
 		{#snippet actions()}
+			<Button variant="outline" href="{basePath}/drivers/onboarding"><UserPlus size={14} /> Registrasi K-Trip</Button>
 			<Button onclick={openCreate}><Plus size={14} /> Add Driver</Button>
 		{/snippet}
 	</PageHeader>

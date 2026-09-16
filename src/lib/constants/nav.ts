@@ -132,6 +132,7 @@ export const navItems: Record<string, NavItem[]> = {
 					name: 'Vehicles',
 					children: [
 						{ name: 'Truck List', url: '/a/fleet/truck-list' },
+						{ name: 'Data Armada', url: '/a/fleet/pairing', permission: 'masterData.read' },
 						{ name: 'Drivers', url: '/a/drivers', permission: 'masterData.read' },
 						{ name: 'Truck Head', url: '/a/truck-head' },
 						{ name: 'Truck Body', url: '/a/truck-body' },
@@ -139,15 +140,10 @@ export const navItems: Record<string, NavItem[]> = {
 						{ name: 'Brand', url: '/a/brand' }
 					]
 				},
-				{
-					name: 'Items',
-					children: [
-						{ name: 'Item Category', url: '/a/item-category' },
-						{ name: 'Item Sub Category', url: '/a/item-sub-category' },
-						{ name: 'Items', url: '/a/item' },
-						{ name: 'Cargo Type', url: '/a/my-cargo' }
-					]
-				},
+				// Cargo types and their items on one page; the category and
+				// sub-category screens still exist at their old URLs but are no
+				// longer part of the menu — three lists became one taxonomy.
+				{ name: 'My Cargo', url: '/a/my-cargo' },
 				{
 					name: 'Trackers',
 					children: [
@@ -156,7 +152,10 @@ export const navItems: Record<string, NavItem[]> = {
 						{ name: 'Sensor Type', url: '/a/sensor-type' }
 					]
 				},
-				{ name: 'Warehouses', url: '/a/my-shipper' }
+				{ name: 'Warehouses', url: '/a/my-shipper' },
+				// Own customers (consignees) and the 3PL vendors that carry for us.
+				{ name: 'Customer List', url: '/a/customer-list' },
+				{ name: 'Transporter List', url: '/a/transporter-list' }
 			]
 		},
 		// The fleet console is a separate product on its own domain, so this
@@ -207,15 +206,10 @@ export const navItems: Record<string, NavItem[]> = {
 						{ name: 'Brand', url: '/s/brand' }
 					]
 				},
-				{
-					name: 'Items',
-					children: [
-						{ name: 'Item Category', url: '/s/item-category' },
-						{ name: 'Item Sub Category', url: '/s/item-sub-category' },
-						{ name: 'Items', url: '/s/item' },
-						{ name: 'Cargo Type', url: '/s/my-cargo' }
-					]
-				},
+				// Cargo types and their items on one page; the category and
+				// sub-category screens still exist at their old URLs but are no
+				// longer part of the menu — three lists became one taxonomy.
+				{ name: 'My Cargo', url: '/s/my-cargo' },
 				{
 					name: 'Trackers',
 					children: [
@@ -224,7 +218,10 @@ export const navItems: Record<string, NavItem[]> = {
 						{ name: 'Sensor Type', url: '/s/sensor-type' }
 					]
 				},
-				{ name: 'Warehouses', url: '/s/my-shipper' }
+				{ name: 'Warehouses', url: '/s/my-shipper' },
+				// Own customers (consignees) and the 3PL vendors that carry for us.
+				{ name: 'Customer List', url: '/s/customer-list' },
+				{ name: 'Transporter List', url: '/s/transporter-list' }
 			]
 		},
 		// The fleet console is a separate product on its own domain, so this
@@ -266,6 +263,7 @@ export const navItems: Record<string, NavItem[]> = {
 					name: 'Vehicles',
 					children: [
 						{ name: 'Truck List', url: '/t/fleet/truck-list' },
+						{ name: 'Data Armada', url: '/t/fleet/pairing', permission: 'masterData.read' },
 						{ name: 'Drivers', url: '/t/drivers', permission: 'masterData.read' },
 						{ name: 'Truck Head', url: '/t/truck-head' },
 						{ name: 'Truck Body', url: '/t/truck-body' },
@@ -273,15 +271,10 @@ export const navItems: Record<string, NavItem[]> = {
 						{ name: 'Brand', url: '/t/brand' }
 					]
 				},
-				{
-					name: 'Items',
-					children: [
-						{ name: 'Item Category', url: '/t/item-category' },
-						{ name: 'Item Sub Category', url: '/t/item-sub-category' },
-						{ name: 'Items', url: '/t/item' },
-						{ name: 'Cargo Type', url: '/t/my-cargo' }
-					]
-				},
+				// Cargo types and their items on one page; the category and
+				// sub-category screens still exist at their old URLs but are no
+				// longer part of the menu — three lists became one taxonomy.
+				{ name: 'My Cargo', url: '/t/my-cargo' },
 				{
 					name: 'Trackers',
 					children: [
@@ -290,7 +283,10 @@ export const navItems: Record<string, NavItem[]> = {
 						{ name: 'Sensor Type', url: '/t/sensor-type' }
 					]
 				},
-				{ name: 'Warehouses', url: '/t/my-shipper' }
+				{ name: 'Warehouses', url: '/t/my-shipper' },
+				// Own customers (consignees) and the 3PL vendors that carry for us.
+				{ name: 'Customer List', url: '/t/customer-list' },
+				{ name: 'Transporter List', url: '/t/transporter-list' }
 			]
 		},
 		// The fleet console is a separate product on its own domain, so this
@@ -332,21 +328,17 @@ export const navItems: Record<string, NavItem[]> = {
 					name: 'Vehicles',
 					children: [
 						{ name: 'Truck List', url: '/m/fleet/truck-list' },
+						{ name: 'Data Armada', url: '/m/fleet/pairing', permission: 'masterData.read' },
 						{ name: 'Truck Head', url: '/m/truck-head' },
 						{ name: 'Truck Body', url: '/m/truck-body' },
 						{ name: 'Truck Class', url: '/m/truck-class' },
 						{ name: 'Brand', url: '/m/brand' }
 					]
 				},
-				{
-					name: 'Items',
-					children: [
-						{ name: 'Item Category', url: '/m/item-category' },
-						{ name: 'Item Sub Category', url: '/m/item-sub-category' },
-						{ name: 'Items', url: '/m/item' },
-						{ name: 'Cargo Type', url: '/m/my-cargo' }
-					]
-				},
+				// Cargo types and their items on one page; the category and
+				// sub-category screens still exist at their old URLs but are no
+				// longer part of the menu — three lists became one taxonomy.
+				{ name: 'My Cargo', url: '/m/my-cargo' },
 				{
 					name: 'Trackers',
 					children: [
@@ -355,7 +347,10 @@ export const navItems: Record<string, NavItem[]> = {
 						{ name: 'Sensor Type', url: '/m/sensor-type' }
 					]
 				},
-				{ name: 'Warehouses', url: '/m/my-shipper' }
+				{ name: 'Warehouses', url: '/m/my-shipper' },
+				// Own customers (consignees) and the 3PL vendors that carry for us.
+				{ name: 'Customer List', url: '/m/customer-list' },
+				{ name: 'Transporter List', url: '/m/transporter-list' }
 			]
 		},
 		// The fleet console is a separate product on its own domain, so this

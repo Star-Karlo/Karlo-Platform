@@ -24,6 +24,7 @@ const SERVICES = {
 	// and still be a company, which is what lets a transporter order on its
 	// behalf before it ever signs in.
 	'/api/v1/shippers': 'http://localhost:5001',
+	'/api/v1/transporters': 'http://localhost:5001',
 	// A company's own roles, and the permission catalogue a role editor reads.
 	'/api/v1/roles': 'http://localhost:5001',
 	'/api/v1/permissions': 'http://localhost:5001',
@@ -32,6 +33,7 @@ const SERVICES = {
 	'/api/v1/catalog': 'http://localhost:5002',
 	'/api/v1/trucks': 'http://localhost:5002',
 	'/api/v1/vehicles': 'http://localhost:5002',
+	'/api/v1/drivers/accounts': 'http://localhost:5001',
 	'/api/v1/drivers': 'http://localhost:5002',
 	'/api/v1/documents': 'http://localhost:5002',
 	'/api/v1/vehicle-groups': 'http://localhost:5002',
@@ -44,6 +46,7 @@ const SERVICES = {
 
 	// business-service :5003
 	'/api/v1/orders': 'http://localhost:5003',
+	'/api/v1/fleet': 'http://localhost:5003',
 	'/api/v1/shipments': 'http://localhost:5003',
 	'/api/v1/agreements': 'http://localhost:5003',
 	'/api/v1/invoices': 'http://localhost:5003',
