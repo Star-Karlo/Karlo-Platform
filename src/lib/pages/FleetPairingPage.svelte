@@ -323,7 +323,10 @@
 											title="Hapus truck"
 											onclick={() => (confirmingDelete = v)}><Trash2 size={14} /></button
 										>
-										<a class="frozen-icon-btn" title="Edit truck" href="{basePath}/fleet/truck-list/{v.id}"
+										<a class="frozen-icon-btn" title="Lihat detail" href="{basePath}/fleet/truck/{v.id}"
+											><Search size={14} /></a
+										>
+										<a class="frozen-icon-btn" title="Ubah data" href="{basePath}/fleet/truck/{v.id}?edit=1"
 											><Pencil size={14} /></a
 										>
 									</div>
@@ -396,7 +399,8 @@
 									/></td
 								>
 								<td
-									>{d.fullName}{#if assigning && tripsWith(d.id, assigning)}<span class="sub">
+									><a class="plate" href="{basePath}/fleet/driver/{d.id}">{d.fullName}</a
+									>{#if assigning && tripsWith(d.id, assigning)}<span class="sub">
 											· {tripsWith(d.id, assigning)} trip dengan truck ini</span
 										>{/if}</td
 								>
