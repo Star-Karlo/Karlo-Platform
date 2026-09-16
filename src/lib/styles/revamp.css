@@ -2417,3 +2417,160 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 
 /* Spot Order pages — the prototype Icon.vue wrapper (scoped there, global here) */
 .icon-wrap{display:inline-flex; align-items:center; justify-content:center; line-height:0;}
+
+/* ---------- Dashboard (business insight widgets, per-persona templates) ---------- */
+/* Persona template picker — a button next to "Atur Widget" that opens a
+   dropdown of the 4 persona templates, rather than a permanently-visible
+   row of cards (the persona choices are just a starting-point template
+   now, not something that needs to stay on screen at all times). Same
+   toggle-button-plus-absolute-menu pattern as .dash-widget-add below. */
+.dash-persona-picker{position:relative;}
+.dash-persona-picker-chevron{transition:transform .15s;}
+.dash-persona-picker-chevron--up{transform:rotate(180deg);}
+.dash-persona-menu{
+  position:absolute; left:0; top:calc(100% + 6px); min-width:240px; background:#fff; border:1px solid var(--outline-variant);
+  border-radius:10px; box-shadow:var(--shadow-2); z-index:20; overflow:hidden;
+}
+.dash-persona-menu-item{
+  display:flex; align-items:center; gap:10px; width:100%; padding:10px 12px; border:none; border-bottom:1px solid var(--outline-variant);
+  background:#fff; text-align:left; cursor:pointer;
+}
+.dash-persona-menu-item:last-child{border-bottom:none;}
+.dash-persona-menu-item:hover{background:var(--surface-alt);}
+.dash-persona-menu-item--active{background:var(--primary-container);}
+.dash-persona-icon{
+  width:32px; height:32px; border-radius:9px; background:var(--surface-alt); color:var(--on-surface-variant);
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.dash-persona-menu-item--active .dash-persona-icon{background:#fff; color:var(--primary);}
+.dash-persona-menu-label{flex:1; min-width:0; font-size:13px; font-weight:700; color:var(--on-surface); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.dash-persona-menu-check{flex-shrink:0; width:14px; height:14px; color:var(--primary);}
+
+/* A fixed 12-column track (not auto-fill/minmax) — auto-fill's column
+   count depends on the exact container width, so a pair of "half" widgets
+   (span 2 of an unpredictable N columns) could land short of the right
+   edge or leave a gap depending on screen size. Fixed 12 columns means
+   span:6 + span:6 always sums to exactly 12/12 — edge to edge — at any
+   width, and span:4 (3-per-row) / span:12 (full row) stay just as
+   predictable. No align-items:start on purpose — the default `stretch`
+   makes every card sharing a grid row match the tallest one, so a 6-stat
+   widget next to a 2-stat widget still ends in a level row instead of a
+   jagged bottom edge. */
+.dash-grid{display:grid; grid-template-columns:repeat(12, 1fr); gap:16px;}
+.dash-widget{grid-column:span 4; padding:16px 18px; position:relative; display:flex; flex-direction:column; min-height:160px;}
+@media (max-width:900px){
+  .dash-widget{grid-column:1/-1;}
+}
+.dash-widget-head{display:flex; align-items:center; gap:10px; margin-bottom:4px; min-width:0;}
+.dash-widget-icon{
+  width:32px; height:32px; border-radius:9px; background:var(--primary-container); color:var(--primary-dark);
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+/* Every ICONS entry hardcodes its own native width/height (16 to 22px
+   depending on the icon) — left alone, two widgets sitting side by side end
+   up with visibly different-sized glyphs in the same-size circle. Forcing
+   one size here (CSS wins over the SVG's own width/height attributes) keeps
+   every widget head visually uniform. */
+.dash-widget-icon svg, .dash-persona-icon svg{width:16px; height:16px;}
+.dash-widget-head h4{font-size:13.5px; font-weight:700; color:var(--on-surface); margin:0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+
+/* A fixed 2 columns (not auto-fit) — with .dash-grid's cards ranging
+   ~320-450px wide, an auto-fit stat grid would silently flip between 2 and
+   3 columns from one widget to the next depending on its card's exact
+   width, which is what actually read as "acak-acakan": neighboring widgets
+   never lined up on the same internal grid. Fixed 2 columns means every
+   widget's stats always line up the same way regardless of card width. */
+.dash-stat-grid{display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-top:12px; align-content:start; flex:1;}
+/* min-width:0 is the fix for the actual "overlap" bug: a grid cell's
+   default min-width is `auto`, which means a long unbreakable string (a
+   Rupiah value, a long uppercase label) refuses to shrink below its own
+   content width and instead spills out past the cell into the next column
+   — it LOOKS like two widgets' text overlapping, but it's really one cell
+   never agreeing to be as narrow as its 1fr track. min-width:0 lets the
+   cell shrink to the track width so overflow-wrap can do its job instead. */
+.dash-stat-item{display:flex; flex-direction:column; gap:4px; padding:10px 12px; border-radius:10px; background:var(--surface-alt); min-width:0; overflow:hidden;}
+.dash-stat-item span{font-size:10px; font-weight:600; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.02em; line-height:1.3; overflow-wrap:break-word;}
+.dash-stat-item b{font-size:16px; font-weight:700; color:var(--on-surface); font-variant-numeric:tabular-nums; line-height:1.25; overflow-wrap:break-word;}
+
+.dash-list{display:flex; flex-direction:column; margin-top:12px; flex:1;}
+.dash-list-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0; border-bottom:1px solid var(--outline-variant);}
+.dash-list-row:last-child{border-bottom:none;}
+.dash-list-row-main{display:flex; flex-direction:column; gap:2px; min-width:0;}
+.dash-list-row-main b{font-size:12.5px; color:var(--on-surface); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.dash-list-row-main span{font-size:11px; color:var(--on-surface-variant); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.dash-list-row-value{font-size:13px; font-weight:700; color:var(--on-surface); font-variant-numeric:tabular-nums; flex-shrink:0;}
+.dash-list-empty{padding:10px 0; font-size:12.5px; color:var(--on-surface-variant); text-align:center;}
+
+/* Adjust-mode overlay — same remove/reorder pattern as Control Tower's own
+   widget system (.ct-widget-* in this file), just re-scaled for a full-page
+   grid card instead of a narrow side-panel stack. */
+.dash-widget--editing{outline:2px dashed var(--outline-variant); outline-offset:2px;}
+.dash-widget--dragging{opacity:.45;}
+.dash-widget-edit-bar{display:flex; align-items:center; gap:6px; padding:5px 8px 5px 6px; margin:-16px -18px 12px; background:#F0F4FF; border-bottom:1px dashed var(--outline-variant); border-radius:var(--r-lg) var(--r-lg) 0 0; cursor:grab;}
+.dash-widget-edit-bar:active{cursor:grabbing;}
+.dash-widget-drag-handle{width:14px; height:14px; color:var(--on-surface-variant); flex-shrink:0;}
+.dash-widget-edit-label{flex:1; min-width:0; font-size:10.5px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.03em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.dash-widget-remove{flex-shrink:0; width:20px; height:20px; border-radius:50%; border:1px solid var(--outline-variant); background:#fff; color:var(--on-surface-variant); display:flex; align-items:center; justify-content:center; cursor:pointer;}
+.dash-widget-remove:hover{border-color:var(--error); color:var(--error);}
+.dash-widget-remove svg{width:10px; height:10px;}
+.dash-widget-add{position:relative; align-self:start;}
+.dash-widget-add-btn{width:100%; min-height:88px; padding:12px; border:1px dashed var(--outline-variant); border-radius:var(--r-lg); background:#fff; color:var(--primary); font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer;}
+.dash-widget-add-btn:hover{border-color:var(--primary); background:var(--primary-container);}
+.dash-widget-add-btn:disabled{opacity:.5; cursor:not-allowed;}
+.dash-widget-add-menu{position:absolute; left:0; right:0; top:calc(100% + 6px); background:#fff; border:1px solid var(--outline-variant); border-radius:10px; box-shadow:var(--shadow-2); z-index:5; overflow:hidden; max-height:280px; overflow-y:auto;}
+.dash-widget-add-menu-item{display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:10px 12px; font-size:12.5px; font-weight:600; color:var(--on-surface); background:#fff; border:none; border-bottom:1px solid var(--outline-variant); cursor:pointer;}
+.dash-widget-add-menu-item:last-child{border-bottom:none;}
+.dash-widget-add-menu-item:hover{background:var(--surface-alt);}
+.dash-widget-add-menu-empty{padding:10px 12px; font-size:11.5px; color:var(--on-surface-variant); text-align:center;}
+.dash-empty{grid-column:1/-1; display:flex; flex-direction:column; align-items:center; gap:10px; padding:48px 20px; color:var(--on-surface-variant);}
+.dash-empty svg{width:32px; height:32px;}
+.dash-toolbar-btn--active{background:var(--primary); color:#fff; border-color:var(--primary);}
+.dash-period-tabs{margin-bottom:20px;}
+.dash-period-custom{margin-top:14px; margin-bottom:20px;}
+.dash-widget-snapshot-pill{
+  flex-shrink:0; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em;
+  padding:3px 8px; border-radius:999px; background:var(--surface-alt); color:var(--on-surface-variant); border:1px solid var(--outline-variant);
+}
+
+/* Order Status Overview — the one wide, full-row widget pinned atop every
+   persona's default layout (see PERSONA_TEMPLATE_DEFAULT in
+   DashboardView.vue). grid-column:1/-1 makes it span the whole .dash-grid
+   row instead of sharing space like every other (stat-grid/list) widget. */
+.dash-widget--wide{grid-column:1/-1;}
+/* Customer/Vendor tables — span:6 of the grid's fixed 12 columns, so the
+   pair always sums to exactly the full row width (edge to edge) at any
+   screen size, not just whenever the auto-fill column count happens to be
+   even. */
+.dash-widget--half{grid-column:span 6;}
+@media (max-width:900px){
+  .dash-widget--half{grid-column:1/-1;}
+}
+.dash-status-row{display:flex; flex-wrap:wrap; gap:10px; margin-top:12px;}
+.dash-status-pill{
+  flex:1 1 110px; min-width:0; overflow:hidden; display:flex; flex-direction:column; gap:4px;
+  padding:12px 14px; border-radius:10px; background:var(--surface-alt);
+}
+.dash-status-pill span{font-size:10px; font-weight:600; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.02em; overflow-wrap:break-word;}
+.dash-status-pill b{font-size:18px; font-weight:700; color:var(--on-surface); font-variant-numeric:tabular-nums;}
+
+/* Customer/Vendor ranked bar charts — a bounded scroll area (measured to
+   show ~3 rows before needing to scroll), inside the .dash-widget--half
+   card pair. Each row is name+value on top, a proportional bar underneath
+   (width % of that widget's own max value, not a shared 0-100 scale
+   between the two widgets), and a small caption. */
+/* 194px = exactly 3 rows at 64.5px each (measured live). */
+.dash-chart-wrap{margin-top:10px; max-height:194px; overflow-y:auto; padding-right:2px;}
+.dash-chart-row{padding:7px 0;}
+.dash-chart-row-top{display:flex; align-items:center; gap:6px; margin-bottom:5px;}
+.dash-chart-name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px; font-weight:600; color:var(--on-surface);}
+.dash-chart-value{flex-shrink:0; font-size:12px; font-weight:700; color:var(--on-surface); font-variant-numeric:tabular-nums;}
+.dash-chart-bar-track{height:7px; border-radius:999px; background:var(--surface-alt); overflow:hidden;}
+.dash-chart-bar-fill{height:100%; border-radius:999px; min-width:3px;}
+.dash-chart-bar-fill--customer{background:var(--primary);}
+.dash-chart-bar-fill--vendor{background:var(--success);}
+.dash-chart-sub{margin-top:4px; font-size:10.5px; color:var(--on-surface-variant);}
+.dash-table-rank{
+  display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%;
+  background:var(--surface-alt); color:var(--on-surface-variant); font-size:9.5px; font-weight:700; margin-right:6px; flex-shrink:0;
+}
+.dash-table-empty{padding:14px; text-align:center; color:var(--on-surface-variant); font-size:12.5px;}

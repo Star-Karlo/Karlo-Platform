@@ -119,6 +119,11 @@ export const navItems: Record<string, NavItem[]> = {
 	// the settings a company needs to administer itself.
 	admin: [
 		{
+			name: 'Insight',
+			icon: Lightbulb,
+			children: [{ name: 'Overview', url: '/a/dashboard' }]
+		},
+		{
 			name: 'Planner',
 			icon: MonitorDot,
 			children: [
@@ -261,6 +266,11 @@ export const navItems: Record<string, NavItem[]> = {
 	// the settings a company needs to administer itself.
 	transporter: [
 		{
+			name: 'Insight',
+			icon: Lightbulb,
+			children: [{ name: 'Overview', url: '/t/dashboard' }]
+		},
+		{
 			name: 'Planner',
 			icon: MonitorDot,
 			children: [
@@ -334,6 +344,11 @@ export const navItems: Record<string, NavItem[]> = {
 	// Profile is the prototype's profile menu (Company, Child Account) plus
 	// the settings a company needs to administer itself.
 	manager: [
+		{
+			name: 'Insight',
+			icon: Lightbulb,
+			children: [{ name: 'Overview', url: '/m/dashboard' }]
+		},
 		{
 			name: 'Planner',
 			icon: MonitorDot,
