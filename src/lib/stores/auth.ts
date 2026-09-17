@@ -1,7 +1,9 @@
 import { derived, writable } from 'svelte/store';
 import { goto } from '$app/navigation';
 import { browser } from '$app/environment';
-import { api, REFRESH_KEY, TOKEN_KEY, USER_KEY } from '$lib/utils/api';
+import { api, TOKEN_KEY, USER_KEY, tabStore } from '$lib/utils/api';
+import { sharedSession } from '$lib/utils/session';
+import { ENDPOINTS } from '$lib/constants/endpoints';
 import { actingFor } from '$lib/stores/actingFor';
 import { consoleKeyFor } from '$lib/constants/nav';
 
@@ -13,6 +15,14 @@ export interface AuthState {
 	ready: boolean;
 }
 
+let stopWatch: () => void = () => {};
+function startWatch() {
+	stopWatch();
+	// The other Karlo app signed out: the shared marker is gone. Follow suit
+	// without a server round trip — the session is already revoked there.
+	stopWatch = sharedSession.watch(() => void authStore.logout({ remote: false }));
+}
+
 function createAuthStore() {
 	const { subscribe, set } = writable<AuthState>({
 		isAuthenticated: false,
@@ -21,44 +31,79 @@ function createAuthStore() {
 		ready: false
 	});
 
+	const signedOut = () => set({ isAuthenticated: false, token: null, user: null, ready: true });
+
 	return {
 		subscribe,
 		init() {
 			if (!browser) return;
-			const token = localStorage.getItem(TOKEN_KEY);
-			const user = localStorage.getItem(USER_KEY);
+			// A tab that already has its session (a reload).
+			const token = tabStore.get(TOKEN_KEY) ?? localStorage.getItem(TOKEN_KEY);
+			const user = tabStore.get(USER_KEY) ?? localStorage.getItem(USER_KEY);
 			if (token && user) {
 				set({ isAuthenticated: true, token, user: JSON.parse(user), ready: true });
 				api.setToken(token);
 				actingFor.init();
-			} else {
-				set({ isAuthenticated: false, token: null, user: null, ready: true });
+				startWatch();
+				return;
+			}
+			// No session of our own — the browser may hold the shared one
+			// (signed in on the other Karlo app, or a new tab of this one).
+			void this.adoptShared().then((adopted) => {
+				if (adopted) return;
+				signedOut();
 				goto('/auth');
+			});
+		},
+		/**
+		 * Sign in from the shared session cookie: exchange it for an access
+		 * token and load the identity. True when it worked; false when there
+		 * is no shared session or it no longer validates.
+		 */
+		async adoptShared(): Promise<boolean> {
+			if (!browser || !sharedSession.present()) return false;
+			try {
+				const token = await api.refresh();
+				const me = (await api.get(ENDPOINTS.auth.me)).data?.data;
+				if (!me) return false;
+				this.login(token, me);
+				actingFor.init();
+				return true;
+			} catch {
+				api.setToken('');
+				return false;
 			}
 		},
-		login(token: string, user: any, refreshToken?: string) {
-			if (browser) {
-				localStorage.setItem(TOKEN_KEY, token);
-				localStorage.setItem(USER_KEY, JSON.stringify(user));
-				// Absent when a session is resumed from a link that carried only
-				// an access token; the existing one then stays valid.
-				if (refreshToken) localStorage.setItem(REFRESH_KEY, refreshToken);
-			}
+		login(token: string, user: any) {
+			tabStore.set(TOKEN_KEY, token);
+			tabStore.set(USER_KEY, JSON.stringify(user));
 			api.setToken(token);
 			set({ isAuthenticated: true, token, user, ready: true });
+			startWatch();
 		},
-		logout() {
+		/**
+		 * End the session everywhere: the service revokes it and clears the
+		 * shared cookies (so the other app notices within a second and its
+		 * next request cannot refresh), then this tab forgets it.
+		 * `remote: false` is for when the server already knows — the other
+		 * app signed out, or the token was rejected.
+		 */
+		async logout(opts: { remote?: boolean } = {}) {
+			stopWatch();
+			if (opts.remote !== false && browser && (tabStore.get(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY))) {
+				try {
+					await api.post(ENDPOINTS.auth.logout);
+				} catch {
+					/* the local sign-out proceeds regardless */
+				}
+			}
 			// Acting-for is cleared with the session it belongs to: a new
 			// person signing in on this browser must never inherit the last
 			// one's client.
 			actingFor.clear();
-			if (browser) {
-				localStorage.removeItem(TOKEN_KEY);
-				localStorage.removeItem(USER_KEY);
-				localStorage.removeItem(REFRESH_KEY);
-			}
+			tabStore.clear();
 			api.setToken('');
-			set({ isAuthenticated: false, token: null, user: null, ready: true });
+			signedOut();
 			goto('/auth');
 		}
 	};
@@ -143,6 +188,9 @@ export const can = derived(access, ($access) => (key: string): boolean => {
 });
 
 /** Whether the company has bought a feature. */
-export const hasFeature = derived(access, ($access) => (name: string): boolean =>
-	$access.features.includes(name)
+export const hasFeature = derived(
+	access,
+	($access) =>
+		(name: string): boolean =>
+			$access.features.includes(name)
 );

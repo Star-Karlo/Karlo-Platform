@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import { Eye, EyeOff, Truck } from 'lucide-svelte';
 	import { authStore } from '$lib/stores/auth';
+	import { sharedSession } from '$lib/utils/session';
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { homeForIdentity } from '$lib/constants/nav';
@@ -24,8 +25,8 @@
 	 * the name is company-chosen text, and the console is chosen from the
 	 * company's side of the market instead.
 	 */
-	function land(user: any, token: string, refreshToken?: string) {
-		authStore.login(token, user, refreshToken);
+	function land(user: any, token: string) {
+		authStore.login(token, user);
 		goto(homeForIdentity(user ?? {}));
 	}
 
@@ -43,13 +44,13 @@
 				password,
 				product: 'tms'
 			});
-			const { token, tokens, user } = res.data.data;
+			const { token, user } = res.data.data;
 			api.setToken(token);
-			// The refresh token was returned on every login and thrown away,
-			// so a session ended after the 2-hour access token rather than the
-			// 30-day refresh one. Keeping it is what stops the app asking for a
-			// password again mid-task.
-			land(user, token, tokens?.refreshToken);
+			// The refresh token is not in the body for us to keep: the service
+			// set it as an HttpOnly cookie on the shared Karlo domain, which is
+			// what signs FMS in too and keeps this session alive past the
+			// short access token.
+			land(user, token);
 		} catch (e: any) {
 			// Two different failures land here and they are not the same thing.
 			//
@@ -70,6 +71,18 @@
 	}
 
 	onMount(async () => {
+		// Already signed in on another Karlo app (or another tab): the shared
+		// cookie signs this one in without the form.
+		if (sharedSession.present()) {
+			loading = true;
+			if (await authStore.adoptShared()) {
+				const me = (await api.get(ENDPOINTS.auth.me)).data?.data;
+				goto(homeForIdentity(me ?? {}));
+				return;
+			}
+			loading = false;
+		}
+
 		// A token in the query string is still accepted, so an existing link from
 		// another Karlo product keeps working.
 		const token = $page.url.searchParams.get('token');

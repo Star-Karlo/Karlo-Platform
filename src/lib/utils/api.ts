@@ -5,19 +5,57 @@ import { ENV } from '$lib/constants/env';
 const instance = axios.create({
 	baseURL: ENV.API_URL,
 	timeout: 30000,
-	headers: { 'Content-Type': 'application/json' }
+	headers: { 'Content-Type': 'application/json' },
+	// The refresh token is an HttpOnly cookie the browser attaches; see
+	// $lib/utils/session.
+	withCredentials: true
 });
 
-/** Storage keys. One place, because the sign-out path and the auth store share them. */
+/**
+ * Storage keys. One place, because the sign-out path and the auth store share
+ * them. Per tab (sessionStorage): the access token is short-lived and a new
+ * tab signs itself in from the shared cookie. REFRESH_KEY is only ever
+ * removed — a leftover from when the refresh token lived in localStorage.
+ */
 export const TOKEN_KEY = 'token';
 export const USER_KEY = 'user';
 export const REFRESH_KEY = 'refreshToken';
 
+/** The tab's own copy of the session. */
+export const tabStore = {
+	get(key: string): string | null {
+		if (!browser) return null;
+		try {
+			return sessionStorage.getItem(key);
+		} catch {
+			return null;
+		}
+	},
+	set(key: string, value: string) {
+		if (!browser) return;
+		try {
+			sessionStorage.setItem(key, value);
+		} catch {
+			/* private mode — the tab just re-signs in from the cookie */
+		}
+	},
+	clear() {
+		if (!browser) return;
+		try {
+			sessionStorage.removeItem(TOKEN_KEY);
+			sessionStorage.removeItem(USER_KEY);
+			localStorage.removeItem(TOKEN_KEY);
+			localStorage.removeItem(USER_KEY);
+			localStorage.removeItem(REFRESH_KEY);
+		} catch {
+			/* nothing to clear */
+		}
+	}
+};
+
 function signOut() {
 	if (!browser) return;
-	localStorage.removeItem(TOKEN_KEY);
-	localStorage.removeItem(USER_KEY);
-	localStorage.removeItem(REFRESH_KEY);
+	tabStore.clear();
 	window.location.href = '/auth';
 }
 
@@ -47,19 +85,20 @@ async function refreshSession(): Promise<string> {
 	if (refreshing) return refreshing;
 
 	refreshing = (async () => {
-		const refreshToken = localStorage.getItem(REFRESH_KEY);
-		if (!refreshToken) throw new Error('no refresh token');
-
-		const res = await axios.post(`${ENV.API_URL}/auth/refresh`, { refreshToken });
+		// An empty body: the browser attaches the HttpOnly refresh cookie, and
+		// the service rotates it in the same response. A tab that predates the
+		// cookie may still hold a token in localStorage; it is spent once and
+		// forgotten.
+		const legacy = browser ? localStorage.getItem(REFRESH_KEY) : null;
+		const res = await axios.post(`${ENV.API_URL}/auth/refresh`, legacy ? { refreshToken: legacy } : {}, {
+			withCredentials: true
+		});
+		if (legacy) localStorage.removeItem(REFRESH_KEY);
 		const data = res.data?.data ?? res.data;
 		const access = data?.accessToken;
 		if (!access) throw new Error('refresh returned no access token');
 
-		localStorage.setItem(TOKEN_KEY, access);
-		// The server rotates the refresh token too. Storing the new one is what
-		// makes the 30-day window roll forward instead of expiring on a fixed
-		// date from first login.
-		if (data.refreshToken) localStorage.setItem(REFRESH_KEY, data.refreshToken);
+		tabStore.set(TOKEN_KEY, access);
 		instance.defaults.headers.common['Authorization'] = `Bearer ${access}`;
 		return access;
 	})().finally(() => {
@@ -116,6 +155,9 @@ export const api = {
 			delete instance.defaults.headers.common[ACTING_FOR_HEADER];
 		}
 	},
+
+	/** Exchange the shared refresh cookie for a new access token. */
+	refresh: () => refreshSession(),
 
 	setToken(token: string) {
 		if (token) {

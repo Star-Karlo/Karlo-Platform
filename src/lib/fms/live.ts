@@ -10,7 +10,7 @@
  * translation layer is one more place for the two to disagree.
  */
 import { get } from 'svelte/store';
-import { TOKEN_KEY } from '$lib/utils/api';
+import { TOKEN_KEY, tabStore } from '$lib/utils/api';
 import { actingFor } from '$lib/stores/actingFor';
 
 export type DriveState = 'moving' | 'idle' | 'parking' | 'offline';
@@ -83,7 +83,7 @@ export const LIVE_POLL_MS = 60_000;
  */
 async function fmsGet<T>(path: string): Promise<T> {
 	const headers: Record<string, string> = { Accept: 'application/json' };
-	const token = localStorage.getItem(TOKEN_KEY);
+	const token = tabStore.get(TOKEN_KEY);
 	if (token) headers['Authorization'] = `Bearer ${token}`;
 	const acting = get(actingFor).companyId;
 	if (acting) headers['X-Acting-For'] = acting;
