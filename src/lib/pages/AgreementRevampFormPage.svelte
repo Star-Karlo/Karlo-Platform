@@ -228,7 +228,15 @@
 		const loads: Promise<unknown>[] = [
 			api
 				.get(ENDPOINTS.shippers.list)
-				.then((r) => (customers = Array.isArray(r.data?.data) ? r.data.data : []))
+				.then((r) => {
+					customers = Array.isArray(r.data?.data) ? r.data.data : [];
+					// Opened from a customer's row on MyAgreement: start with them.
+					const pre = new URLSearchParams(window.location.search).get('customer');
+					if (pre && !editing && !form.customerNama) {
+						const c = customers.find((x) => x.id === pre);
+						if (c) form.customerNama = c.name;
+					}
+				})
 				.catch(() => (customers = [])),
 			api
 				.get(ENDPOINTS.catalog.list('truckType'), { pageSize: 200 })

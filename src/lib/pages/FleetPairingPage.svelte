@@ -42,10 +42,10 @@
 
 	// Filters
 	let truckSearch = $state('');
-	let truckFilter = $state('unpaired'); // unpaired | all
+	let truckFilter = $state('all'); // unpaired | all — 'all' by default: an empty table on first open read as 'no data'
 	let truckStatus = $state('active');
 	let driverSearch = $state('');
-	let driverFilter = $state('unpaired'); // unpaired | all
+	let driverFilter = $state('all'); // unpaired | all
 	let suggestMostUsed = $state(false);
 	let suggestLongestIdle = $state(false);
 
@@ -484,15 +484,24 @@
 		opacity: 0.85;
 		font-variant-numeric: tabular-nums;
 	}
+	/* Two filters on one row, each half the width — a full-width select per
+	   filter pushed the table down and read as a form, not a toolbar. */
 	.fleet-filters {
-		display: flex;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 8px;
 		padding: 10px 14px;
 		border-bottom: 1px solid var(--outline-variant, #e5e7eb);
-		flex-wrap: wrap;
 	}
-	.fleet-filters :global(select) {
-		min-width: 180px;
+	.fleet-filters :global(select),
+	.fleet-filters :global(> *) {
+		min-width: 0;
+		width: 100%;
+	}
+	@media (max-width: 640px) {
+		.fleet-filters {
+			grid-template-columns: 1fr;
+		}
 	}
 	.fleet-suggest {
 		display: flex;
