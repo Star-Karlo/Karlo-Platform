@@ -70,17 +70,35 @@
 		}
 	}
 
+	async function adopt(): Promise<boolean> {
+		loading = true;
+		if (await authStore.adoptShared()) {
+			const me = (await api.get(ENDPOINTS.auth.me)).data?.data;
+			goto(homeForIdentity(me ?? {}));
+			return true;
+		}
+		loading = false;
+		return false;
+	}
+
+	onMount(() => {
+		// Someone signs in on the other Karlo app while this page sits open:
+		// the marker appears, and this tab is signed in the same way a fresh
+		// load would be.
+		let last = sharedSession.who();
+		const timer = setInterval(() => {
+			const now = sharedSession.who();
+			if (now && now !== last && !loading) void adopt();
+			last = now;
+		}, 1000);
+		return () => clearInterval(timer);
+	});
+
 	onMount(async () => {
 		// Already signed in on another Karlo app (or another tab): the shared
 		// cookie signs this one in without the form.
 		if (sharedSession.present()) {
-			loading = true;
-			if (await authStore.adoptShared()) {
-				const me = (await api.get(ENDPOINTS.auth.me)).data?.data;
-				goto(homeForIdentity(me ?? {}));
-				return;
-			}
-			loading = false;
+			if (await adopt()) return;
 		}
 
 		// A token in the query string is still accepted, so an existing link from
