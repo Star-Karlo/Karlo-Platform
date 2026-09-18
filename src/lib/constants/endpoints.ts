@@ -185,6 +185,16 @@ export const ENDPOINTS = {
 	 * not a login. A driver who does get a login is linked by userId.
 	 */
 	/**
+	 * Planning helpers on the business service: the raw route preview and the
+	 * platform's own address search (fms-geocode over the private hop), both
+	 * kept server-side so no key or internal host reaches the browser.
+	 */
+	routing: {
+		route: '/routing/route',
+		geocode: '/routing/geocode'
+	},
+
+	/**
 	 * Where the fleet is. The business service asks the telemetry service for
 	 * a live fix per device and falls back to the last unloading point, so the
 	 * console never talks to telemetry directly and no ingest key reaches the

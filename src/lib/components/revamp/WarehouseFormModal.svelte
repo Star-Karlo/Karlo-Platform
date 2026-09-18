@@ -94,9 +94,10 @@
 
 	// ---------- Address search (geocode) ----------
 	// The prototype's flow: type an address or place, search, the pin lands
-	// there, then click the map to fine-tune. Nominatim (OpenStreetMap), as
-	// the prototype used, restricted to Indonesia; a handful of matches
-	// rather than the first one, since "Gudang Priok" is rarely unique.
+	// there, then click the map to fine-tune. The search is the platform's
+	// own geocoder (Indonesia's kelurahan and road names), reached through
+	// the business service — nothing external, nothing in the browser but
+	// the candidates.
 	let searchQuery = $state('');
 	let searching = $state(false);
 	let searchError = $state('');
@@ -105,22 +106,25 @@
 
 	async function onSearch() {
 		const q = searchQuery.trim();
-		if (!q) return;
+		if (q.length < 3) return;
 		searching = true;
 		searchError = '';
 		results = [];
 		try {
-			const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=id&q=${encodeURIComponent(q)}`;
-			const res = await fetch(url, { headers: { Accept: 'application/json' } });
-			const rows: any[] = await res.json();
+			const res = await api.get(ENDPOINTS.routing.geocode, { q, limit: 8 });
+			const rows: any[] = res.data?.data ?? [];
 			if (!rows.length) {
-				searchError = 'Lokasi tidak ditemukan, coba kata kunci lain.';
+				searchError = 'Lokasi tidak ditemukan, coba nama jalan, kelurahan, atau kecamatan.';
 				return;
 			}
-			results = rows.map((r) => ({ lat: Number(r.lat), lon: Number(r.lon), label: r.display_name }));
+			results = rows.map((r) => ({
+				lat: Number(r.lat),
+				lon: Number(r.lon),
+				label: r.label || [r.name, r.address?.kecamatan, r.address?.kabupaten].filter(Boolean).join(', ')
+			}));
 			if (results.length === 1) choose(results[0]);
-		} catch {
-			searchError = 'Gagal mencari lokasi. Cek koneksi internet.';
+		} catch (e: any) {
+			searchError = e?.response?.data?.message ?? 'Gagal mencari lokasi, silakan coba lagi.';
 		} finally {
 			searching = false;
 		}
@@ -208,7 +212,7 @@
 							<input
 								type="text"
 								bind:value={searchQuery}
-								placeholder="Cari alamat atau nama tempat, cth. Pelabuhan Tanjung Priok"
+								placeholder="Cari nama jalan / kelurahan / kecamatan, cth. Jl. Raya Bekasi Cikarang"
 								onkeydown={(e) => {
 									if (e.key === 'Enter') {
 										e.preventDefault();
