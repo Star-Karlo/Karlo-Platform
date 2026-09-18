@@ -16,12 +16,25 @@ describe('sharedSession', () => {
 
 	it('reads only the marker, never a token', () => {
 		expect(sharedSession.present()).toBe(false);
-		document.cookie = `${MARKER_COOKIE}=1`;
+		document.cookie = `${MARKER_COOKIE}=user-a`;
 		expect(sharedSession.present()).toBe(true);
+		expect(sharedSession.who()).toBe('user-a');
+	});
+
+	it('notices a different person signing in on the other app', () => {
+		document.cookie = `${MARKER_COOKIE}=user-a`;
+		const gone = vi.fn();
+		const changed = vi.fn();
+		const stop = sharedSession.watch(gone, changed);
+		document.cookie = `${MARKER_COOKIE}=user-b`;
+		vi.advanceTimersByTime(1100);
+		expect(changed).toHaveBeenCalledWith('user-b');
+		expect(gone).not.toHaveBeenCalled();
+		stop();
 	});
 
 	it('notices the other app signing out within a second', () => {
-		document.cookie = `${MARKER_COOKIE}=1`;
+		document.cookie = `${MARKER_COOKIE}=user-a`;
 		const gone = vi.fn();
 		const stop = sharedSession.watch(gone);
 		vi.advanceTimersByTime(1500);

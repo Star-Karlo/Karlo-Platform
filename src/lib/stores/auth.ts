@@ -1,11 +1,11 @@
-import { derived, writable } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
 import { goto } from '$app/navigation';
 import { browser } from '$app/environment';
 import { api, TOKEN_KEY, USER_KEY, tabStore } from '$lib/utils/api';
 import { sharedSession } from '$lib/utils/session';
 import { ENDPOINTS } from '$lib/constants/endpoints';
 import { actingFor } from '$lib/stores/actingFor';
-import { consoleKeyFor } from '$lib/constants/nav';
+import { consoleKeyFor, homeForIdentity } from '$lib/constants/nav';
 
 export interface AuthState {
 	isAuthenticated: boolean;
@@ -18,9 +18,22 @@ export interface AuthState {
 let stopWatch: () => void = () => {};
 function startWatch() {
 	stopWatch();
-	// The other Karlo app signed out: the shared marker is gone. Follow suit
-	// without a server round trip — the session is already revoked there.
-	stopWatch = sharedSession.watch(() => void authStore.logout({ remote: false }));
+	stopWatch = sharedSession.watch(
+		// The other Karlo app signed out: the shared marker is gone. Follow
+		// suit without a server round trip — the session is already revoked.
+		() => void authStore.logout({ remote: false }),
+		// Someone else signed in on the other app: the browser's session is
+		// theirs now, so this tab becomes them too. Their identity may land
+		// on a different console than the page we are on.
+		() => {
+			stopWatch();
+			tabStore.clear();
+			void authStore.adoptShared().then((ok) => {
+				if (ok) window.location.href = homeForIdentity(get(authStore).user ?? {});
+				else void authStore.logout({ remote: false });
+			});
+		}
+	);
 }
 
 function createAuthStore() {
@@ -40,7 +53,11 @@ function createAuthStore() {
 			// A tab that already has its session (a reload).
 			const token = tabStore.get(TOKEN_KEY) ?? localStorage.getItem(TOKEN_KEY);
 			const user = tabStore.get(USER_KEY) ?? localStorage.getItem(USER_KEY);
-			if (token && user) {
+			// A stored session is only ours while the browser's shared session
+			// is still the same person's; otherwise adopt whoever it is now.
+			const who = sharedSession.who();
+			const stale = !!user && !!who && JSON.parse(user)?.id !== who;
+			if (token && user && !stale) {
 				set({ isAuthenticated: true, token, user: JSON.parse(user), ready: true });
 				api.setToken(token);
 				actingFor.init();

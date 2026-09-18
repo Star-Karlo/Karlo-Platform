@@ -7,15 +7,17 @@
  * a pair of cookies the APIs set on the parent domain:
  *
  *   karlo_rt       the refresh token — HttpOnly, never readable here
- *   karlo_session  a marker ("1") beside it — the one thing a page may read
+ *   karlo_session  a marker beside it carrying the user id — the one thing a
+ *                  page may read
  *
  * This app keeps the access token in memory for the tab (sessionStorage),
  * never the refresh token: a refresh is `POST /auth/refresh` with an empty
  * body and the browser attaching the cookie. On boot with no token of its
- * own, that refresh IS the sign-in. Sign-out on the other app is noticed
- * because the marker disappears (watched every second) — and, belt and
- * braces, because the server revoked the session so the next request
- * fails and cannot refresh.
+ * own, that refresh IS the sign-in. The marker is watched every second:
+ * gone means the other app signed out (follow suit); a different user id
+ * means someone else signed in there (become them, rather than keep an
+ * identity the browser no longer holds). Belt and braces, the server also
+ * revoked the old session, so its next request fails and cannot refresh.
  */
 import { browser } from '$app/environment';
 
@@ -33,17 +35,24 @@ export const sharedSession = {
 		return !!readCookie(MARKER_COOKIE);
 	},
 
+	/** The user id the shared session belongs to, '' when there is none. */
+	who(): string {
+		return readCookie(MARKER_COOKIE);
+	},
+
 	/**
-	 * Call `onGone` when the marker disappears — the other app signed out.
-	 * Returns a stop function.
+	 * Watch the marker. `onGone` when it disappears (the other app signed
+	 * out); `onChanged` when it names a different user (someone else signed
+	 * in there). Returns a stop function.
 	 */
-	watch(onGone: () => void): () => void {
+	watch(onGone: () => void, onChanged: (userId: string) => void = () => {}): () => void {
 		if (!browser) return () => {};
-		let had = sharedSession.present();
+		let last = sharedSession.who();
 		const timer = setInterval(() => {
-			const has = sharedSession.present();
-			if (had && !has) onGone();
-			had = has;
+			const now = sharedSession.who();
+			if (last && !now) onGone();
+			else if (now && last && now !== last) onChanged(now);
+			last = now;
 		}, 1000);
 		return () => clearInterval(timer);
 	}
