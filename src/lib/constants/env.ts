@@ -74,5 +74,12 @@ export const MAP = {
 	DEFAULT_ZOOM: 5
 };
 
-
-
+/**
+ * Karlo customer service on WhatsApp, as a wa.me link. Digits only in the
+ * variable (country code first, e.g. 62812…); empty hides every "Hubungi CS
+ * Karlo" button rather than linking to nowhere.
+ */
+export const CS_WHATSAPP_URL: string = (() => {
+	const digits = (env.PUBLIC_CS_WHATSAPP ?? '').replace(/\D/g, '');
+	return digits ? `https://wa.me/${digits}` : '';
+})();

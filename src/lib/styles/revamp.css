@@ -2574,3 +2574,9 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
   background:var(--surface-alt); color:var(--on-surface-variant); font-size:9.5px; font-weight:700; margin-right:6px; flex-shrink:0;
 }
 .dash-table-empty{padding:14px; text-align:center; color:var(--on-surface-variant); font-size:12.5px;}
+
+/* ---------- Warehouse form — geocode search results (console addition) ---------- */
+.map-picker-results{list-style:none; margin:0 0 8px; padding:0; border:1px solid var(--outline-variant); border-radius:10px; overflow:hidden; background:var(--surface);}
+.map-picker-results li + li{border-top:1px solid var(--outline-variant);}
+.map-picker-results button{display:block; width:100%; text-align:left; background:none; border:none; padding:9px 12px; font-size:12.5px; color:var(--on-surface); cursor:pointer;}
+.map-picker-results button:hover{background:var(--surface-container);}

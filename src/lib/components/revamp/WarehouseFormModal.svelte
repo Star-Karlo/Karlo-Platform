@@ -92,6 +92,47 @@
 		form.lng = lng;
 	}
 
+	// ---------- Address search (geocode) ----------
+	// The prototype's flow: type an address or place, search, the pin lands
+	// there, then click the map to fine-tune. Nominatim (OpenStreetMap), as
+	// the prototype used, restricted to Indonesia; a handful of matches
+	// rather than the first one, since "Gudang Priok" is rarely unique.
+	let searchQuery = $state('');
+	let searching = $state(false);
+	let searchError = $state('');
+	let results = $state<{ lat: number; lon: number; label: string }[]>([]);
+	let flyTo = $state<[number, number] | null>(null);
+
+	async function onSearch() {
+		const q = searchQuery.trim();
+		if (!q) return;
+		searching = true;
+		searchError = '';
+		results = [];
+		try {
+			const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=id&q=${encodeURIComponent(q)}`;
+			const res = await fetch(url, { headers: { Accept: 'application/json' } });
+			const rows: any[] = await res.json();
+			if (!rows.length) {
+				searchError = 'Lokasi tidak ditemukan, coba kata kunci lain.';
+				return;
+			}
+			results = rows.map((r) => ({ lat: Number(r.lat), lon: Number(r.lon), label: r.display_name }));
+			if (results.length === 1) choose(results[0]);
+		} catch {
+			searchError = 'Gagal mencari lokasi. Cek koneksi internet.';
+		} finally {
+			searching = false;
+		}
+	}
+	function choose(r: { lat: number; lon: number; label: string }) {
+		form.lat = r.lat;
+		form.lng = r.lon;
+		flyTo = [r.lon, r.lat];
+		if (!form.alamat.trim()) form.alamat = r.label;
+		results = [];
+	}
+
 	let markers = $derived(
 		form.lat != null && form.lng != null
 			? [{ id: 'picked', lat: form.lat, lng: form.lng, title: form.nama || 'Warehouse' }]
@@ -163,9 +204,41 @@
 				<div class="field">
 					<label>Titik Lokasi di Peta</label>
 					<div class="map-picker">
-						<MapView center={mapCenter} zoom={mapZoom} {markers} height="260px" {onPick} />
+						<div class="map-picker-search">
+							<input
+								type="text"
+								bind:value={searchQuery}
+								placeholder="Cari alamat atau nama tempat, cth. Pelabuhan Tanjung Priok"
+								onkeydown={(e) => {
+									if (e.key === 'Enter') {
+										e.preventDefault();
+										void onSearch();
+									}
+								}}
+							/>
+							<button type="button" class="btn btn-outline btn-sm" disabled={searching} onclick={onSearch}>
+								{searching ? 'Mencari...' : 'Cari'}
+							</button>
+						</div>
+						{#if searchError}<div class="map-picker-error">{searchError}</div>{/if}
+						{#if results.length > 1}
+							<ul class="map-picker-results">
+								{#each results as r (r.label)}
+									<li><button type="button" onclick={() => choose(r)}>{r.label}</button></li>
+								{/each}
+							</ul>
+						{/if}
+						<MapView
+							center={mapCenter}
+							zoom={mapZoom}
+							{markers}
+							height="260px"
+							{onPick}
+							{flyTo}
+							flyZoom={16}
+						/>
 						<div class="hint" style="margin-top:6px;">
-							Klik peta atau geser pin untuk menyesuaikan titik lokasi secara manual.
+							Cari alamat untuk menempatkan pin, lalu klik peta untuk menyesuaikan titik lokasi secara manual.
 						</div>
 					</div>
 				</div>

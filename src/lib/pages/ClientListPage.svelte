@@ -16,6 +16,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import { Users, Link2, Copy } from 'lucide-svelte';
+	import { INDUSTRY_SECTOR_OPTIONS } from '$lib/constants/industry';
 	import { shipperStore, shipperActions, type Shipper } from '$lib/stores/shippers';
 	import { can } from '$lib/stores/auth';
 	import { formatDate } from '$lib/utils/format';
@@ -47,7 +48,9 @@
 		npwp: '',
 		nib: '',
 		address: '',
-		phone: ''
+		phone: '',
+		picName: '',
+		industrySector: ''
 	});
 
 	const ENTITY_TYPES = [
@@ -61,23 +64,37 @@
 		$shipperStore.shippers.filter((c) => {
 			const q = search.trim().toLowerCase();
 			if (!q) return true;
-			return `${c.name} ${c.abbreviation ?? ''} ${c.npwp ?? ''} ${c.nib ?? ''}`
-				.toLowerCase()
-				.includes(q);
+			return `${c.name} ${c.abbreviation ?? ''} ${c.npwp ?? ''} ${c.nib ?? ''}`.toLowerCase().includes(q);
 		})
 	);
 
 	const columns: Column[] = [
 		{ key: 'name', label: 'Nama Perusahaan' },
 		{ key: 'abbreviation', label: 'Kode', format: (r) => r.abbreviation ?? '-' },
-		{ key: 'entityType', label: 'Tipe', format: (r) => (r.entityType === 'personal' ? 'Perorangan' : 'Perusahaan') },
+		{
+			key: 'entityType',
+			label: 'Tipe',
+			format: (r) => (r.entityType === 'personal' ? 'Perorangan' : 'Perusahaan')
+		},
+		{ key: 'picName', label: 'Nama PIC', format: (r: any) => r.profile?.picName ?? '-' },
+		{ key: 'industrySector', label: 'Sektor Industri', format: (r: any) => r.profile?.industrySector ?? '-' },
 		{ key: 'npwp', label: 'NPWP', format: (r) => r.npwp ?? '-' },
 		{ key: 'nib', label: 'NIB', format: (r) => r.nib ?? '-' },
 		{ key: '__claim', label: '', align: 'right' }
 	];
 
 	function openCreate() {
-		form = { name: '', abbreviation: '', entityType: 'company', npwp: '', nib: '', address: '', phone: '' };
+		form = {
+			name: '',
+			abbreviation: '',
+			entityType: 'company',
+			npwp: '',
+			nib: '',
+			address: '',
+			phone: '',
+			picName: '',
+			industrySector: ''
+		};
 		notice = '';
 		showForm = true;
 	}
@@ -87,7 +104,15 @@
 		// Only what was filled in. An empty NPWP must not be sent: it is a
 		// deduplication key, and "" would match every other client that has
 		// none, folding unrelated businesses into one company.
-		for (const key of ['abbreviation', 'npwp', 'nib', 'address', 'phone'] as const) {
+		for (const key of [
+			'abbreviation',
+			'npwp',
+			'nib',
+			'address',
+			'phone',
+			'picName',
+			'industrySector'
+		] as const) {
 			if (form[key].trim()) payload[key] = form[key].trim();
 		}
 
@@ -106,7 +131,11 @@
 </script>
 
 <div class="space-y-gutter">
-	<PageHeader {title} icon={Users} subtitle="Clients you order on behalf of. A client need not have an account.">
+	<PageHeader
+		{title}
+		icon={Users}
+		subtitle="Clients you order on behalf of. A client need not have an account."
+	>
 		{#snippet actions()}
 			{#if mayCreate}
 				<Button onclick={openCreate}>+ Tambah Customer</Button>
@@ -145,7 +174,7 @@
 							class="flex items-center gap-1 text-xs text-cyan hover:underline"
 							onclick={() => issueClaim(row)}
 						>
-							<Link2 size={12} /> Claim link
+							<Link2 size={12} /> Undang ke Karlo
 						</button>
 					{/if}
 				{:else if column.key === 'entityType'}
@@ -169,10 +198,20 @@
 		<div>
 			<label for="c-abbr" class="form-label">Kode Singkatan Perusahaan</label>
 			<Input id="c-abbr" bind:value={form.abbreviation} placeholder="cth. SMS" />
-			<p class="mt-1 text-xs text-muted">
-				Dipakai sebagai segmen kode pada No. Agreement (cth. AGR-SKI-SMS-000001). Dibuat
-				otomatis dari nama bila dikosongkan.
-			</p>
+		</div>
+
+		<div>
+			<label for="c-pic" class="form-label">Nama PIC</label>
+			<Input id="c-pic" bind:value={form.picName} placeholder="cth. Budi Santoso" />
+		</div>
+		<div>
+			<label for="c-sector" class="form-label">Sektor Industri</label>
+			<Select
+				id="c-sector"
+				bind:value={form.industrySector}
+				options={INDUSTRY_SECTOR_OPTIONS}
+				placeholder="Pilih sektor industri"
+			/>
 		</div>
 
 		<div>
@@ -206,13 +245,6 @@
 			<Input id="c-address" bind:value={form.address} placeholder="cth. Jl. Sudirman No.10, Jakarta" />
 		</div>
 
-		<!-- Why the tax numbers matter here, since they look optional. -->
-		<p class="md:col-span-2 text-xs text-muted">
-			NPWP dan NIB dipakai untuk mencocokkan perusahaan yang sudah terdaftar. Bila customer ini
-			sudah dicatat oleh transporter lain, sistem akan menautkan ke perusahaan yang sama —
-			bukan membuat duplikat.
-		</p>
-
 		{#if $shipperStore.error}
 			<p class="md:col-span-2 rounded-card bg-danger/10 px-4 py-3 text-xs text-danger" role="alert">
 				{$shipperStore.error}
@@ -226,18 +258,23 @@
 	</div>
 </Modal>
 
-<Modal open={!!claimFor} title="Claim link" onClose={() => { claimFor = null; shipperActions.clearClaimLink(); }}>
+<Modal
+	open={!!claimFor}
+	title="Undang customer ke Karlo"
+	onClose={() => {
+		claimFor = null;
+		shipperActions.clearClaimLink();
+	}}
+>
 	<p class="text-xs text-ink">
-		Send this to <span class="font-medium">{claimFor?.name}</span> so they can take ownership of
-		their company.
+		Kirim tautan ini ke <span class="font-medium">{claimFor?.name}</span>. Dengan membukanya mereka membuat
+		akun Karlo untuk perusahaannya sendiri — dan langsung melihat agreement serta order yang sudah Anda catat
+		untuk mereka.
 	</p>
 	{#if $shipperStore.claimLink}
 		<div class="mt-3 flex items-center gap-2">
 			<Input value={$shipperStore.claimLink} readonly class="font-mono" />
-			<Button
-				variant="outline"
-				onclick={() => navigator.clipboard?.writeText($shipperStore.claimLink)}
-			>
+			<Button variant="outline" onclick={() => navigator.clipboard?.writeText($shipperStore.claimLink)}>
 				<Copy size={14} /> Copy
 			</Button>
 		</div>
@@ -245,8 +282,8 @@
 		     that could be fetched back would be a credential sitting in the
 		     database — and this one transfers ownership of a whole company. -->
 		<p class="mt-2 text-xs text-muted">
-			Copy it now. It is shown once and cannot be retrieved again — issue a new one if it is
-			lost.
+			Salin sekarang. Tautan hanya ditampilkan sekali dan tidak bisa diambil kembali — buat yang baru bila
+			hilang.
 		</p>
 	{:else if $shipperStore.saving}
 		<p class="mt-3 text-xs text-muted">Issuing…</p>
