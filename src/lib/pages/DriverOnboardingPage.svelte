@@ -187,7 +187,6 @@
 	<PageHeader
 		title="Onboarding & Registrasi Driver"
 		icon={UserPlus}
-		subtitle="Beri driver akun K-Trip: dari username yang sudah mereka buat sendiri, atau daftarkan langsung dan kirim kredensialnya ke WhatsApp."
 	>
 		{#snippet actions()}
 			<Button variant="ghost" href="{basePath}/fleet/pairing"

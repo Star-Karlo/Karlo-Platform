@@ -229,7 +229,6 @@
 <div class="page-head">
 	<div>
 		<h1>Karlo Clients</h1>
-		<p>Perusahaan yang memakai platform: buat perusahaan, beri akses fitur, dan buat admin pertamanya.</p>
 	</div>
 	<button type="button" class="btn btn-primary" onclick={openCreate}><Plus size={15} /> Tambah Klien</button>
 </div>

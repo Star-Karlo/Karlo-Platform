@@ -88,7 +88,6 @@
 	<PageHeader
 		title="Company Management"
 		icon={Building2}
-		subtitle="What each client company may use. Their own administrator hands out permissions from within this."
 	/>
 
 	<Card title="Choose a company" header="accent">

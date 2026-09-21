@@ -1,19 +1,23 @@
 <script lang="ts">
 	/**
-	 * Data Armada — trucks and drivers side by side, paired on one page.
+	 * My Fleet — trucks and drivers side by side, paired on one page.
 	 *
-	 * The review's point: a planner pairing a truck needs to see both lists
-	 * at once — which trucks have nobody, which drivers are free — and to
-	 * assign without leaving the table. Suggestions come from the order
-	 * history (business-service): who has driven this truck most, who has
-	 * been off the road longest. Master data holds the pairing itself.
+	 * Port of the prototype's FleetHomeView + TruckTable + DriverTable +
+	 * PairingAutocomplete. A planner pairing a truck needs both lists at
+	 * once: the truck row turns into a typeable driver field, the driver
+	 * list grows a checkbox per row, and the suggestion filters (who has
+	 * driven this truck most, who has been idle longest) only appear while a
+	 * pairing is in progress. Master data holds the pairing itself; the
+	 * suggestions come from the order history (business-service).
 	 */
-	import { onMount } from 'svelte';
-	import { Truck, Users, Plus, Search, Check, Link2Off, Pencil, Trash2 } from 'lucide-svelte';
+	import { onMount, tick } from 'svelte';
+	import { Truck, Plus, Search, Check, Pencil, Trash2, CircleDot, Disc3 } from 'lucide-svelte';
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
-	import { Button, Modal, PageHeader, Select, StatusBadge } from '$lib/components/ui';
-	import { formatDate } from '$lib/utils/format';
+	import { toast } from '$lib/stores/ui';
+	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
+	import ConfirmModal from '$lib/components/revamp/ConfirmModal.svelte';
+	import Pagination from '$lib/components/revamp/Pagination.svelte';
 
 	let { basePath = '/t' }: { basePath?: string } = $props();
 
@@ -27,31 +31,51 @@
 		truckBody?: { name: string } | null;
 		truckHead?: { name: string } | null;
 		attributes?: Record<string, any>;
-		tracker?: { deviceId?: string } | null;
-		unitYear?: number | null;
 	};
 	type Driver = { id: string; fullName: string; phone?: string; status?: string; userId?: string };
 	type Activity = { driverId: string; truckId: string; trips: number; lastActiveAt?: string };
+	type Live = { truckId: string; city?: string };
+
+	const PAGE_SIZE = 5;
+	const PAIRING_OPTIONS = [
+		{ value: 'all', label: 'Semua Truck' },
+		{ value: 'paired', label: 'Sudah Ada Driver' },
+		{ value: 'unpaired', label: 'Belum Ada Driver' }
+	];
+	const STATUS_OPTIONS = [
+		{ value: 'all', label: 'Semua Status' },
+		{ value: 'active', label: 'Truck Aktif' },
+		{ value: 'inactive', label: 'Truck Non-aktif' }
+	];
+	const DRIVER_OPTIONS = [
+		{ value: 'all', label: 'Semua Driver' },
+		{ value: 'paired', label: 'Sudah Terpairing' },
+		{ value: 'unpaired', label: 'Belum Terpairing' }
+	];
 
 	let vehicles = $state<Vehicle[]>([]);
 	let drivers = $state<Driver[]>([]);
 	let activity = $state<Activity[]>([]);
+	let live = $state<Live[]>([]);
 	let loading = $state(true);
 	let error = $state('');
-	let notice = $state('');
 
-	// Filters
-	let truckSearch = $state('');
-	let truckFilter = $state('all'); // unpaired | all — 'all' by default: an empty table on first open read as 'no data'
-	let truckStatus = $state('active');
-	let driverSearch = $state('');
-	let driverFilter = $state('all'); // unpaired | all
-	let suggestMostUsed = $state(false);
-	let suggestLongestIdle = $state(false);
+	let searchTruck = $state('');
+	let searchDriver = $state('');
+	let pairingFilter = $state('all');
+	let statusFilter = $state('all');
+	let driverFilter = $state('all');
+	let truckPage = $state(1);
+	let driverPage = $state(1);
+	let sugFreqTruck = $state(false);
+	let sugIdle = $state(false);
 
-	// Inline assign state
-	let assigning = $state<string | null>(null); // vehicle id
-	let chosenDriver = $state('');
+	// Pairing in progress: the truck whose driver cell is the autocomplete.
+	let assigning = $state<string | null>(null);
+	let query = $state('');
+	let dropdownOpen = $state(false);
+	let dropdownStyle = $state('');
+	let inputEl = $state<HTMLInputElement | null>(null);
 	let saving = $state(false);
 
 	async function load() {
@@ -65,27 +89,25 @@
 			vehicles = v.data?.data ?? [];
 			drivers = d.data?.data ?? [];
 		} catch (e: any) {
-			error = e?.response?.data?.message ?? 'Could not load the fleet.';
+			error = e?.response?.data?.message ?? 'Gagal memuat data armada.';
 		} finally {
 			loading = false;
 		}
-		// Suggestions are a nicety: their absence must not empty the page.
-		try {
-			const a = await api.get('/fleet/driver-activity');
-			activity = a.data?.data ?? [];
-		} catch {
-			activity = [];
-		}
+		// Suggestions and last-known cities are niceties: their absence must
+		// not empty the page.
+		const [a, l] = await Promise.allSettled([
+			api.get(ENDPOINTS.fleet.driverActivity),
+			api.get(ENDPOINTS.fleet.live)
+		]);
+		activity = a.status === 'fulfilled' ? (a.value.data?.data ?? []) : [];
+		live = l.status === 'fulfilled' ? (l.value.data?.data ?? l.value.data?.positions ?? []) : [];
 	}
 	onMount(load);
 
-	const pairedDriverIds = $derived(
-		new Set(vehicles.map((v) => v.currentDriverId).filter(Boolean) as string[])
-	);
 	const truckOfDriver = $derived(
 		new Map(vehicles.filter((v) => v.currentDriverId).map((v) => [v.currentDriverId as string, v]))
 	);
-
+	const cityOf = $derived(new Map(live.map((p) => [p.truckId, p.city ?? ''])));
 	const lastActive = $derived.by(() => {
 		const m = new Map<string, string>();
 		for (const a of activity) {
@@ -96,238 +118,335 @@
 	});
 	const tripsWith = (driverId: string, truckId: string | null) =>
 		truckId ? (activity.find((a) => a.driverId === driverId && a.truckId === truckId)?.trips ?? 0) : 0;
-
-	const filteredTrucks = $derived.by(() => {
-		const q = truckSearch.trim().toLowerCase();
-		return vehicles.filter((v) => {
-			if (truckFilter === 'unpaired' && v.currentDriverId) return false;
-			if (truckStatus && (v.status ?? 'active') !== truckStatus) return false;
-			if (q && !(v.licensePlate ?? '').toLowerCase().includes(q) && !typeLabel(v).toLowerCase().includes(q))
-				return false;
-			return true;
-		});
-	});
-
-	const filteredDrivers = $derived.by(() => {
-		const q = driverSearch.trim().toLowerCase();
-		let list = drivers.filter((d) => {
-			if (driverFilter === 'unpaired' && pairedDriverIds.has(d.id)) return false;
-			if (q && !(d.fullName ?? '').toLowerCase().includes(q) && !(d.phone ?? '').includes(q)) return false;
-			return true;
-		});
-		// Suggestion ordering. "Most used this truck" needs a truck in hand —
-		// the one being assigned — otherwise it is a no-op.
-		if (suggestMostUsed && assigning) {
-			list = [...list].sort((a, b) => tripsWith(b.id, assigning) - tripsWith(a.id, assigning));
-		} else if (suggestLongestIdle) {
-			list = [...list].sort((a, b) => ((lastActive.get(a.id) ?? '') < (lastActive.get(b.id) ?? '') ? -1 : 1));
-		}
-		return list;
-	});
-
-	const driverOptions = $derived(
-		filteredDrivers.map((d) => ({
-			value: d.id,
-			label: `${d.fullName}${assigning && tripsWith(d.id, assigning) ? ` · ${tripsWith(d.id, assigning)} trip` : ''}${pairedDriverIds.has(d.id) ? ' (paired)' : ''}`
-		}))
-	);
+	const idleDays = (driverId: string) => {
+		const at = lastActive.get(driverId);
+		if (!at) return null;
+		return Math.max(0, Math.floor((Date.now() - new Date(at).getTime()) / 86_400_000));
+	};
 
 	function typeLabel(v: Vehicle) {
 		return v.truckHead?.name ?? v.truckBody?.name ?? v.attributes?.truckTypeName ?? '';
 	}
+	function locationOf(v: Vehicle) {
+		return cityOf.get(v.id) || v.attributes?.location || v.attributes?.pool || '—';
+	}
+	const isActive = (v: Vehicle) => (v.status ?? 'active') !== 'inactive';
 
-	function startAssign(v: Vehicle) {
-		assigning = v.id;
-		chosenDriver = '';
-		notice = '';
-	}
-	function pickDriver(d: Driver) {
-		if (!assigning) {
-			// Clicking a driver first: start with the first unpaired truck.
-			const t = filteredTrucks.find((v) => !v.currentDriverId);
-			if (!t) return;
-			assigning = t.id;
+	const filteredTrucks = $derived.by(() => {
+		const q = searchTruck.trim().toLowerCase();
+		return vehicles.filter((v) => {
+			if (pairingFilter === 'paired' && !v.currentDriverId) return false;
+			if (pairingFilter === 'unpaired' && v.currentDriverId) return false;
+			if (statusFilter === 'active' && !isActive(v)) return false;
+			if (statusFilter === 'inactive' && isActive(v)) return false;
+			if (!q) return true;
+			return [v.licensePlate, typeLabel(v), locationOf(v), v.driver?.fullName ?? '']
+				.join(' ')
+				.toLowerCase()
+				.includes(q);
+		});
+	});
+	const truckRows = $derived(filteredTrucks.slice((truckPage - 1) * PAGE_SIZE, truckPage * PAGE_SIZE));
+
+	const filteredDrivers = $derived.by(() => {
+		const q = searchDriver.trim().toLowerCase();
+		let list = drivers.filter((d) => {
+			if (driverFilter === 'paired' && !truckOfDriver.has(d.id)) return false;
+			if (driverFilter === 'unpaired' && truckOfDriver.has(d.id)) return false;
+			if (q && !(d.fullName ?? '').toLowerCase().includes(q) && !(d.phone ?? '').includes(q)) return false;
+			return true;
+		});
+		if (assigning && (sugFreqTruck || sugIdle)) {
+			list = [...list].sort((a, b) => {
+				let sa = 0;
+				let sb = 0;
+				if (sugFreqTruck) {
+					sa += tripsWith(a.id, assigning) * 1000;
+					sb += tripsWith(b.id, assigning) * 1000;
+				}
+				if (sugIdle) {
+					sa += idleDays(a.id) ?? 0;
+					sb += idleDays(b.id) ?? 0;
+				}
+				return sb - sa;
+			});
 		}
-		chosenDriver = d.id;
+		return list;
+	});
+	const driverRows = $derived(filteredDrivers.slice((driverPage - 1) * PAGE_SIZE, driverPage * PAGE_SIZE));
+
+	$effect(() => {
+		void searchTruck, pairingFilter, statusFilter;
+		truckPage = 1;
+	});
+	$effect(() => {
+		void searchDriver, driverFilter, sugFreqTruck, sugIdle;
+		driverPage = 1;
+	});
+
+	function tagsFor(d: Driver) {
+		const tags: { type: 'freq' | 'idle'; text: string }[] = [];
+		if (!assigning) return tags;
+		if (sugFreqTruck) {
+			const n = tripsWith(d.id, assigning);
+			if (n > 0) tags.push({ type: 'freq', text: `${n}× pakai truck ini` });
+		}
+		if (sugIdle) {
+			const days = idleDays(d.id);
+			if (days !== null && days >= 3) tags.push({ type: 'idle', text: `${days} hari idle` });
+		}
+		return tags;
 	}
-	async function submitAssign() {
-		if (!assigning || !chosenDriver) return;
-		await setDriver(assigning, chosenDriver);
+
+	// --- Pairing ------------------------------------------------------------
+	const plateOf = (id: string | null) => vehicles.find((v) => v.id === id)?.licensePlate ?? '';
+
+	async function startPairing(v: Vehicle) {
+		assigning = v.id;
+		query = '';
+		sugFreqTruck = false;
+		sugIdle = false;
+		toast('Pilih driver untuk dipasangkan dengan truck ' + v.licensePlate);
+		await tick();
+		inputEl?.focus();
+	}
+	function cancelPairing() {
 		assigning = null;
-		chosenDriver = '';
+		query = '';
+		dropdownOpen = false;
 	}
-	// The truck list's own actions live here now: this page IS the fleet
-	// register (review A.3 — trucks and drivers on one page).
-	let confirmingDelete = $state<Vehicle | null>(null);
-	async function removeTruck() {
-		if (!confirmingDelete) return;
+	function selectDriver(d: Driver) {
+		query = query === d.fullName ? '' : d.fullName;
+	}
+	const matches = $derived.by(() => {
+		const q = query.trim().toLowerCase();
+		return drivers.filter((d) => d.fullName.toLowerCase().includes(q));
+	});
+	function positionDropdown() {
+		if (!inputEl) return;
+		const r = inputEl.getBoundingClientRect();
+		dropdownStyle = `left:${Math.round(r.left)}px; top:${Math.round(r.bottom + 4)}px; min-width:${Math.round(r.width)}px;`;
+	}
+	function showDropdown() {
+		positionDropdown();
+		dropdownOpen = true;
+	}
+	function hideDropdownSoon() {
+		setTimeout(() => (dropdownOpen = false), 150);
+	}
+	async function submitPairing() {
+		if (!assigning) return;
+		const name = query.trim().toLowerCase();
+		if (!name) return;
+		const driver = drivers.find((d) => d.fullName.toLowerCase() === name);
+		if (!driver) {
+			toast(`Driver "${query.trim()}" tidak ditemukan di daftar Driver List`);
+			return;
+		}
+		const plate = plateOf(assigning);
+		const ok = await setDriver(assigning, driver.id);
+		if (ok) {
+			toast(`${driver.fullName} dipasangkan dengan truck ${plate}`);
+			cancelPairing();
+		}
+	}
+	async function setDriver(vehicleId: string, driverId: string) {
 		saving = true;
+		error = '';
 		try {
-			await api.delete(ENDPOINTS.vehicles.remove(confirmingDelete.id));
-			notice = `${confirmingDelete.licensePlate} dihapus dari armada.`;
-			confirmingDelete = null;
+			await api.put(ENDPOINTS.vehicles.update(vehicleId), { currentDriverId: driverId });
 			await load();
+			return true;
 		} catch (e: any) {
-			error = e?.response?.data?.message ?? 'Could not remove the truck.';
+			error = e?.response?.data?.message ?? 'Gagal menyimpan pairing.';
+			return false;
 		} finally {
 			saving = false;
 		}
 	}
 
-	async function setDriver(vehicleId: string, driverId: string) {
+	// --- Status toggle ---------------------------------------------------------
+	let deactivating = $state<Vehicle | null>(null);
+	async function toggleActive(v: Vehicle) {
+		if (isActive(v)) {
+			deactivating = v;
+			return;
+		}
+		await setStatus(v, 'active');
+	}
+	async function setStatus(v: Vehicle, status: 'active' | 'inactive') {
 		saving = true;
-		error = '';
 		try {
-			await api.put(ENDPOINTS.vehicles.one(vehicleId), { currentDriverId: driverId });
-			const plate = vehicles.find((v) => v.id === vehicleId)?.licensePlate;
-			notice = driverId
-				? `${plate} paired with ${drivers.find((d) => d.id === driverId)?.fullName ?? 'driver'}.`
-				: `${plate} unpaired.`;
+			await api.put(ENDPOINTS.vehicles.update(v.id), { status });
+			toast(`Truck ${v.licensePlate} sekarang ${status === 'active' ? 'Aktif' : 'Non-aktif'}`);
+			deactivating = null;
 			await load();
 		} catch (e: any) {
-			error = e?.response?.data?.message ?? 'Could not save the pairing.';
+			toast(e?.response?.data?.message ?? 'Gagal mengubah status truck');
+		} finally {
+			saving = false;
+		}
+	}
+
+	// --- Delete ---------------------------------------------------------------
+	let removingTruck = $state<Vehicle | null>(null);
+	let removingDriver = $state<Driver | null>(null);
+	async function removeTruck() {
+		if (!removingTruck) return;
+		saving = true;
+		try {
+			await api.delete(ENDPOINTS.vehicles.remove(removingTruck.id));
+			toast(`Truck ${removingTruck.licensePlate} dihapus dari armada`);
+			removingTruck = null;
+			await load();
+		} catch (e: any) {
+			toast(e?.response?.data?.message ?? 'Gagal menghapus truck');
+		} finally {
+			saving = false;
+		}
+	}
+	async function removeDriver() {
+		if (!removingDriver) return;
+		saving = true;
+		try {
+			await api.delete(ENDPOINTS.drivers.remove(removingDriver.id));
+			toast(`Driver ${removingDriver.fullName} dihapus`);
+			removingDriver = null;
+			await load();
+		} catch (e: any) {
+			toast(e?.response?.data?.message ?? 'Gagal menghapus driver');
 		} finally {
 			saving = false;
 		}
 	}
 </script>
 
-<div class="space-y-gutter">
-	<PageHeader
-		title="My Fleet"
-		icon={Truck}
-		subtitle="Pair trucks with drivers. Filter to what still needs a pairing, pick from the list on the right, submit in the row."
-	>
-		{#snippet actions()}
-			<Button variant="outline" href="{basePath}/fleet/truck-list/create"><Plus size={14} /> Add Truck</Button
-			>
-			<Button variant="outline" href="{basePath}/drivers"><Plus size={14} /> Add Driver</Button>
-		{/snippet}
-	</PageHeader>
+<svelte:window onscroll={() => (dropdownOpen = false)} />
 
-	{#if error}<p class="rounded-card bg-danger/10 px-4 py-3 text-xs text-danger" role="alert">{error}</p>{/if}
-	{#if notice}<p class="rounded-card bg-zebra px-4 py-3 text-xs text-ink" role="status">{notice}</p>{/if}
+<div class="page-head">
+	<div><h1>My Fleet</h1></div>
+</div>
 
-	<div class="fleet-search">
-		<label class="form-label" for="ts">Search Truck by</label>
-		<label class="form-label" for="ds">Search Driver by</label>
-		<div class="fleet-search-input">
-			<Search size={14} /><input
-				id="ts"
-				class="form-input"
-				placeholder="Cari plat nomor atau tipe truck"
-				bind:value={truckSearch}
-			/>
-		</div>
-		<div class="fleet-search-input">
-			<Search size={14} /><input
-				id="ds"
-				class="form-input"
-				placeholder="Cari nama atau nomor telepon driver"
-				bind:value={driverSearch}
-			/>
-		</div>
+<div class="fleet-actions">
+	<a class="btn btn-outline" href="{basePath}/fleet/truck-list/create"><Plus size={14} /> Add Truck</a>
+	<a class="btn btn-outline" href="{basePath}/drivers"><Plus size={14} /> Add Driver</a>
+</div>
+
+{#if error}<p class="rounded-card bg-danger/10 px-4 py-3 text-xs text-danger" role="alert">{error}</p>{/if}
+
+<div class="fleet-search-row">
+	<div class="field">
+		<label for="fleet-search-truck">Search Truck by</label>
+		<input
+			id="fleet-search-truck"
+			type="text"
+			bind:value={searchTruck}
+			placeholder="Cari plat nomor, tipe truck, atau lokasi…"
+		/>
 	</div>
+	<div class="field">
+		<label for="fleet-search-driver">Search Driver by</label>
+		<input
+			id="fleet-search-driver"
+			type="text"
+			bind:value={searchDriver}
+			placeholder="Cari nama atau nomor telepon driver…"
+		/>
+	</div>
+</div>
 
-	<div class="fleet-grid">
-		<section class="fleet-panel">
-			<header class="fleet-panel-head">
-				<Truck size={15} /> Active Fleet <span class="fleet-count">{filteredTrucks.length}</span>
-			</header>
-			<div class="fleet-filters">
-				<Select
-					bind:value={truckFilter}
-					options={[
-						{ value: 'unpaired', label: 'Belum ada driver' },
-						{ value: 'all', label: 'Semua truck' }
-					]}
-				/>
-				<Select
-					bind:value={truckStatus}
-					options={[
-						{ value: 'active', label: 'Truck aktif' },
-						{ value: 'inactive', label: 'Truck non-aktif' },
-						{ value: '', label: 'Semua status' }
-					]}
-				/>
+<div class="fleet-columns">
+	<!-- Active Fleet -->
+	<div class="card fleet-col-card">
+		<div class="detail-header header-blue"><Truck size={15} /> Active Fleet</div>
+		<div class="card-pad">
+			<div class="filter-row">
+				<FieldSelect bind:value={pairingFilter} options={PAIRING_OPTIONS} compact />
+				<FieldSelect bind:value={statusFilter} options={STATUS_OPTIONS} compact />
 			</div>
-			<div class="fleet-table-wrap">
+			<div class="table-wrap">
 				<table class="fleet-table">
-					<thead
-						><tr><th>Truck</th><th>Driver</th><th>Device</th><th>Status</th><th class="right">Action</th></tr
-						></thead
-					>
+					<colgroup>
+						<col style="width:24%" /><col style="width:24%" /><col style="width:18%" /><col style="width:34%" />
+					</colgroup>
+					<thead>
+						<tr><th>Truck</th><th>Driver</th><th>Location</th><th>Action</th></tr>
+					</thead>
 					<tbody>
 						{#if loading}
-							<tr><td colspan="5" class="muted">Loading…</td></tr>
+							<tr><td colspan="4"><div class="empty">Memuat…</div></td></tr>
 						{:else if filteredTrucks.length === 0}
-							<tr><td colspan="5" class="muted">No trucks match.</td></tr>
+							<tr>
+								<td colspan="4">
+									<div class="empty"><div class="eic">🚛</div>Tidak ada truck yang cocok dengan filter ini.</div>
+								</td>
+							</tr>
 						{/if}
-						{#each filteredTrucks as v (v.id)}
-							<tr class:assigning={assigning === v.id}>
-								<td
-									><div class="plate">{v.licensePlate}</div>
-									<div class="sub">{typeLabel(v) || '—'}</div></td
-								>
+						{#each truckRows as v (v.id)}
+							<tr class:row-inactive={!isActive(v)}>
+								<td>
+									<div class="mono" style="font-weight:700;">{v.licensePlate}</div>
+									<div style="font-size:12px; color:var(--on-surface-variant); margin-top:2px;">
+										{typeLabel(v) || '—'}
+									</div>
+								</td>
 								<td>
 									{#if assigning === v.id}
-										<div class="assign-inline">
-											<Select
-												bind:value={chosenDriver}
-												options={driverOptions}
-												placeholder="Ketik atau pilih nama driver"
-											/>
-											<div class="assign-actions">
-												<Button onclick={submitAssign} loading={saving} disabled={!chosenDriver}
-													>Submit</Button
-												>
-												<button
-													type="button"
-													class="btn btn-outline btn-sm"
-													onclick={() => {
-														assigning = null;
-														chosenDriver = '';
-													}}>Batal</button
-												>
+										<div class="pairing-row">
+											<div class="pairing-autocomplete">
+												<input
+													bind:this={inputEl}
+													type="text"
+													class="pairing-input"
+													placeholder="Ketik atau pilih nama driver"
+													bind:value={query}
+													oninput={showDropdown}
+													onfocus={showDropdown}
+													onblur={hideDropdownSoon}
+													onkeydown={(e) => e.key === 'Enter' && submitPairing()}
+												/>
+											</div>
+											<div class="pairing-actions">
+												<button class="btn btn-primary btn-sm" disabled={saving} onclick={submitPairing}>
+													{saving ? 'Menyimpan…' : 'Submit'}
+												</button>
+												<button class="btn btn-text btn-sm" onclick={cancelPairing}>Batal</button>
 											</div>
 										</div>
+									{:else if v.driver?.fullName}
+										<span>{v.driver.fullName}</span>
 									{:else}
-										{v.driver?.fullName ?? '—'}
+										<span class="no-pairing">-</span>
 									{/if}
 								</td>
-								<td class="sub"
-									>{v.tracker?.deviceId ?? '—'}{#if v.unitYear}
-										· {v.unitYear}{/if}</td
-								>
-								<td><StatusBadge statusCode={v.status ?? 'active'} label={v.status ?? 'active'} /></td>
-								<td class="right">
-									<div class="action-cell" style="justify-content:flex-end;">
-										{#if v.currentDriverId}
-											<button
-												type="button"
-												class="frozen-icon-btn"
-												title="Lepas pairing"
-												onclick={() => setDriver(v.id, '')}><Link2Off size={14} /></button
-											>
-										{:else if assigning !== v.id}
-											<button
-												type="button"
-												class="frozen-icon-btn"
-												title="Assign driver"
-												onclick={() => startAssign(v)}><Check size={14} /></button
-											>
-										{/if}
+								<td>{locationOf(v)}</td>
+								<td>
+									<div class="action-cell">
 										<button
-											type="button"
-											class="frozen-icon-btn"
-											title="Hapus truck"
-											onclick={() => (confirmingDelete = v)}><Trash2 size={14} /></button
+											class="mini-icon-btn-dark"
+											class:mini-icon-btn-active={assigning === v.id}
+											title="Pairing driver"
+											onclick={() => (assigning === v.id ? cancelPairing() : startPairing(v))}
+											><Disc3 size={15} /></button
 										>
-										<a class="frozen-icon-btn" title="Lihat detail" href="{basePath}/fleet/truck/{v.id}"
+										<a class="mini-icon-btn" title="Lihat detail" href="{basePath}/fleet/truck/{v.id}"
 											><Search size={14} /></a
 										>
-										<a class="frozen-icon-btn" title="Ubah data" href="{basePath}/fleet/truck/{v.id}?edit=1"
+										<a class="mini-icon-btn" title="Ubah data" href="{basePath}/fleet/truck/{v.id}?edit=1"
 											><Pencil size={14} /></a
+										>
+										<button
+											class="status-toggle-btn"
+											class:status-on={isActive(v)}
+											class:status-off={!isActive(v)}
+											title={isActive(v)
+												? 'Truck Aktif — klik untuk nonaktifkan'
+												: 'Truck Non-aktif — klik untuk aktifkan'}
+											disabled={saving}
+											onclick={() => toggleActive(v)}><CircleDot size={15} /></button
+										>
+										<button class="mini-icon-btn-del" title="Hapus truck" onclick={() => (removingTruck = v)}
+											><Trash2 size={14} /></button
 										>
 									</div>
 								</td>
@@ -336,193 +455,162 @@
 					</tbody>
 				</table>
 			</div>
-		</section>
+			<div class="status-legend">
+				<span><span class="legend-dot" style="background:var(--success);"></span> Truck Aktif</span>
+				<span><span class="legend-dot" style="background:var(--error);"></span> Truck Non-aktif</span>
+			</div>
+			{#if filteredTrucks.length}
+				<Pagination totalItems={filteredTrucks.length} bind:page={truckPage} pageSize={PAGE_SIZE} />
+			{/if}
+		</div>
+	</div>
 
-		<section class="fleet-panel">
-			<header class="fleet-panel-head">
-				<Users size={15} /> Driver List <span class="fleet-count">{filteredDrivers.length}</span>
-			</header>
-			<div class="fleet-filters">
-				<Select
-					bind:value={driverFilter}
-					options={[
-						{ value: 'unpaired', label: 'Belum terpairing' },
-						{ value: 'all', label: 'Semua driver' }
-					]}
-				/>
+	<!-- Driver List -->
+	<div class="card fleet-col-card">
+		<div class="detail-header header-blue">Driver List</div>
+		<div class="card-pad">
+			<div class="filter-row">
+				<FieldSelect bind:value={driverFilter} options={DRIVER_OPTIONS} compact />
 			</div>
-			<div class="fleet-suggest">
-				<span>Saran untuk keputusan pairing:</span>
-				<label
-					><input
-						type="checkbox"
-						bind:checked={suggestMostUsed}
-						onchange={() => {
-							if (suggestMostUsed) suggestLongestIdle = false;
-						}}
-					/> Paling sering pakai truck ini</label
-				>
-				<label
-					><input
-						type="checkbox"
-						bind:checked={suggestLongestIdle}
-						onchange={() => {
-							if (suggestLongestIdle) suggestMostUsed = false;
-						}}
-					/> Paling lama tidak beroperasional</label
-				>
-			</div>
-			<div class="fleet-table-wrap">
+			{#if assigning}
+				<div class="suggest-filters">
+					<div class="suggest-title">💡 Saran untuk keputusan pairing ({plateOf(assigning)}):</div>
+					<div class="suggest-check-row">
+						<label class="suggest-check"><input type="checkbox" bind:checked={sugFreqTruck} /> Paling Sering Pakai Truck Ini</label>
+						<label class="suggest-check"><input type="checkbox" bind:checked={sugIdle} /> Paling Lama Tidak Beroperasi</label>
+					</div>
+				</div>
+			{/if}
+			<div class="table-wrap">
 				<table class="fleet-table">
-					<thead
-						><tr
-							><th></th><th>Name</th><th>Phone</th><th>Status</th><th>Pairing truck</th><th>Last trip</th></tr
-						></thead
-					>
+					<colgroup>
+						<col style="width:28%" /><col style="width:22%" /><col style="width:16%" /><col style="width:18%" /><col style="width:16%" />
+					</colgroup>
+					<thead>
+						<tr><th>Name</th><th>Phone Number</th><th>Status</th><th>Pairing Truck</th><th>Action</th></tr>
+					</thead>
 					<tbody>
 						{#if loading}
-							<tr><td colspan="6" class="muted">Loading…</td></tr>
+							<tr><td colspan="5"><div class="empty">Memuat…</div></td></tr>
 						{:else if filteredDrivers.length === 0}
-							<tr><td colspan="6" class="muted">No drivers match.</td></tr>
+							<tr>
+								<td colspan="5">
+									<div class="empty"><div class="eic">🔍</div>Tidak ada driver yang cocok dengan filter ini.</div>
+								</td>
+							</tr>
 						{/if}
-						{#each filteredDrivers as d (d.id)}
+						{#each driverRows as d (d.id)}
 							{@const t = truckOfDriver.get(d.id)}
-							<tr class:chosen={chosenDriver === d.id}>
-								<td
-									><input
-										type="radio"
-										name="pick-driver"
-										checked={chosenDriver === d.id}
-										disabled={pairedDriverIds.has(d.id)}
-										onchange={() => pickDriver(d)}
-										aria-label="Pilih {d.fullName}"
-									/></td
-								>
-								<td
-									><a class="plate" href="{basePath}/fleet/driver/{d.id}">{d.fullName}</a
-									>{#if assigning && tripsWith(d.id, assigning)}<span class="sub">
-											· {tripsWith(d.id, assigning)} trip dengan truck ini</span
-										>{/if}</td
-								>
-								<td>{d.phone ?? '—'}</td>
-								<td><StatusBadge statusCode={d.status ?? 'active'} label={d.status ?? 'active'} /></td>
-								<td
-									>{#if t}<span class="plate">{t.licensePlate}</span>{:else}<span class="no-pair"
-											>No Pairing</span
-										>{/if}</td
-								>
-								<td class="sub">{lastActive.get(d.id) ? formatDate(lastActive.get(d.id)!) : '—'}</td>
+							<tr>
+								<td>
+									<div class="row-avatar-name">
+										{#if assigning}
+											<button
+												class="pairing-check"
+												class:checked={query === d.fullName}
+												title={query === d.fullName ? 'Klik untuk batalkan pilihan' : 'Pilih driver ini untuk pairing'}
+												onclick={() => selectDriver(d)}
+											>
+												{#if query === d.fullName}<Check size={12} />{/if}
+											</button>
+										{/if}
+										{d.fullName}
+									</div>
+									{#each tagsFor(d) as tag (tag.type)}
+										<span class="suggest-tag" class:suggest-tag-freq={tag.type === 'freq'} class:suggest-tag-idle={tag.type === 'idle'}>{tag.text}</span>
+									{/each}
+								</td>
+								<td class="mono">{d.phone ?? '—'}</td>
+								<td>
+									{#if d.userId}
+										<span class="badge badge-active">Accepted</span>
+									{:else}
+										<span class="badge badge-wait">Pending</span>
+									{/if}
+								</td>
+								<td>
+									{#if t}<span class="pairing-ok">{t.licensePlate}</span>{:else}<span class="no-pairing">No Pairing</span>{/if}
+								</td>
+								<td>
+									<div class="action-cell">
+										<a class="mini-icon-btn" title="Lihat detail driver" href="{basePath}/fleet/driver/{d.id}"
+											><Search size={14} /></a
+										>
+										<button class="mini-icon-btn-del" title="Hapus driver" onclick={() => (removingDriver = d)}
+											><Trash2 size={14} /></button
+										>
+									</div>
+								</td>
 							</tr>
 						{/each}
 					</tbody>
 				</table>
 			</div>
-		</section>
+			{#if filteredDrivers.length}
+				<Pagination totalItems={filteredDrivers.length} bind:page={driverPage} pageSize={PAGE_SIZE} />
+			{/if}
+		</div>
 	</div>
 </div>
 
-<Modal
-	open={confirmingDelete !== null}
-	size="sm"
-	title="Hapus truck"
-	onClose={() => (confirmingDelete = null)}
->
-	<p class="text-sm">
-		Hapus <b>{confirmingDelete?.licensePlate}</b> dari armada? Riwayat order tetap tersimpan.
-	</p>
-	{#snippet footer()}
-		<button type="button" class="btn btn-outline" onclick={() => (confirmingDelete = null)}>Batal</button>
-		<Button variant="danger" onclick={removeTruck} loading={saving}>Hapus</Button>
-	{/snippet}
-</Modal>
+<!-- Driver autocomplete menu, portaled so the table's overflow can't clip it -->
+<div class="pairing-dropdown" class:show={dropdownOpen && !!assigning} style={dropdownStyle} role="listbox">
+	{#if matches.length === 0}
+		<div class="pairing-option" style="color:var(--on-surface-variant); cursor:default;">Driver tidak ditemukan</div>
+	{/if}
+	{#each matches as d (d.id)}
+		{@const t = truckOfDriver.get(d.id)}
+		<div
+			class="pairing-option"
+			role="option"
+			tabindex="-1"
+			aria-selected={query === d.fullName}
+			onmousedown={() => {
+				query = d.fullName;
+				dropdownOpen = false;
+			}}
+		>
+			{d.fullName}<span class="po-hint">{t ? `(${t.licensePlate})` : '(belum terpairing)'}</span>
+		</div>
+	{/each}
+</div>
+
+<ConfirmModal
+	open={!!deactivating}
+	title="Nonaktifkan Truck?"
+	message={`Truck <b>${deactivating?.licensePlate ?? ''}</b> akan dinonaktifkan dan tidak dapat ditugaskan untuk pengiriman baru sampai diaktifkan kembali. Lanjutkan?`}
+	confirmLabel="Ya, Nonaktifkan"
+	busy={saving}
+	onConfirm={() => deactivating && setStatus(deactivating, 'inactive')}
+	onClose={() => (deactivating = null)}
+/>
+
+<ConfirmModal
+	open={!!removingTruck}
+	title="Hapus Truck?"
+	message={`Truck <b>${removingTruck?.licensePlate ?? ''}</b> akan dihapus permanen dari daftar armada. Jika truck ini sedang terpasang dengan driver, pairing-nya akan otomatis dilepas. Tindakan ini tidak dapat dibatalkan.`}
+	confirmLabel="Ya, Hapus"
+	busy={saving}
+	onConfirm={removeTruck}
+	onClose={() => (removingTruck = null)}
+/>
+
+<ConfirmModal
+	open={!!removingDriver}
+	title="Hapus Driver?"
+	message={`Driver <b>${removingDriver?.fullName ?? ''}</b> akan dihapus. Truck yang terpasang dengannya akan dilepas.`}
+	confirmLabel="Ya, Hapus"
+	busy={saving}
+	onConfirm={removeDriver}
+	onClose={() => (removingDriver = null)}
+/>
 
 <style>
-	.fleet-search {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 4px 16px;
-	}
-	.fleet-search-input {
+	.detail-header {
 		display: flex;
 		align-items: center;
+		justify-content: center;
 		gap: 8px;
-	}
-	.fleet-search-input input {
-		flex: 1;
-	}
-	.fleet-grid {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-		gap: 16px;
-		align-items: start;
-	}
-	@media (max-width: 1100px) {
-		.fleet-grid,
-		.fleet-search {
-			grid-template-columns: 1fr;
-		}
-	}
-	.fleet-panel {
-		background: var(--surface, #fff);
-		border: 1px solid var(--outline-variant, #e5e7eb);
-		border-radius: 12px;
-		overflow: hidden;
-	}
-	.fleet-panel-head {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 10px 14px;
-		background: var(--primary, #1d4ed8);
-		color: #fff;
-		font-size: 13px;
-		font-weight: 600;
-	}
-	.fleet-count {
-		margin-left: auto;
-		font-size: 11px;
-		opacity: 0.85;
-		font-variant-numeric: tabular-nums;
-	}
-	/* Two filters on one row, each half the width — a full-width select per
-	   filter pushed the table down and read as a form, not a toolbar. */
-	.fleet-filters {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 8px;
-		padding: 10px 14px;
-		border-bottom: 1px solid var(--outline-variant, #e5e7eb);
-	}
-	.fleet-filters :global(select),
-	.fleet-filters :global(> *) {
-		min-width: 0;
-		width: 100%;
-	}
-	@media (max-width: 640px) {
-		.fleet-filters {
-			grid-template-columns: 1fr;
-		}
-	}
-	.fleet-suggest {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 6px 16px;
-		padding: 8px 14px;
-		font-size: 12px;
-		background: var(--surface-container, #f3f6fb);
-		border-bottom: 1px solid var(--outline-variant, #e5e7eb);
-	}
-	.fleet-suggest span {
-		color: var(--on-surface-variant, #6b7280);
-	}
-	.fleet-suggest label {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		cursor: pointer;
-	}
-	.fleet-table-wrap {
-		overflow-x: auto;
 	}
 	.fleet-table {
 		width: 100%;
@@ -534,47 +622,36 @@
 		font-size: 11px;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
-		color: var(--on-surface-variant, #6b7280);
-		padding: 8px 12px;
-		border-bottom: 1px solid var(--outline-variant, #e5e7eb);
+		color: var(--on-surface-variant);
+		padding: 10px 12px;
+		border-bottom: 1px solid var(--outline-variant);
+		background: var(--surface-alt);
 	}
 	.fleet-table td {
-		padding: 8px 12px;
-		border-bottom: 1px solid var(--outline-variant, #eef0f4);
+		padding: 10px 12px;
+		border-bottom: 1px solid var(--outline-variant);
 		vertical-align: middle;
 	}
-	.fleet-table tr.assigning td {
-		background: var(--primary-container, #eef4ff);
+	.fleet-table tr:last-child td {
+		border-bottom: none;
 	}
-	.fleet-table tr.chosen td {
-		background: var(--primary-container, #eef4ff);
+	.fleet-table tr.row-inactive td:first-child {
+		opacity: 0.6;
 	}
-	.right {
-		text-align: right;
+	.fleet-table .empty {
+		padding: 22px 8px;
 	}
-	.muted {
-		color: var(--on-surface-variant, #6b7280);
-		font-size: 12px;
-		padding: 18px 12px;
-	}
-	.plate {
-		font-weight: 600;
-	}
-	.sub {
-		font-size: 11px;
-		color: var(--on-surface-variant, #6b7280);
-	}
-	.no-pair {
-		color: var(--danger, #dc2626);
-		font-size: 12px;
-	}
-	.assign-inline {
-		display: grid;
-		gap: 6px;
-		min-width: 220px;
-	}
-	.assign-actions {
+	.action-cell {
 		display: flex;
 		gap: 6px;
+		flex-wrap: wrap;
+	}
+	.action-cell a {
+		text-decoration: none;
+	}
+	@media (max-width: 1100px) {
+		.fleet-columns {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>

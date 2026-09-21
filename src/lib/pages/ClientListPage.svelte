@@ -134,7 +134,6 @@
 	<PageHeader
 		{title}
 		icon={Users}
-		subtitle="Clients you order on behalf of. A client need not have an account."
 	>
 		{#snippet actions()}
 			{#if mayCreate}

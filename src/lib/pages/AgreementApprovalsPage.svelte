@@ -41,7 +41,6 @@
 	<PageHeader
 		title="Agreement Approvals"
 		icon={CheckCheck}
-		subtitle="Price and terms changes waiting on a decision. Renewals do not appear here — they take effect without approval."
 	/>
 
 	{#if $agreementVersionStore.loading}

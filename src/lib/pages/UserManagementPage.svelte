@@ -243,9 +243,7 @@
 	<PageHeader
 		title="User Management"
 		icon={Users}
-		subtitle={$actingFor.companyId
-			? `${$actingFor.companyName}'s people and what each may do.`
-			: 'Your people, and what each may do. Limited to the features Karlo has enabled for you.'}
+		subtitle={$actingFor.companyId ? $actingFor.companyName : undefined}
 	>
 		{#snippet actions()}
 			<Button variant="outline" href="roles">Roles &amp; Permissions</Button>

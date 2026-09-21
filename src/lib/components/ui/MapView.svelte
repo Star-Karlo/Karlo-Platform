@@ -18,6 +18,12 @@
 		/** Plain text. Set as textContent, never as HTML — labels come from the API. */
 		title?: string;
 		subtitle?: string;
+		/** A short chip drawn under the marker — a plate, a stop number. Text only. */
+		label?: string;
+		/** Drawn with a ring, for the truck or stop the page has picked. */
+		selected?: boolean;
+		/** Clicking the marker. Set, the marker gets no popup — the page owns the click. */
+		onClick?: () => void;
 	}
 
 	/** A route drawn on the map. Coordinates are [longitude, latitude] pairs. */
@@ -51,6 +57,12 @@
 		markers = [],
 		lines = [],
 		fitToMarkers = false,
+		/**
+		 * Fit the markers and lines once each time this changes — a page that
+		 * refreshes positions every minute wants to fit on selection, not on
+		 * every refresh.
+		 */
+		fitKey = '',
 		flyTo = null,
 		flyZoom = 12,
 		/**
@@ -77,6 +89,7 @@
 		markers?: MapMarker[];
 		lines?: MapLine[];
 		fitToMarkers?: boolean;
+		fitKey?: string;
 		/** Animate to this point whenever it changes. */
 		flyTo?: [number, number] | null;
 		flyZoom?: number;
@@ -265,15 +278,46 @@
 				element.style.backgroundColor = marker.color ?? '#0B57D0';
 			}
 
+			// A label or a click needs a wrapper: the image itself is the icon,
+			// and a chip beneath it must not shift the anchor.
+			if (marker.label || marker.selected || marker.onClick) {
+				const wrap = document.createElement('div');
+				wrap.style.cssText = 'display:flex; flex-direction:column; align-items:center; gap:2px;';
+				if (marker.selected) {
+					element.style.filter = 'drop-shadow(0 0 3px #0B57D0) drop-shadow(0 0 6px #0B57D0)';
+				}
+				wrap.appendChild(element);
+				if (marker.label) {
+					const chip = document.createElement('span');
+					chip.textContent = marker.label;
+					chip.style.cssText =
+						'font:700 10px/1 system-ui,sans-serif; letter-spacing:.02em; padding:3px 6px; border-radius:6px; background:#fff; color:#1B1C1E; border:1px solid ' +
+						(marker.selected ? '#0B57D0' : 'rgba(0,0,0,.18)') +
+						'; box-shadow:0 1px 3px rgba(0,0,0,.25); white-space:nowrap;';
+					wrap.appendChild(chip);
+				}
+				if (marker.onClick) {
+					wrap.style.cursor = 'pointer';
+					wrap.addEventListener('click', (ev) => {
+						ev.stopPropagation();
+						marker.onClick?.();
+					});
+				}
+				element = wrap;
+			}
+
 			const instance = new gl.Marker({
 				element,
+				// The chip hangs under the icon; push the whole thing down by
+				// half its height so the icon still sits on the coordinate.
+				offset: marker.label ? [0, 10] : [0, 0],
 				// Rotates with the compass, not with the screen, so a heading
 				// still reads correctly if the map itself is ever rotated.
 				rotation: marker.heading ?? 0,
 				rotationAlignment: marker.heading === undefined ? 'viewport' : 'map'
 			}).setLngLat([marker.lng, marker.lat]);
 
-			if (marker.title) {
+			if (marker.title && !marker.onClick) {
 				// Built as DOM nodes, not an HTML string, so a police number
 				// from the API cannot inject markup.
 				const popup = document.createElement('div');
@@ -294,13 +338,24 @@
 			markerInstances.push(instance);
 		}
 
-		if (fitToMarkers && (markers.length > 0 || lines.length > 0)) {
-			const bounds = new gl.LngLatBounds();
-			for (const marker of markers) bounds.extend([marker.lng, marker.lat]);
-			for (const line of lines) for (const c of line.coordinates) bounds.extend(c);
-			map.fitBounds(bounds, { padding: 60, maxZoom: 12, duration: 0 });
-		}
+		if (fitToMarkers) fitAll(0);
 	}
+
+	function fitAll(duration: number) {
+		if (!map || !gl || (markers.length === 0 && lines.length === 0)) return;
+		const bounds = new gl.LngLatBounds();
+		for (const marker of markers) bounds.extend([marker.lng, marker.lat]);
+		for (const line of lines) for (const c of line.coordinates) bounds.extend(c);
+		map.fitBounds(bounds, { padding: 60, maxZoom: 12, duration });
+	}
+
+	let lastFitKey = '';
+	$effect(() => {
+		const key = fitKey;
+		if (!ready || !key || key === lastFitKey) return;
+		lastFitKey = key;
+		fitAll(500);
+	});
 
 	$effect(() => {
 		markers;

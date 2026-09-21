@@ -227,7 +227,6 @@
 	<PageHeader
 		{title}
 		icon={Warehouse}
-		subtitle="Warehouse per customer: titik muat dan bongkar milik tiap customer, di samping gudang Anda sendiri."
 	/>
 
 	{#if error && !showForm}

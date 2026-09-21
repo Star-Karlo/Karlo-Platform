@@ -87,7 +87,6 @@
 <div class="page-head">
 	<div>
 		<h1>Uang Sangu</h1>
-		<p>Uang jalan pengemudi, per order. Nominal diisi dari halaman detail order.</p>
 	</div>
 </div>
 

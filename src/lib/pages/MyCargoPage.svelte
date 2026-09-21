@@ -239,7 +239,6 @@
 	<PageHeader
 		{title}
 		icon={Boxes}
-		subtitle="Cargo types and the items under them. Karlo's types are shared with everyone; add your own beside them and your items under either."
 	/>
 
 	{#if error}

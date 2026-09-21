@@ -11,7 +11,7 @@
 	 * vehicle, and vice versa.
 	 */
 	import { onMount } from 'svelte';
-	import { Users, Plus, Pencil, Trash2, Search, UserPlus } from 'lucide-svelte';
+	import { Users, ArrowLeft, Pencil, Trash2, Search, UserPlus } from 'lucide-svelte';
 	import { driverStore, driverActions, type Driver } from '$lib/stores/drivers';
 	import { Button, DataTable, Field, FormGrid, Input, Modal, PageHeader, Select, StatusBadge, Tabs, type Column } from '$lib/components/ui';
 	import { formatDate } from '$lib/utils/format';
@@ -56,12 +56,6 @@
 	}
 	let form = $state(blank());
 
-	function openCreate() {
-		editing = null;
-		form = blank();
-		formError = '';
-		showForm = true;
-	}
 	function openEdit(d: Driver) {
 		editing = d;
 		form = {
@@ -112,10 +106,12 @@
 </script>
 
 <div class="space-y-gutter">
-	<PageHeader {title} icon={Users} subtitle="People who drive your trucks. Assign one to a truck from the truck's page; give one a login from User Management.">
+	<!-- No "Add Driver" here: drivers register themselves in K-Trip; this
+	     page only edits what they entered. -->
+	<PageHeader {title} icon={Users}>
 		{#snippet actions()}
-			<Button variant="outline" href="{basePath}/drivers/onboarding"><UserPlus size={14} /> Registrasi K-Trip</Button>
-			<Button onclick={openCreate}><Plus size={14} /> Add Driver</Button>
+			<Button variant="outline" href="{basePath}/fleet/truck-list"><ArrowLeft size={14} /> Kembali ke My Fleet</Button>
+			<Button href="{basePath}/drivers/onboarding"><UserPlus size={14} /> Registrasi K-Trip</Button>
 		{/snippet}
 	</PageHeader>
 

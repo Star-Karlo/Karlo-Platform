@@ -49,7 +49,7 @@
 </script>
 
 <div class="space-y-gutter">
-	<PageHeader {title} icon={Truck} subtitle="Counted from the fleet register" />
+	<PageHeader {title} icon={Truck} />
 
 	{#if $truckStore.error}
 		<p class="rounded-card bg-danger/10 px-4 py-3 text-xs text-danger" role="alert">{$truckStore.error}</p>

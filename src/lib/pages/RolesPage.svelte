@@ -155,7 +155,6 @@
 	<PageHeader
 		{title}
 		icon={UserCog}
-		subtitle="What each role in your company may do. Limited to the features Karlo has enabled for you."
 	>
 		{#snippet actions()}
 			<Button onclick={openCreate}>+ Add Role</Button>

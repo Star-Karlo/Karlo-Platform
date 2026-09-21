@@ -66,9 +66,7 @@
 	<PageHeader
 		title="Form Configuration"
 		icon={SlidersHorizontal}
-		subtitle={$actingFor.companyId
-			? `What ${$actingFor.companyName}'s forms ask for. The steps of the flow do not change.`
-			: 'Choose what your agreement and order forms ask for. The steps of the flow do not change.'}
+		subtitle={$actingFor.companyId ? $actingFor.companyName : undefined}
 	/>
 
 	{#if $authStore.user?.isPlatformStaff && !$actingFor.companyId}

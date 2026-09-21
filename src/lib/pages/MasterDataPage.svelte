@@ -262,7 +262,6 @@
 <div class="page-head">
 	<div>
 		<h1>Master Data — {spec?.label ?? kind}</h1>
-		{#if spec?.blurb}<p>{spec.blurb}</p>{/if}
 	</div>
 	{#if spec && writable && mayCreate}
 		<button type="button" class="btn btn-primary" onclick={openCreate}>

@@ -47,7 +47,6 @@
 	<PageHeader
 		{title}
 		icon={Truck}
-		subtitle="Transporter (vendor 3PL) yang mengangkut order Anda. Penautan transporter dilakukan melalui tim Karlo — hubungi CS Karlo untuk menambah atau mengubahnya."
 	>
 		{#snippet actions()}
 			{#if CS_WHATSAPP_URL}
