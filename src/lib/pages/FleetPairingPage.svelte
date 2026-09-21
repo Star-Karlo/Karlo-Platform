@@ -231,8 +231,11 @@
 		positionDropdown();
 		dropdownOpen = true;
 	}
-	function hideDropdownSoon() {
-		setTimeout(() => (dropdownOpen = false), 150);
+	// Options pick on mousedown, which fires before the input's blur, so the
+	// menu can close on blur at once — leaving it open a beat longer put it
+	// over the Submit/Batal row underneath.
+	function hideDropdown() {
+		dropdownOpen = false;
 	}
 	async function submitPairing() {
 		if (!assigning) return;
@@ -402,7 +405,7 @@
 													bind:value={query}
 													oninput={showDropdown}
 													onfocus={showDropdown}
-													onblur={hideDropdownSoon}
+													onblur={hideDropdown}
 													onkeydown={(e) => e.key === 'Enter' && submitPairing()}
 												/>
 											</div>
@@ -556,7 +559,7 @@
 <!-- Driver autocomplete menu, portaled so the table's overflow can't clip it -->
 <div class="pairing-dropdown" class:show={dropdownOpen && !!assigning} style={dropdownStyle} role="listbox">
 	{#if matches.length === 0}
-		<div class="pairing-option" style="color:var(--on-surface-variant); cursor:default;">Driver tidak ditemukan</div>
+		<div class="pairing-option" style="color:var(--on-surface-variant); cursor:default; pointer-events:none;">Driver tidak ditemukan</div>
 	{/if}
 	{#each matches as d (d.id)}
 		{@const t = truckOfDriver.get(d.id)}

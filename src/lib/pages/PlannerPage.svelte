@@ -70,6 +70,8 @@
 		address?: string;
 		picName?: string;
 		picPhone?: string;
+		latitude?: number | null;
+		longitude?: number | null;
 		location?: { coordinates?: [number, number] } | null;
 	};
 	type Position = {
@@ -177,8 +179,11 @@
 	// Lookups
 	// ---------------------------------------------------------------------
 	const warehouseById = $derived(new Map(warehouses.map((w) => [w.id, w])));
+	/** Master data serves latitude/longitude; the older GeoJSON shape is kept for safety. */
 	function warehouseCoords(w: Warehouse | undefined | null): [number, number] | null {
-		const c = w?.location?.coordinates;
+		if (!w) return null;
+		if (typeof w.longitude === 'number' && typeof w.latitude === 'number') return [w.longitude, w.latitude];
+		const c = w.location?.coordinates;
 		return c && c.length === 2 ? [c[0], c[1]] : null;
 	}
 	/** Best known position per vehicle id: FMS live fix first, then /fleet/live. */
