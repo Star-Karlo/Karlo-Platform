@@ -3439,3 +3439,18 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 /* Mode Uji: an empty POD slot becomes an upload button. */
 .pod-photo-upload{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; border:1.5px dashed var(--primary); background:var(--primary-container); color:var(--primary); font-size:11px; font-weight:600; cursor:pointer;}
 .pod-photo-upload:disabled{opacity:.6; cursor:progress;}
+
+/* Control Tower right-panel tables: fixed, evenly spaced numeric columns; a
+   single dash style; checkpoints that wrap instead of running off the card. */
+.ct2-table{table-layout:fixed;}
+.ct2-table th, .ct2-table td{padding:6px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.ct2-table th:first-child, .ct2-table td:first-child{width:34%;}
+.ct2-table thead th{background:var(--surface-alt); border-bottom:1px solid var(--outline-variant);}
+.ct2-table tbody tr:nth-child(even) td{background:var(--surface-alt);}
+.ct2-table td:not(:first-child){font-weight:600; color:var(--on-surface);}
+.ct-progress-checkpoints{display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:4px; margin-top:8px;}
+.ct-progress-checkpoint{white-space:normal; text-align:center; line-height:1.25; font-size:9px; overflow-wrap:anywhere;}
+.ct-progress-checkpoint:first-child{text-align:left;}
+.ct-progress-checkpoint:last-child{text-align:right;}
+.ct-progress-track{margin-top:8px;}
+.ct-progress-duration{margin-top:10px; padding-top:10px; border-top:1px solid var(--outline-variant);}

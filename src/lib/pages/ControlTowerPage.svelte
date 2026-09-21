@@ -995,6 +995,8 @@
 
 	let needsClient = $derived(isStaff && !$actingFor.companyId);
 	let num = (v: any) => (v === undefined || v === null || v === '' ? undefined : Number(v));
+	/** Numbers in the panel tables; one dash style ("—") for a missing figure. */
+	const nf = (v: any) => { const n = num(v); return n === undefined || Number.isNaN(n) ? '—' : formatNumber(n); };
 </script>
 
 <div class="ct2">
@@ -1154,9 +1156,9 @@
 							<table class="ct2-table">
 								<thead><tr><th></th><th>Plan</th><th>Muat</th><th>Bongkar</th></tr></thead>
 								<tbody>
-									<tr><td>Tonase (Kg)</td><td>{formatNumber(num(o.weightKg))}</td><td>{formatNumber(num(shipment?.loadedWeightKg ?? shipment?.weight))}</td><td>{formatNumber(num(shipment?.unloadedWeightKg))}</td></tr>
-									<tr><td>Qty (Pcs)</td><td>{formatNumber(num(o.quantity))}</td><td>{formatNumber(num(shipment?.loadedQuantity))}</td><td>{formatNumber(num(shipment?.unloadedQuantity))}</td></tr>
-									<tr><td>Volume (m³)</td><td>{formatNumber(num(o.detail?.volumeM3 ?? o.detail?.volume))}</td><td>{formatNumber(num(shipment?.volume))}</td><td>—</td></tr>
+									<tr><td>Tonase (Kg)</td><td>{nf(o.weightKg)}</td><td>{nf(shipment?.loadedWeightKg ?? shipment?.weight)}</td><td>{nf(shipment?.unloadedWeightKg)}</td></tr>
+									<tr><td>Qty (Pcs)</td><td>{nf(o.quantity)}</td><td>{nf(shipment?.loadedQuantity)}</td><td>{nf(shipment?.unloadedQuantity)}</td></tr>
+									<tr><td>Volume (m³)</td><td>{nf(o.volumeM3 ?? o.detail?.volumeM3 ?? o.detail?.volume)}</td><td>{nf(shipment?.loadedVolumeM3 ?? shipment?.volume)}</td><td>{nf(shipment?.unloadedVolumeM3)}</td></tr>
 								</tbody>
 							</table>
 						{:else}
@@ -1174,7 +1176,7 @@
 							<table class="ct2-table">
 								<thead><tr><th></th><th>Plan</th><th>Aktual</th></tr></thead>
 								<tbody>
-									<tr><td>Jarak</td><td>{plannedRoute?.distanceKm != null ? `${plannedRoute.distanceKm} km` : o.detail?.distanceKm ? `${formatNumber(num(o.detail.distanceKm))} km` : '—'}</td><td>{trip?.distance_km != null ? `${formatNumber(Math.round(trip.distance_km * 10) / 10)} km` : '—'}</td></tr>
+									<tr><td>Jarak</td><td>{plannedRoute?.distanceKm != null ? `${plannedRoute.distanceKm} km` : o.detail?.distanceKm ? `${nf(o.detail.distanceKm)} km` : '—'}</td><td>{trip?.distance_km != null ? `${formatNumber(Math.round(trip.distance_km * 10) / 10)} km` : '—'}</td></tr>
 									<tr><td>ETA</td><td>{plannedRoute?.durationMin != null ? `${Math.floor(plannedRoute.durationMin / 60)} jam ${plannedRoute.durationMin % 60} menit` : o.deliveryAt ? new Date(o.deliveryAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</td><td>{o.statusCode === 'delivered' || o.statusCode === 'completed' ? new Date(o.updatedAt ?? '').toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : 'dalam perjalanan'}</td></tr>
 								</tbody>
 							</table>
