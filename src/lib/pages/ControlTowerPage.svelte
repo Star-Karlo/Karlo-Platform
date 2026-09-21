@@ -695,36 +695,34 @@
 	// The planned haul from the business service (MAPID geometry), so the
 	// plan on the map is a road, not a straight line, and the actual trace
 	// can be scored against it.
-	let plannedRoute = $state<{ geometry: [number, number][]; distanceKm: number | null; durationMin: number | null } | null>(null);
+	type PlannedLeg = { geometry: [number, number][]; distanceKm: number | null; durationMin: number | null; from: [number, number] | null };
+	let plannedRoute = $state<PlannedLeg | null>(null);
+	/** The truck's leg from where it was when assigned to the loading point — its "Berangkat" point. */
+	let approachRoute = $state<PlannedLeg | null>(null);
+	function legOf(l: any): PlannedLeg | null {
+		const src = l?.route ?? l;
+		if (!src) return null;
+		const from: [number, number] | null =
+			l?.fromLon != null && l?.fromLat != null ? [Number(l.fromLon), Number(l.fromLat)] : null;
+		return {
+			geometry: Array.isArray(src.geometry) ? src.geometry : [],
+			distanceKm: src.distanceMeters != null ? Math.round(src.distanceMeters / 100) / 10 : null,
+			durationMin: src.durationSeconds != null ? Math.round(src.durationSeconds / 60) : null,
+			from
+		};
+	}
 	$effect(() => {
 		const o = selectedOrder;
 		plannedRoute = null;
+		approachRoute = null;
 		if (!o?.id) return;
+		// The service stores both legs on the order (and backfills the haul for
+		// older orders), so the planned route read here is the order's history.
 		api.get(ENDPOINTS.orders.routes(o.id)).then((r) => {
 			if (selectedOrder?.id !== o.id) return;
-			const haul = (r.data?.data ?? []).find((l: any) => l.leg === 'haul');
-			const src = haul?.route ?? haul;
-			if (src?.geometry?.length) {
-				plannedRoute = {
-					geometry: src.geometry,
-					distanceKm: src.distanceMeters != null ? Math.round(src.distanceMeters / 100) / 10 : null,
-					durationMin: src.durationSeconds != null ? Math.round(src.durationSeconds / 60) : null
-				};
-				return;
-			}
-			// Older orders have no stored leg: plan the lane now (cached 90 days).
-			const a = coordsOf(o.originWarehouseId);
-			const b = coordsOf(o.destinationWarehouseId);
-			if (!a || !b) return;
-			return api.post(ENDPOINTS.routing.route, { points: [a, b], profile: 'truck' }).then((rr) => {
-				if (selectedOrder?.id !== o.id) return;
-				const d = rr.data?.data ?? rr.data ?? {};
-				plannedRoute = {
-					geometry: Array.isArray(d.geometry) ? d.geometry : [],
-					distanceKm: d.distanceMeters != null ? Math.round(d.distanceMeters / 100) / 10 : null,
-					durationMin: d.durationSeconds != null ? Math.round(d.durationSeconds / 60) : null
-				};
-			});
+			const legs: any[] = r.data?.data ?? [];
+			plannedRoute = legOf(legs.find((l) => l.leg === 'haul'));
+			approachRoute = legOf(legs.find((l) => l.leg === 'approach'));
 		}).catch(() => {});
 	});
 	/** Share of actual fixes within 500 m of the planned line — "Kepatuhan Rute". */
@@ -997,6 +995,18 @@
 		// A truck with no GPS fix is not guessed onto the map (it used to be
 		// drawn at the warehouse, which reads as a position). It is flagged in
 		// the order table instead — see noGps().
+		// The selected order's three points: where the truck set off from when
+		// assigned (Berangkat), the loading point (Muat) and the unloading
+		// point (Bongkar).
+		if (selectedOrder) {
+			const o = selectedOrder;
+			const start = approachRoute?.from ?? (approachRoute?.geometry.length ? approachRoute.geometry[0] : null);
+			if (start) out.push({ id: 'o-start', lng: start[0], lat: start[1], color: '#0B57D0', label: 'Berangkat', title: 'Titik berangkat', subtitle: 'Posisi truck saat ditugaskan' });
+			const a = coordsOf(o.originWarehouseId);
+			const b = coordsOf(o.destinationWarehouseId);
+			if (a) out.push({ id: 'o-muat', lng: a[0], lat: a[1], color: '#146C2E', label: 'Muat', title: o.originWarehouseName ?? 'Lokasi muat' });
+			if (b) out.push({ id: 'o-bongkar', lng: b[0], lat: b[1], color: '#B3261E', label: 'Bongkar', title: o.destinationWarehouseName ?? 'Lokasi bongkar' });
+		}
 		// Pantau Armada dots, for the selected truck's window.
 		if (selectedVehicleId) {
 			if (layerOn('stopDots')) stopEvents.forEach((p, i) => out.push({ id: `stop-${i}`, lng: p.lon, lat: p.lat, color: MONITOR_LAYER_META.stopDots.color, title: `Berhenti ${fmtMin(p.idle_min ?? 0)}`, subtitle: `${new Date(p.time).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}${p.address ? ` · ${p.address}` : ''}` }));
@@ -1012,6 +1022,7 @@
 		const out: { id: string; coordinates: [number, number][]; dashed?: boolean; color?: string; width?: number }[] = [];
 		const o = selectedOrder;
 		if (o) {
+			if (approachRoute?.geometry.length) out.push({ id: `approach-${o.id}`, coordinates: approachRoute.geometry, dashed: true, color: '#146C2E', width: 3 });
 			if (plannedRoute?.geometry.length) out.push({ id: `plan-${o.id}`, coordinates: plannedRoute.geometry, dashed: true, color: '#0B57D0' });
 			else {
 				const a = coordsOf(o.originWarehouseId);
@@ -1220,6 +1231,9 @@
 								<thead><tr><th></th><th>Plan</th><th>Aktual</th></tr></thead>
 								<tbody>
 									<tr><td>Jarak</td><td>{plannedRoute?.distanceKm != null ? `${plannedRoute.distanceKm} km` : o.detail?.distanceKm ? `${nf(o.detail.distanceKm)} km` : '—'}</td><td>{actualTrail?.distanceKm != null ? `${formatNumber(Math.round(actualTrail.distanceKm * 10) / 10)} km` : '—'}</td></tr>
+									{#if approachRoute?.distanceKm != null}
+										<tr><td>Menuju muat</td><td>{approachRoute.distanceKm} km</td><td>—</td></tr>
+									{/if}
 									<tr><td>ETA</td><td>{plannedRoute?.durationMin != null ? `${Math.floor(plannedRoute.durationMin / 60)} jam ${plannedRoute.durationMin % 60} menit` : o.deliveryAt ? new Date(o.deliveryAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</td><td>{o.statusCode === 'delivered' || o.statusCode === 'completed' ? new Date(o.updatedAt ?? '').toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : 'dalam perjalanan'}</td></tr>
 								</tbody>
 							</table>
