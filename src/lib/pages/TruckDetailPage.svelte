@@ -150,7 +150,7 @@
 			await api.put(ENDPOINTS.vehicles.update(id), {
 				licensePlate: form.plate.trim(),
 				color: form.color.trim(),
-				currentDriverId: currentDriverId || null,
+				currentDriverId: currentDriverId || "",
 				attributes
 			});
 			toast('Data truck ' + form.plate + ' berhasil diperbarui');
