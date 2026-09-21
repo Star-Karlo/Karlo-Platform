@@ -742,9 +742,28 @@
 		try { localStorage.setItem(MONITOR_STORAGE_KEY, JSON.stringify({ layers: activeMonitorLayers, config: monitorConfig })); monitorSaved = true; setTimeout(() => (monitorSaved = false), 1500); toast('Tampilan Pantau Armada disimpan sebagai default'); } catch { toast('Gagal menyimpan'); }
 	}
 	const layerOn = (k: MonitorLayer) => activeMonitorLayers.includes(k);
-	/** Dwell events off the raw trace: a fix with idle_min ≥ threshold, ignition off = stop, on = idle. */
-	let stopEvents = $derived(tripPoints.filter((p) => (p.idle_min ?? 0) >= monitorConfig.stopToleranceHours * 60 && p.ignition === false));
-	let idleEvents = $derived(tripPoints.filter((p) => (p.idle_min ?? 0) >= monitorConfig.idleToleranceMinutes && p.ignition !== false));
+	/**
+	 * Dwell events off the raw trace. FMS reports idle_min on every fix of a
+	 * stop, so a run of consecutive dwelling fixes is ONE event (its last fix,
+	 * carrying the longest dwell) — not one dot per fix. Ignition off = stop,
+	 * ignition on = idle.
+	 */
+	let dwellEvents = $derived.by(() => {
+		const out: TripPoint[] = [];
+		let run: TripPoint | null = null;
+		for (const p of tripPoints) {
+			if ((p.idle_min ?? 0) > 0) {
+				if (!run || (p.idle_min ?? 0) >= (run.idle_min ?? 0)) run = p;
+			} else if (run) {
+				out.push(run);
+				run = null;
+			}
+		}
+		if (run) out.push(run);
+		return out;
+	});
+	let stopEvents = $derived(dwellEvents.filter((p) => (p.idle_min ?? 0) >= monitorConfig.stopToleranceHours * 60 && p.ignition === false));
+	let idleEvents = $derived(dwellEvents.filter((p) => (p.idle_min ?? 0) >= monitorConfig.idleToleranceMinutes && p.ignition !== false));
 	let harshEvents = $derived(alerts.filter((a) => /harsh|kasar|mendadak|brak|accel|corner/i.test(`${a.alert_code} ${a.alert_name}`) && a.lat != null && a.lon != null));
 	let refuelEvents = $derived(alerts.filter((a) => /refuel|fuel|bbm|bahan bakar/i.test(`${a.alert_code} ${a.alert_name}`) && a.lat != null && a.lon != null));
 	let overspeedCount = $derived(tripPoints.filter((p) => (p.speed ?? 0) > monitorConfig.speedLimitKmh).length);
