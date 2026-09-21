@@ -21,6 +21,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import {
+		AlertCircle,
 		ChevronDown,
 		ChevronUp,
 		Clock,
@@ -422,7 +423,73 @@
 			qty += Number(s.order.totalQty) || 0;
 			vol += parseFloat(s.order.totalVolume) || 0;
 		}
-		return { tonase: `${formatThousands(String(Math.round(kg)))} Kg`, qty: String(qty), volume: `${Math.round(vol * 100) / 100} m³` };
+		return { kg, tonase: `${formatThousands(String(Math.round(kg)))} Kg`, qty: String(qty), volume: `${Math.round(vol * 100) / 100} m³` };
+	});
+
+	// ---------------------------------------------------------------------
+	// Simulasi Muatan — does the combined LTL load fit the truck? Reference
+	// max payload per truck class (standard Indonesian figures), matched by
+	// keyword against the fleet's own type names, which don't follow one
+	// vocabulary. Asked for by Rere so a planner sees an overload before
+	// assigning, not after.
+	// ---------------------------------------------------------------------
+	const TRUCK_TYPE_CAPACITY_KG: { match: RegExp; kg: number }[] = [
+		{ match: /trailer.*45/i, kg: 34000 },
+		{ match: /trailer.*40/i, kg: 32000 },
+		{ match: /trailer.*30/i, kg: 30000 },
+		{ match: /trailer.*20/i, kg: 28000 },
+		{ match: /trailer/i, kg: 28000 },
+		{ match: /tronton/i, kg: 24000 },
+		{ match: /fuso|medium/i, kg: 16000 },
+		{ match: /cdd/i, kg: 8000 },
+		{ match: /cde|engkel/i, kg: 2500 },
+		{ match: /pickup|van/i, kg: 1000 }
+	];
+	const STANDARD_TRUCK_CLASSES = ['Van/Pickup', 'CDE', 'CDD', 'Fuso / Medium', 'Tronton', 'Trailer 20ft', 'Trailer 40ft', 'Trailer 45ft'];
+	function capacityKgForTruckType(type: string): number | null {
+		const rule = TRUCK_TYPE_CAPACITY_KG.find((r) => r.match.test(type || ''));
+		return rule ? rule.kg : null;
+	}
+	/** The fleet's own types first (a real truck to assign), the standard classes after. */
+	const ltlSimTruckTypeOptions = $derived.by(() => {
+		const seen = new Set<string>();
+		const out: { value: string; label: string }[] = [];
+		for (const t of [...truckTypeOptions.map((o) => o.value), ...STANDARD_TRUCK_CLASSES]) {
+			if (seen.has(t) || !capacityKgForTruckType(t)) continue;
+			seen.add(t);
+			out.push({ value: t, label: `${t} · maks ${formatThousands(String(capacityKgForTruckType(t)))} Kg` });
+		}
+		return out;
+	});
+	let ltlSimTruckType = $state('');
+	let ltlSimCollapsed = $state(false);
+	const ltlSimCapacityKg = $derived(capacityKgForTruckType(ltlSimTruckType));
+	const ltlLoadPercent = $derived(ltlSimCapacityKg ? Math.round((ltlCombinedTotals.kg / ltlSimCapacityKg) * 100) : 0);
+	const ltlIsOverload = $derived(!!ltlSimCapacityKg && ltlLoadPercent > 100);
+	// Picking a truck for the LTL group seeds the simulator with its type.
+	$effect(() => {
+		const t = selectedTruck;
+		if (t && ltlPanelActive && capacityKgForTruckType(typeLabel(t))) ltlSimTruckType = typeLabel(t);
+	});
+	function shadeColor(hex: string, percent: number) {
+		const n = parseInt(hex.slice(1), 16);
+		const ch = (c: number) => Math.round(Math.min(255, Math.max(0, c + (percent > 0 ? (255 - c) * percent : c * percent))));
+		return `#${[ch(n >> 16), ch((n >> 8) & 255), ch(n & 255)].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+	}
+	const LTL_SIM_BED = { x: 2, y: 4, width: 31, height: 18 };
+	const ltlSimVisual = $derived.by(() => {
+		const pct = ltlLoadPercent;
+		const visualPct = Math.max(0, Math.min(100, pct));
+		const fillH = (LTL_SIM_BED.height * visualPct) / 100;
+		const color = ltlIsOverload ? '#B3261E' : '#146C2E';
+		return {
+			color,
+			light: shadeColor(color, 0.35),
+			dark: shadeColor(color, -0.3),
+			fillH,
+			fillY: LTL_SIM_BED.y + LTL_SIM_BED.height - fillH,
+			fillColor: pct > 100 ? 'rgba(211,47,47,.6)' : pct >= 80 ? 'rgba(245,158,11,.6)' : 'rgba(255,255,255,.55)'
+		};
 	});
 	const ltlCombinedStops = $derived.by(() => {
 		const muat: Stop[] = [];
@@ -816,6 +883,12 @@
 			return;
 		}
 		selectedTruckId = t.id;
+		if (targets.length > 1) {
+			const cap = capacityKgForTruckType(typeLabel(t));
+			if (cap && ltlCombinedTotals.kg > cap) {
+				toast(`Muatan gabungan ${formatThousands(String(Math.round(ltlCombinedTotals.kg)))} Kg melebihi kapasitas ${typeLabel(t)} (${formatThousands(String(cap))} Kg)`);
+			}
+		}
 		confirming = { truck: t, orders: targets };
 	}
 	async function assignConfirmed() {
@@ -997,6 +1070,65 @@
 						<div class="planner-order-title-row"><div class="planner-order-company">Pengiriman Gabungan (LTL)</div></div>
 						<div class="planner-order-meta">{ltlShipments.length} order digabungkan</div>
 					</div>
+
+					<div class="planner-ltl-sim">
+						<button type="button" class="planner-ltl-sim-head" onclick={() => (ltlSimCollapsed = !ltlSimCollapsed)}>
+							<span class="planner-stops-label planner-ltl-sim-title">Simulasi Muatan</span>
+							{#if ltlSimCapacityKg}<span class="planner-ltl-sim-head-percent" class:planner-ltl-sim-head-percent--overload={ltlIsOverload}>{ltlLoadPercent}%</span>{/if}
+							<span class="planner-ltl-shipment-toggle" style="transform:{ltlSimCollapsed ? 'none' : 'rotate(180deg)'}"><ChevronDown size={14} /></span>
+						</button>
+						{#if !ltlSimCollapsed}
+							<FieldSelect bind:value={ltlSimTruckType} options={ltlSimTruckTypeOptions} compact placeholder="Pilih Jenis Truck" />
+							{#if ltlSimCapacityKg}
+								<div class="planner-ltl-sim-truck" class:planner-ltl-sim-truck--overload={ltlIsOverload}>
+									<div class="planner-ltl-sim-truck-visual">
+										<svg viewBox="0 0 54 36" xmlns="http://www.w3.org/2000/svg">
+											<defs>
+												<linearGradient id="ltlSimTruckBody" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color={ltlSimVisual.light} /><stop offset="100%" stop-color={ltlSimVisual.color} /></linearGradient>
+												<linearGradient id="ltlSimTruckCab" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color={ltlSimVisual.light} /><stop offset="100%" stop-color={ltlSimVisual.dark} /></linearGradient>
+												<linearGradient id="ltlSimTruckGlass" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e0f2fe" /><stop offset="100%" stop-color="#7dd3fc" /></linearGradient>
+												<clipPath id="ltlSimTruckBedClip"><rect x="2" y="4" width="31" height="18" rx="2.5" /></clipPath>
+											</defs>
+											<ellipse cx="27" cy="30.5" rx="23" ry="2.8" fill="rgba(15,23,42,0.25)" />
+											<rect x="2" y="21.5" width="48" height="3" rx="1.5" fill="#1e293b" />
+											<rect x="2" y="4" width="31" height="18" rx="2.5" fill="url(#ltlSimTruckBody)" stroke={ltlSimVisual.dark} stroke-width="0.8" />
+											<rect x="4" y="6" width="27" height="3" rx="1.5" fill="#ffffff" opacity="0.35" />
+											<line x1="11" y1="9" x2="11" y2="20" stroke={ltlSimVisual.dark} stroke-width="0.7" opacity="0.35" />
+											<line x1="19" y1="9" x2="19" y2="20" stroke={ltlSimVisual.dark} stroke-width="0.7" opacity="0.35" />
+											<line x1="27" y1="9" x2="27" y2="20" stroke={ltlSimVisual.dark} stroke-width="0.7" opacity="0.35" />
+											<rect class="planner-ltl-sim-truck-fill" x="2" width="31" y={ltlSimVisual.fillY} height={ltlSimVisual.fillH} fill={ltlSimVisual.fillColor} clip-path="url(#ltlSimTruckBedClip)" />
+											<path d="M33 9.5 h10.5 a3 3 0 0 1 2.4 1.2 l5 6.8 a2 2 0 0 1 .4 1.2 v3.8 a1.5 1.5 0 0 1 -1.5 1.5 h-16.8 z" fill="url(#ltlSimTruckCab)" stroke={ltlSimVisual.dark} stroke-width="0.8" />
+											<path d="M32.5 7.5 h11 a1.5 1.5 0 0 1 1.4 1 l.6 1 h-13 z" fill={ltlSimVisual.light} opacity="0.9" />
+											<path d="M36 11.5 h7 l3.5 5.5 h-10.5 z" fill="url(#ltlSimTruckGlass)" stroke="#38bdf8" stroke-width="0.5" />
+											<path d="M36.5 12 h4.5 l-1.8 4.5 h-2.7 z" fill="#ffffff" opacity="0.6" />
+											<path d="M50 19 h1.8 a1 1 0 0 1 1 1 v1.2 h-2.8 z" fill="#fef08a" stroke="#ca8a04" stroke-width="0.5" />
+											<rect x="48" y="22" width="4.5" height="2.5" rx="1" fill="#475569" />
+											{#each [8.5, 19, 42] as wx (wx)}
+												<g class="planner-ltl-sim-wheel">
+													<circle cx={wx} cy="26" r="4.8" fill="#0f172a" />
+													<circle cx={wx} cy="26" r="2.2" fill="#94a3b8" />
+													<g class="planner-ltl-sim-wheel-spin" style="transform-origin:{wx}px 26px">
+														<line x1={wx} y1="26" x2={wx} y2="23.3" stroke="#0f172a" stroke-width="0.9" />
+														<circle cx={wx} cy="26" r="0.9" fill="#0f172a" />
+													</g>
+												</g>
+											{/each}
+										</svg>
+									</div>
+									<div class="planner-ltl-sim-percent">{ltlLoadPercent}%</div>
+								</div>
+								<div class="planner-ltl-sim-meta">
+									{formatThousands(String(Math.round(ltlCombinedTotals.kg)))} Kg dari {formatThousands(String(ltlSimCapacityKg))} Kg kapasitas {ltlSimTruckType}
+								</div>
+								{#if ltlIsOverload}
+									<div class="planner-ltl-sim-alert"><AlertCircle size={14} /> Muatan melebihi kapasitas truck yang dipilih.</div>
+								{/if}
+							{:else}
+								<div class="hint">Pilih jenis truck untuk melihat simulasi kapasitas muatan.</div>
+							{/if}
+						{/if}
+					</div>
+
 					<div class="planner-ltl-shipments">
 						{#each ltlShipments as sh (sh.order.key)}
 							<div class="planner-ltl-shipment-card" class:planner-ltl-shipment-card--collapsed={ltlCollapsedCards.includes(sh.order.key)}>
@@ -1377,7 +1509,7 @@
 	title={confirming && confirming.orders.length > 1 ? 'Tugaskan Pengiriman Gabungan?' : 'Tugaskan Truck?'}
 	message={confirming
 		? confirming.orders.length > 1
-			? `${confirming.orders.length} order (${confirming.orders.map((o) => o.orderId).join(', ')}) akan ditugaskan ke truck <b>${confirming.truck.licensePlate}</b> dengan driver <b>${confirming.truck.driver?.fullName ?? '-'}</b> sebagai satu pengiriman LTL.`
+			? `${confirming.orders.length} order (${confirming.orders.map((o) => o.orderId).join(', ')}) akan ditugaskan ke truck <b>${confirming.truck.licensePlate}</b> dengan driver <b>${confirming.truck.driver?.fullName ?? '-'}</b> sebagai satu pengiriman LTL.${(() => { const cap = capacityKgForTruckType(typeLabel(confirming.truck)); return cap && ltlCombinedTotals.kg > cap ? `<br><br><b style="color:var(--error)">⚠ Overload:</b> muatan gabungan ${formatThousands(String(Math.round(ltlCombinedTotals.kg)))} Kg melebihi kapasitas ${typeLabel(confirming.truck)} (${formatThousands(String(cap))} Kg).` : ''; })()}`
 			: `Order <b>${confirming.orders[0].orderId}</b> akan ditugaskan ke truck <b>${confirming.truck.licensePlate}</b> dengan driver <b>${confirming.truck.driver?.fullName ?? '-'}</b>. Driver akan menerima notifikasi penugasan.`
 		: ''}
 	confirmLabel="Ya, Tugaskan"
