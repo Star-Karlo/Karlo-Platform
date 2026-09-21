@@ -85,7 +85,29 @@
 		stepping = true;
 		try {
 			if (n.kind === 'shipment' && shipment) {
-				await api.put(ENDPOINTS.shipments.status(shipment.id), { status: n.status, note: 'Mode Uji' });
+				// Arrival steps need a position, as the driver app would send one.
+				// Mode Uji reports the warehouse's own point, so the geofence
+				// check passes the way a real arrival would.
+				const body: Record<string, unknown> = { status: n.status, note: 'Mode Uji' };
+				if (n.status === 'atLoading' || n.status === 'atUnloading') {
+					const whId = n.status === 'atLoading' ? order?.originWarehouseId : order?.destinationWarehouseId;
+					if (whId) {
+						try {
+							const wh = (await api.get(ENDPOINTS.warehouses.one(whId))).data?.data;
+							if (wh?.latitude != null && wh?.longitude != null) {
+								body.latitude = wh.latitude;
+								body.longitude = wh.longitude;
+							}
+						} catch {
+							/* fall through: the server says what it needs */
+						}
+					}
+					if (body.latitude == null) {
+						toast('Gudang tidak punya koordinat — isi titik gudang dulu di MyWarehouse');
+						return false;
+					}
+				}
+				await api.put(ENDPOINTS.shipments.status(shipment.id), body);
 			} else if (n.kind === 'order') {
 				await api.put(ENDPOINTS.orders.status(orderId), { status: n.status, note: 'Mode Uji' });
 			}
