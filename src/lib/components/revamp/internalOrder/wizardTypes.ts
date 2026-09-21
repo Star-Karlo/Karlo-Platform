@@ -20,6 +20,8 @@ export type WizardShipment = {
 	loadingPoints: string[];
 	unloadingPoints: string[];
 	fleetDescription: string;
+	/** "Body|Size" keys, at most MAX_TRUCK_OPTIONS — the truck types a planner may assign. */
+	truckOptions: string[];
 	expanded: boolean;
 	items: WizardItem[];
 	totalTonnage: NumInput;
@@ -58,6 +60,7 @@ export function newShipment(): WizardShipment {
 		loadingPoints: [''],
 		unloadingPoints: [''],
 		fleetDescription: '',
+		truckOptions: [],
 		expanded: true,
 		items: [newItem()],
 		totalTonnage: '',

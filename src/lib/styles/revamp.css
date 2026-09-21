@@ -2600,3 +2600,596 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .md-main-body{padding:0 18px 18px;}
 .md-main-body .method-tabs{margin-bottom:14px;}
 .md-main-body .table-wrap{border:0; border-radius:0;}
+
+/* Shared top bar — Control Tower and Planner Allocate (prototype 385e41e / ceeefae). */
+.ct-topbar{flex:0 0 auto;}
+/* Detail Order only exists once an order is selected — width is JS-driven
+   (drag-to-resize) rather than a fixed percentage, and can collapse to a
+   slim 56px strip via the minimize toggle. */
+/* order:1 (default for .planner-map-panel is 0) puts this on the right of
+   the map within .planner-shell without reordering the actual template
+   markup — the resize handle below sits on its LEFT edge, facing the map.
+   Its own card (border on every side, rounded) now, since a gap — not a
+   shared edge — separates it from the map. */
+.planner-side-panel{position:relative; flex-shrink:0; overflow-y:auto; padding:56px 20px 20px; order:1;}
+.planner-side-panel-minimized{overflow:visible; padding:0; display:flex; flex-direction:column; align-items:center;}
+.planner-side-minimize{
+  position:absolute; top:16px; left:16px; width:28px; height:28px; border-radius:50%; border:1px solid var(--outline-variant);
+  background:var(--surface-alt); color:var(--on-surface-variant); display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:1;
+}
+.planner-side-minimize:hover{background:var(--outline-variant);}
+.planner-side-minimize svg{width:13px; height:13px; transform:rotate(90deg);}
+.planner-side-panel-minimized .planner-side-minimize{position:static; margin-top:16px;}
+.planner-side-panel-minimized .planner-side-minimize svg{transform:rotate(-90deg);}
+.planner-side-close{
+  position:absolute; top:16px; right:16px; width:28px; height:28px; border-radius:50%; border:1px solid var(--outline-variant);
+  background:var(--surface-alt); color:var(--on-surface-variant); display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:1;
+}
+.planner-side-close:hover{background:var(--outline-variant);}
+.planner-side-close svg{width:13px; height:13px;}
+/* left:0 (not a negative offset) — .planner-side-panel has overflow-y:auto,
+   which clips any child positioned outside its own box, so a handle hanging
+   past the edge would be unreachable. Sits on the panel's LEFT edge since
+   the panel itself now sits on the right of .planner-page (see order:1
+   above) — this is the edge facing the map/order-list, same as it always
+   was when the panel was on the left. */
+.planner-side-resize-handle{position:absolute; top:0; left:0; bottom:0; width:6px; cursor:col-resize; z-index:2;}
+.planner-side-resize-handle:hover, .planner-side-resize-handle:active{background:var(--primary-container);}
+/* Leaflet's own panes/controls use z-index up to 1000 internally — without a
+   stacking context of its own here, those values compare directly against
+   the app header/topbar (z-index 150/5) and win once the map scrolls into
+   view, rendering the map on top of them. Setting z-index on this relatively
+   positioned ancestor scopes all of Leaflet's z-index values inside it. */
+/* flex:1 — the order list below is a fixed height capped to 3 rows, so the
+   map just takes whatever's left over. It's a .card of its own now (see
+   the template), overflow:hidden clips the Leaflet tiles to its rounded
+   corners. */
+.planner-map-panel{flex:1; min-width:0; min-height:0; overflow:hidden; position:relative; z-index:0; padding:0;}
+.planner-map-canvas{width:100%; height:100%;}
+/* Wrapper keeps the truck-status legend/filter and the muat/bongkar legend
+   side by side, anchored together at the map's top-right corner. */
+.planner-map-legends{position:absolute; top:16px; right:16px; z-index:400; display:flex; align-items:flex-start; gap:10px;}
+.planner-map-legend{
+  background:#fff; border:1px solid var(--outline-variant);
+  border-radius:var(--r-md); padding:10px 14px; display:flex; gap:16px; font-size:12px; color:var(--on-surface-variant);
+  box-shadow:var(--shadow-2); white-space:nowrap;
+}
+.planner-map-legend span{display:flex; align-items:center; gap:6px;}
+/* Leaflet's divIcon defaults to a bordered white square box — reset that so
+   only the pickup/dropoff SVG itself shows, with a drop-shadow standing in
+   for the box's visual weight. */
+.planner-map-pin{background:transparent !important; border:none !important;}
+.planner-map-pin--pickup svg,
+.planner-map-pin--dropoff svg{
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
+}
+/* The icon SVGs fill with currentColor — without setting it here they
+   inherit whatever ambient text color the map container has (black), same
+   Muat/Bongkar colors as the map legend. */
+.planner-map-pin--pickup{color:var(--primary);}
+.planner-map-pin--dropoff{color:var(--success);}
+
+/* Truck marker: modernized 3D truck illustration with plate pill tag underneath */
+.planner-truck-map-pin{
+  position:relative;
+  display:flex;
+  background:transparent !important;
+  border:none !important;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  user-select:none;
+  transform:scale(1.15);
+  z-index:1001 !important;
+}
+.planner-truck-map-body{
+  display:flex;
+  align-items:center;
+  line-height:0;
+}
+.planner-truck-map-body svg{
+  height:26px !important;
+  display:block !important;
+  filter:none !important;
+  cursor:pointer;
+}
+.planner-truck-map-plate{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  margin-top:2px;
+  padding:2px 6px;
+  border:1.5px solid #cbd5e1;
+  border-radius:999px;
+  background:#ffffff;
+  box-shadow:0 1px 3px rgba(0,0,0,.25);
+  font-size:10px;
+  white-space:nowrap;
+}
+.planner-truck-map-dot{
+  width:6px; height:6px; border-radius:50%; flex-shrink:0;
+}
+.planner-truck-map-text{
+  font-size:10px; font-weight:700; color:#0f172a;
+}
+.planner-truck-map-pin.is-selected .planner-truck-map-plate{
+  border-color:#0B57D0 !important;
+  box-shadow:0 0 0 2px rgba(11,87,208,.35), 0 2px 6px rgba(0,0,0,.2);
+  background:#eff6ff;
+  font-weight:700;
+  color:#0f172a;
+  letter-spacing:.2px;
+  line-height:1.2;
+}
+.planner-truck-radar-ping{
+  position:absolute;
+  width:56px;
+  height:56px;
+  border-radius:50%;
+  top:12px;
+  left:50%;
+  transform:translate(-50%, -50%);
+  background:rgba(11,87,208,.2);
+  pointer-events:none;
+  animation:truckRadarPing 1.8s cubic-bezier(0,0,.2,1) infinite;
+}
+@keyframes truckRadarPing{
+  0%{ transform:translate(-50%, -50%) scale(.4); opacity:.8; }
+  100%{ transform:translate(-50%, -50%) scale(1.8); opacity:0; }
+}
+/* line to bend it through a preferred road/area. */
+/* Bottom margin so the last stop row doesn't sit flush against whatever
+   follows it (the Jarak/ETA/Biaya Toll strip) — same rhythm as the plain
+   Stops accordion's own .planner-stops margin. */
+.planner-custom-stops{margin-bottom:18px;}
+/* .hint is also used elsewhere in the app as a small INLINE annotation next
+   to a label (e.g. AgreementFormView, SpotOrderDetailView) — that usage
+   must stay inline, so this centered/padded empty-state treatment is scoped
+   to just the planner's own list containers rather than a bare .hint rule. */
+.planner-custom-stops .hint,
+.planner-stops .hint,
+.planner-ltl-sim .hint,
+.planner-ltl-shipments .hint,
+.planner-ft-results .hint{
+  display:block; padding:14px 8px; text-align:center; font-size:12px; color:var(--on-surface-variant); line-height:1.5;
+}
+.planner-custom-stop{display:flex; align-items:center; gap:8px;}
+.planner-custom-stop + .planner-custom-stop{margin-top:6px;}
+.planner-custom-stop--dragging{opacity:.4;}
+.planner-custom-stop-drag{
+  flex-shrink:0; width:14px; display:flex; align-items:center; justify-content:center; color:var(--on-surface-variant); cursor:grab;
+}
+.planner-custom-stop-drag:active{cursor:grabbing;}
+.planner-custom-stop-drag--hidden{visibility:hidden; cursor:default;}
+.planner-custom-stop-num{
+  flex-shrink:0; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:11.5px; font-weight:700; color:#fff;
+}
+.planner-custom-stop-num--muat{background:var(--primary);}
+.planner-custom-stop-num--via{background:#F09300;}
+.planner-custom-stop-num--bongkar{background:var(--success);}
+.planner-custom-stop-pill{
+  flex:1; min-width:0; padding:8px 14px; border:1px solid var(--outline-variant); border-radius:999px;
+  font-size:12.5px; color:var(--on-surface); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.planner-custom-stop-btns{display:flex; align-items:center; gap:4px; flex-shrink:0;}
+.planner-custom-stop-btn{
+  width:22px; height:22px; border-radius:50%; border:1px solid var(--outline-variant); background:#fff;
+  color:var(--on-surface-variant); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;
+}
+.planner-custom-stop-btn:disabled{opacity:.35; cursor:not-allowed;}
+.planner-custom-stop-btn-add{border-color:var(--success); color:var(--success);}
+.planner-custom-stop-btn-remove{border-color:var(--error); color:var(--error);}
+/* Custom Rute's own map-click hint + Reset Rute — sat with zero spacing/
+   typography of its own, flush against the Custom Rute/Find Truck buttons
+   above it. */
+.planner-custom-route-hint{
+  display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:14px; padding-top:12px;
+  border-top:1px dashed var(--outline-variant); font-size:11.5px; color:var(--on-surface-variant); line-height:1.5;
+}
+.planner-custom-route-reset{
+  flex-shrink:0; background:none; border:none; padding:0; font-family:inherit; font-size:11.5px; font-weight:700;
+  color:var(--primary); text-decoration:underline; cursor:pointer; white-space:nowrap;
+}
+.planner-custom-route-reset:hover{opacity:.75;}
+
+.planner-toll-fare{border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:12px 14px; margin-bottom:16px;}
+.planner-toll-fare-label{font-size:11px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.03em; margin-bottom:8px;}
+.planner-toll-fare-row{display:flex; align-items:center; gap:8px;}
+.planner-toll-fare-row .field-select{flex:1;}
+.planner-toll-fare-refresh{
+  flex-shrink:0; width:30px; height:30px; border-radius:50%; border:1px solid var(--outline-variant); background:var(--surface-alt);
+  color:var(--on-surface-variant); display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.planner-toll-fare-refresh:hover{color:var(--primary); border-color:var(--primary);}
+.planner-toll-fare-value{flex-shrink:0; font-size:14px; font-weight:700; color:var(--on-surface); white-space:nowrap;}
+.planner-toll-fare-note{font-size:10.5px; color:var(--on-surface-variant); line-height:1.5; margin-top:10px; padding-top:8px; border-top:1px dashed var(--outline-variant);}
+
+/* Toll Summary — collapsible gate-by-gate breakdown (in/out per detected
+   toll segment), matching the reference accordion pattern. */
+.planner-toll-summary{border:1px solid var(--outline-variant); border-radius:var(--r-md); overflow:hidden; margin-bottom:16px;}
+.planner-toll-summary-head{
+  width:100%; display:flex; align-items:center; justify-content:space-between; padding:12px 14px;
+  background:none; border:none; cursor:pointer; font-size:13px; font-weight:700; color:var(--on-surface); font-family:inherit;
+}
+.planner-toll-summary-head .icon-wrap{transition:transform .15s;}
+.planner-toll-summary-body{padding:0 14px 14px; border-top:1px solid var(--outline-variant); padding-top:10px;}
+.planner-toll-summary-gate{padding:8px 0;}
+.planner-toll-summary-gate + .planner-toll-summary-gate{border-top:1px dashed var(--outline-variant);}
+.planner-toll-summary-gate-name{font-size:12.5px; font-weight:700; color:var(--on-surface); margin-bottom:4px;}
+.planner-toll-summary-gate-row{display:flex; justify-content:space-between; font-size:12px; color:var(--on-surface-variant); padding:1px 0;}
+.planner-legend-icon{display:inline-flex; width:16px; height:16px;}
+.planner-legend-icon--pickup{color:var(--primary);}
+.planner-legend-icon--dropoff{color:var(--success);}
+
+.planner-truck-legend{
+  background:#fff; border:1px solid var(--outline-variant);
+  border-radius:var(--r-md); box-shadow:var(--shadow-2); width:236px; overflow:hidden; flex-shrink:0;
+}
+.planner-truck-legend-head{
+  width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 12px;
+  background:none; border:none; cursor:pointer; font-size:12.5px; font-weight:700; color:var(--on-surface); white-space:nowrap;
+}
+.planner-truck-legend-body{padding:0 12px 12px; display:flex; flex-direction:column; gap:2px; border-top:1px solid var(--outline-variant); padding-top:8px;}
+/* Collapsed state: just the truck icon, beside the muat/bongkar legend. */
+.planner-truck-legend-toggle{
+  width:36px; height:36px; border-radius:50%; flex-shrink:0;
+  background:#fff; border:1px solid var(--outline-variant); box-shadow:var(--shadow-2); color:var(--on-surface-variant);
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.planner-truck-legend-toggle:hover{color:var(--primary); border-color:var(--primary);}
+.planner-truck-legend-option{display:flex; align-items:center; gap:8px; padding:5px 2px; font-size:12.5px; color:var(--on-surface-variant); cursor:pointer;}
+.planner-truck-legend-option input{margin:0;}
+.planner-truck-legend-dot{width:10px; height:10px; border-radius:50%; flex-shrink:0;}
+.planner-truck-legend-label{flex:1;}
+.planner-truck-legend-count{color:var(--on-surface-variant); font-variant-numeric:tabular-nums;}
+/* Planned/Empty have no supporting data in this app yet — kept visible for
+   parity with the reference legend's shape, but visually marked as inert
+   (always zero) rather than presented as real, live counts. */
+.planner-truck-legend-option--placeholder{opacity:.5;}
+.planner-truck-legend-reset{width:100%; margin-top:6px;}
+.planner-truck-legend-head--static{cursor:default; white-space:normal; line-height:1.3;}
+.planner-vendor-armada-legend{width:250px; max-height:340px; display:flex; flex-direction:column;}
+.planner-vendor-armada-list{list-style:decimal; margin:0; padding:8px 12px 12px 28px; gap:10px; overflow-y:auto;}
+.planner-vendor-armada-item{font-size:12.5px; color:var(--on-surface); padding-left:2px;}
+.planner-vendor-armada-item::marker{color:var(--on-surface-variant); font-weight:700; font-size:11.5px;}
+.planner-vendor-armada-row{display:flex; align-items:center; gap:8px;}
+.planner-vendor-armada-item .icon-wrap{color:var(--primary); flex-shrink:0;}
+.planner-vendor-armada-label{flex:1;}
+.planner-vendor-armada-count{color:var(--on-surface-variant); font-variant-numeric:tabular-nums; font-size:11.5px; white-space:nowrap;}
+
+/* "Pantau" (Monitor) panel — layer chips + threshold config, collapsed to
+   just an icon (reusing .planner-truck-legend-toggle) beside the truck
+   status legend toggle when closed. */
+.ct-monitor-panel{background:#fff; border:1px solid var(--outline-variant); border-radius:var(--r-md); box-shadow:var(--shadow-2); width:308px; flex-shrink:0; padding:14px;}
+.ct-monitor-panel-head{display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:13px; font-weight:700; color:var(--on-surface); margin-bottom:12px;}
+.ct-monitor-chips{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;}
+.ct-monitor-chip{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:20px; font-size:12px; font-weight:700; white-space:nowrap;}
+.ct-monitor-chip-dot{width:8px; height:8px; border-radius:50%; flex-shrink:0;}
+.ct-monitor-chip-icon{font-size:12px; line-height:1;}
+.ct-monitor-chip-remove{background:none; border:none; padding:0; margin-left:1px; font-size:14px; line-height:1; color:inherit; opacity:.6; cursor:pointer;}
+.ct-monitor-chip-remove:hover{opacity:1;}
+.ct-monitor-add-wrap{position:relative;}
+.ct-monitor-chip--add{background:#fff; border:1.4px dashed var(--outline-variant); color:var(--on-surface-variant); cursor:pointer;}
+.ct-monitor-chip--add:hover{border-color:var(--primary); color:var(--primary);}
+.ct-monitor-chip--add svg{width:11px; height:11px;}
+.ct-monitor-add-menu{position:absolute; top:calc(100% + 6px); left:0; z-index:10; background:#fff; border:1px solid var(--outline-variant); border-radius:10px; box-shadow:var(--shadow-2); padding:6px; min-width:170px;}
+.ct-monitor-add-menu-item{display:flex; align-items:center; gap:8px; width:100%; padding:7px 8px; background:none; border:none; border-radius:6px; font-size:12.5px; font-weight:600; color:var(--on-surface); text-align:left; cursor:pointer; white-space:nowrap;}
+.ct-monitor-add-menu-item:hover{background:var(--surface-variant, #F4F5F7);}
+.ct-monitor-add-menu-empty{padding:7px 8px; font-size:12px; color:var(--on-surface-variant);}
+.ct-monitor-config-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid var(--outline-variant);}
+.ct-monitor-config-label{font-size:12.5px; color:var(--on-surface-variant);}
+.ct-monitor-config-input{width:64px; padding:6px 8px; border:1px solid var(--outline-variant); border-radius:8px; font-size:13px; font-weight:700; color:var(--on-surface); text-align:center; font-variant-numeric:tabular-nums;}
+.ct-monitor-config-input:focus{outline:none; border-color:var(--primary);}
+.ct-monitor-config-unit{font-size:12px; color:var(--on-surface-variant); min-width:38px; text-align:right;}
+.ct-monitor-save-btn{width:100%; margin-top:14px; padding:9px; background:#fff; border:1.4px dashed var(--outline-variant); border-radius:10px; font-size:12.5px; font-weight:700; color:var(--on-surface); cursor:pointer;}
+.ct-monitor-save-btn:hover{border-color:var(--primary); color:var(--primary);}
+
+.planner-truck-status-badge{display:inline-flex; align-items:center; gap:6px;}
+.planner-row-disabled{opacity:.55; cursor:not-allowed;}
+
+/* Fixed height (not a flex share of the workspace anymore) capped to
+   exactly 3 visible rows — measured live: .planner-orders-head 43px +
+   thead 40.75px + 3 × .planner-row 51px + .planner-orders-foot 37px —
+   so the list scrolls its own rows past 3 instead of growing/shrinking
+   with viewport height. */
+.planner-orders-panel{flex:0 0 auto; height:274px; min-height:0; display:flex; flex-direction:column; padding:0; overflow:hidden;}
+/* Header (filter tabs) and footer (pagination) are shrunk down from their
+   normal app-wide sizing so more of this panel's limited height goes to the
+   actual row list, which is the point of this panel. Scoped to these two
+   wrappers so the shared .method-tabs/.pagination components stay full-size
+   everywhere else in the app. */
+.planner-orders-head{flex-shrink:0; padding:8px 16px 0;}
+.planner-orders-head .method-tabs{margin-bottom:0;}
+/* Rounded pill underline instead of a flush straight border-bottom — the
+   ::after bar sits with a small gap below the text and has soft rounded
+   ends, matching the reference tab style the user provided. */
+.planner-orders-head .method-tab{padding:8px 4px 11px; font-size:12px; margin-right:20px; border-bottom:none;}
+.planner-orders-head .method-tab::after{content:''; position:absolute; left:2px; right:2px; bottom:0; height:3px; border-radius:999px; background:transparent;}
+.planner-orders-head .method-tab.active::after{background:var(--primary);}
+.planner-orders-scroll{flex:1; min-height:0; overflow:auto; padding:0 16px;}
+.planner-orders-scroll thead th{position:sticky; top:0; z-index:2; background:#F4F6F9;}
+.planner-orders-foot{flex-shrink:0; padding:6px 16px; border-top:1px solid var(--outline-variant);}
+.planner-orders-foot .pagination{margin-top:0;}
+.planner-orders-foot .page-btn{width:24px; height:24px; font-size:11px; border-radius:6px;}
+
+.planner-order-header{display:flex; flex-direction:column; gap:6px; margin-bottom:18px; padding-bottom:16px; border-bottom:1px solid var(--outline-variant);}
+.planner-order-title-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.planner-order-company{font-size:15.5px; font-weight:700; color:var(--on-surface); line-height:1.3; min-width:0;}
+.planner-order-meta{font-size:12.5px; color:var(--on-surface-variant);}
+.planner-item-name{font-size:13px; font-weight:600; color:var(--on-surface); margin-top:14px; margin-bottom:12px; line-height:1.4;}
+
+/* Compact 3-up strip (Tonase/Qty/Volume) — thin dividers instead of the
+   padded card treatment used elsewhere, since this sits right under the
+   header and just needs to be scannable, not call attention to itself. */
+.planner-route-strip-label{font-size:11px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px;}
+.planner-route-strip-hint{display:block; font-size:12px; color:var(--on-surface-variant); line-height:1.5; padding:10px 12px; margin-bottom:18px; border:1px solid var(--outline-variant); border-radius:var(--r-md); background:var(--surface-alt);}
+.planner-muatan-strip{display:flex; margin-bottom:18px; border:1px solid var(--outline-variant); border-radius:var(--r-md); overflow:hidden;}
+.planner-muatan-item{flex:1; min-width:0; padding:8px 6px; text-align:center; border-right:1px solid var(--outline-variant);}
+.planner-muatan-item:last-child{border-right:none;}
+.planner-muatan-label{font-size:9.5px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.03em; margin-bottom:3px;}
+.planner-muatan-value{font-size:12.5px; font-weight:700; color:var(--on-surface); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+/* LTL combined-shipment cards — one per selected order, stacked in the side
+   panel in place of the single-order header/muatan-strip pair. */
+.planner-ltl-shipments{display:flex; flex-direction:column; gap:10px; margin-bottom:18px;}
+.planner-ltl-shipment-card{border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:12px 14px;}
+.planner-ltl-shipment-card--collapsed{padding-bottom:12px;}
+.planner-ltl-shipment-card .planner-item-name{margin-top:8px; margin-bottom:10px;}
+.planner-ltl-shipment-card .planner-muatan-strip{margin-bottom:0;}
+.planner-ltl-shipment-head{
+  width:100%; display:flex; align-items:center; gap:8px; background:none; border:none; padding:0; margin-bottom:4px;
+  font-family:inherit; text-align:left; cursor:pointer;
+}
+.planner-ltl-shipment-company{flex:1; min-width:0; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.planner-ltl-shipment-badge{
+  flex-shrink:0; font-size:10px; font-weight:700; color:#fff; background:var(--primary);
+  padding:2px 8px; border-radius:999px; text-transform:uppercase; letter-spacing:.03em;
+}
+.planner-ltl-shipment-toggle{flex-shrink:0; width:13px; height:13px; color:var(--on-surface-variant); transition:transform .15s;}
+/* Small shipment tag prefixed onto a combined-route stop pill, so the same
+   list can show "which shipment does this stop belong to" without a whole
+   separate column. */
+.planner-ltl-stop-tag{
+  display:inline-block; font-size:9.5px; font-weight:700; color:var(--primary); background:var(--primary-container);
+  padding:1px 6px; border-radius:999px; margin-right:5px; text-transform:uppercase; letter-spacing:.02em;
+}
+
+/* Simulasi Muatan — cargo-load simulator, first thing shown in the LTL
+   panel so a dispatcher picks a truck type before working through orders. */
+.planner-ltl-sim{border:1px solid var(--outline-variant); border-radius:var(--r-md); padding:12px 14px; margin-bottom:18px;}
+.planner-ltl-sim-head{
+  width:100%; display:flex; align-items:center; gap:8px; background:none; border:none; padding:0; margin:0;
+  font-family:inherit; text-align:left; cursor:pointer;
+}
+/* Matches the chevron icon's own 13px box (.planner-ltl-shipment-toggle) and
+   centers each text span within an identical fixed-height box, the same way
+   Icon.vue centers its SVG — line-height alone wasn't reliably centering
+   these against the icon since text ascent/descent isn't symmetric around a
+   line box the way flex-centered content is. */
+.planner-ltl-sim-title{flex:1; min-width:0; height:13px; display:inline-flex; align-items:center; line-height:1;}
+/* .planner-stops-label's own margin-bottom:14px (declared later in this
+   file, so it otherwise wins the cascade) pinned this span to the top of
+   its centered flex box instead of actually centering it — the extra
+   specificity here (two classes vs one) makes the override stick regardless
+   of source order. */
+.planner-ltl-sim-head .planner-ltl-sim-title{margin-bottom:0;}
+.planner-ltl-sim-head-percent{
+  flex-shrink:0; height:13px; display:inline-flex; align-items:center; font-size:12.5px; font-weight:800; color:var(--on-surface); line-height:1;
+}
+.planner-ltl-sim-head-percent--overload{color:var(--error);}
+.planner-ltl-sim .field-select{margin-top:8px;}
+.planner-ltl-sim-truck{display:flex; flex-direction:column; align-items:center; margin-top:16px;}
+.planner-ltl-sim-truck-visual{width:120px; transition:filter .2s; animation:ltlTruckBounce 1.6s ease-in-out infinite;}
+.planner-ltl-sim-truck-visual svg{width:100%; height:auto; display:block; overflow:visible;}
+@keyframes ltlTruckBounce{
+  0%, 100%{ transform:translateY(0); }
+  50%{ transform:translateY(-1.5px); }
+}
+.planner-ltl-sim-truck--overload .planner-ltl-sim-truck-visual{
+  filter:drop-shadow(0 0 6px rgba(179,38,30,.5));
+  animation:ltlTruckBounce 1.6s ease-in-out infinite, ltlOverloadPulse 1.4s ease-in-out infinite;
+}
+@keyframes ltlOverloadPulse{
+  0%, 100%{ opacity:1; }
+  50%{ opacity:.72; }
+}
+/* Wheels spin continuously; the origin is set in viewBox user-space
+   coordinates (each wheel's own center), matching the default SVG
+   transform-box so the rotation pivots correctly on that wheel. */
+.planner-ltl-sim-wheel-spin{animation:ltlWheelSpin .6s linear infinite;}
+@keyframes ltlWheelSpin{
+  from{ transform:rotate(0deg); }
+  to{ transform:rotate(360deg); }
+}
+/* height/y are real SVG geometry properties in modern browsers, so — unlike
+   the old v-html-rebuilt version, which replaced the whole SVG on every
+   percent change — Vue now patches this rect's attributes in place, and
+   these transitions actually animate. */
+.planner-ltl-sim-truck-fill{transition:height .4s ease, y .4s ease, fill .3s ease;}
+.planner-ltl-sim-percent{margin-top:6px; font-size:20px; font-weight:800; color:var(--on-surface);}
+.planner-ltl-sim-truck--overload .planner-ltl-sim-percent{color:var(--error);}
+.planner-ltl-sim-meta{margin-top:8px; font-size:11.5px; color:var(--on-surface-variant); text-align:center;}
+.planner-ltl-sim-alert{
+  display:flex; align-items:center; justify-content:center; gap:6px; margin-top:10px; padding:8px 10px;
+  border-radius:var(--r-md); background:var(--error-container); color:var(--error); font-size:11.5px; font-weight:700; text-align:center;
+}
+
+/* Truck detail (Fleet Catalog "Kontrol" column) — shares the side panel with
+   order detail, so it reuses the same card-region rhythm at a slightly
+   denser 2-column grid since it has more fields to fit. */
+.planner-td-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px 14px; margin-top:14px;}
+.planner-td-item{min-width:0;}
+.planner-td-label{font-size:10px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.03em; margin-bottom:3px;}
+.planner-td-value{font-size:13px; font-weight:600; color:var(--on-surface); overflow-wrap:break-word;}
+
+.planner-stops-label{font-size:11px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.05em; margin-bottom:14px;}
+.planner-stops-toggle{
+  width:100%; display:flex; align-items:center; justify-content:space-between; background:none; border:none; padding:0;
+  font-family:inherit; cursor:pointer;
+}
+.planner-stops-toggle svg{transition:transform .15s; color:var(--on-surface-variant);}
+/* Truck Options — the (max 5) truck types picked when the order was
+   created, listed above Stops as a reference for whoever assigns a truck. */
+.planner-truck-options{margin-bottom:18px;}
+.planner-truck-options-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px;}
+.planner-truck-options-head .planner-stops-label{margin-bottom:0;}
+.planner-truck-options-count{font-size:11px; font-weight:700; color:var(--on-surface-variant); font-variant-numeric:tabular-nums;}
+/* Own class, not .hint — .hint isn't styled as a standalone block here, so
+   it rendered as plain 14px body text next to the small uppercase labels. */
+.planner-truck-options-empty{padding:12px 14px; border:1px dashed var(--outline); border-radius:var(--r-md); background:var(--surface-alt); color:var(--on-surface-variant); font-size:12px; line-height:1.4; text-align:center;}
+.planner-truck-option{display:flex; align-items:center; gap:10px; padding:8px 10px; margin-bottom:6px; border:1px solid var(--outline-variant); border-radius:var(--r-md); background:var(--surface);}
+.planner-truck-option-num{flex-shrink:0; width:20px; height:20px; border-radius:50%; background:var(--primary-container); color:var(--primary); font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;}
+.planner-truck-option-icon{flex-shrink:0; width:26px; height:26px; color:var(--on-surface-variant);}
+.planner-truck-option-label{flex:1; min-width:0; font-size:13px; font-weight:600; color:var(--on-surface); overflow-wrap:break-word;}
+.planner-truck-option-size{flex-shrink:0; font-size:10.5px; font-weight:700; color:#fff; padding:2px 8px; border-radius:999px; white-space:nowrap;}
+.planner-stops{margin-bottom:18px;}
+.planner-stop{display:flex; gap:14px;}
+.planner-stop-marker{display:flex; flex-direction:column; align-items:center; width:20px; flex-shrink:0;}
+.planner-stop-icon{display:flex; width:20px; height:20px; flex-shrink:0;}
+.planner-stop-icon svg{width:100%; height:100%;}
+.planner-stop-icon--muat{color:var(--primary);}
+.planner-stop-icon--bongkar{color:var(--success);}
+.planner-stop-line{flex:1; width:0; min-height:26px; border-left:2px dotted var(--outline-variant); margin:4px 0;}
+.planner-stop-body{flex:1; min-width:0; padding-bottom:22px;}
+.planner-stop-type{font-size:11px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px;}
+.planner-stop-city{font-size:15px; font-weight:700; color:var(--on-surface);}
+.planner-stop-name{font-size:13px; color:var(--on-surface-variant); margin-top:2px;}
+.planner-stop-address{font-size:12px; color:var(--on-surface-variant); margin-top:3px; line-height:1.5;}
+.planner-stop-contact{display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--on-surface-variant); margin-top:9px;}
+.planner-stop-contact svg{width:13px; height:13px;}
+
+.planner-find-transporter{margin-top:12px; padding:12px; background:#fff; border:1px solid var(--outline-variant); border-radius:var(--r-md);}
+.planner-ft-tabs{margin-bottom:10px;}
+.planner-ft-tabs.method-tab, .planner-find-transporter .method-tab{padding:6px 4px; font-size:12px; margin-right:16px;}
+.planner-ft-filter-group{margin-bottom:12px;}
+.planner-ft-filter-label{font-size:11.5px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px;}
+.planner-ft-radius-row{display:flex; align-items:center; gap:10px;}
+.planner-ft-radius-row input[type="range"]{flex:1;}
+.planner-ft-radius-value{font-size:12.5px; font-weight:700; color:var(--on-surface); white-space:nowrap;}
+.planner-ft-idle-toggle{display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--on-surface-variant); cursor:pointer; margin-bottom:12px;}
+.planner-ft-idle-toggle input{margin:0;}
+.planner-ft-results-label{font-size:11.5px; font-weight:700; color:var(--on-surface-variant); text-transform:uppercase; letter-spacing:.03em; margin-bottom:8px;}
+.planner-ft-results{display:flex; flex-direction:column; gap:8px;}
+.planner-ft-result{
+  display:flex; align-items:center; gap:12px; padding:12px; background:#fff; border:1px solid var(--outline-variant);
+  border-radius:var(--r-md); cursor:pointer; transition:border-color .15s, box-shadow .15s;
+}
+.planner-ft-result:hover{border-color:var(--primary);}
+.planner-ft-result-selected, .planner-ft-result-selected:hover{
+  background:var(--primary-container); border-color:var(--primary); box-shadow:0 0 0 2px rgba(11,87,208,.22);
+}
+.planner-ft-result-body{flex:1; min-width:0;}
+.planner-ft-result-name{font-weight:700; font-size:13.5px; color:var(--on-surface);}
+.planner-ft-result-sub{font-size:11.5px; color:var(--on-surface-variant); margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.planner-ft-result-tags{display:flex; flex-wrap:wrap; gap:5px; margin-top:7px;}
+.planner-ft-tag{background:var(--surface-alt); color:var(--on-surface-variant); font-size:10.5px; font-weight:600; padding:3px 8px; border-radius:999px; white-space:nowrap;}
+.planner-ft-tag-good{background:var(--success-container); color:var(--success);}
+.planner-ft-assign-btn{
+  flex-shrink:0; background:var(--on-surface); color:#fff; border:none; border-radius:999px; padding:8px 16px;
+  font-size:12.5px; font-weight:700; cursor:pointer; font-family:inherit;
+}
+.planner-ft-assign-btn:hover{opacity:.88;}
+.planner-ft-assign-btn:disabled{opacity:.45; cursor:not-allowed;}
+.planner-ft-assign-btn-sm{padding:5px 12px; font-size:11.5px;}
+
+/* Reuses the Find Transporter result card's look (name/sub/tags) for
+   consistency — just a static summary here, not a pick from a list, so the
+   pointer cursor + hover highlight are cancelled. */
+.planner-selected-truck-card{margin-top:16px; cursor:default;}
+.planner-selected-truck-card:hover{border-color:var(--outline-variant);}
+.planner-table{table-layout:fixed;}
+.planner-table th, .planner-table td{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.planner-row{cursor:pointer;}
+.planner-row:hover{background:var(--surface-alt);}
+.planner-row-selected, .planner-row-selected:hover{background:var(--primary-container); box-shadow:inset 0 0 0 2px var(--primary);}
+.planner-ltl-col{text-align:center;}
+.planner-ltl-toggle{display:inline-flex; align-items:center; gap:6px; cursor:pointer; user-select:none;}
+.planner-ltl-toggle input{position:absolute; opacity:0; width:0; height:0;}
+.planner-ltl-switch{position:relative; width:26px; height:15px; border-radius:999px; background:#c7ccd4; transition:background .15s; flex-shrink:0;}
+.planner-ltl-switch::before{content:''; position:absolute; top:2px; left:2px; width:11px; height:11px; border-radius:50%; background:#fff; transition:transform .15s; box-shadow:0 1px 2px rgba(0,0,0,.3);}
+.planner-ltl-toggle input:checked + .planner-ltl-switch{background:var(--primary);}
+.planner-ltl-toggle input:checked + .planner-ltl-switch::before{transform:translateX(11px);}
+.planner-ltl-check{width:15px; height:15px; accent-color:var(--primary); cursor:pointer;}
+.planner-ltl-check:disabled{opacity:.35; cursor:not-allowed;}
+
+@media (max-width:720px) {
+  .planner-page{height:auto; min-height:0; margin-bottom:0;}
+  .planner-shell{flex:none; flex-direction:column;}
+  .planner-side-panel{width:auto !important;}
+  .planner-map-panel{flex:none; height:320px;}
+  .planner-orders-panel{flex:none; height:480px;}
+}
+
+/* ---------- Control Tower ---------- */
+.ct-live{
+  display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--success);
+  font-family:ui-monospace, monospace;
+}
+.ct-live-dot{width:7px; height:7px; border-radius:50%; background:var(--success); animation:ctLivePulse 2s ease-in-out infinite;}
+@keyframes ctLivePulse{0%,100%{opacity:1;} 50%{opacity:.35;}}
+@media (prefers-reduced-motion: reduce){ .ct-live-dot{animation:none;} }
+
+/* .ct-page sits INSIDE .content's normal padding now (no more full-bleed
+   negative-margin trick) — matching the reference, where the top bar,
+   truck sidebar, map, detail panel and Order Control bar are each their
+   own separate rounded card floating on the page's muted background
+   (var(--surface-alt), the same tone .content already sits on elsewhere
+   in this app), with a visible gap between every one of them rather than
+   a shared border/seam. display:flex + gap is what produces those gaps;
+   each piece below gets the same background/border/radius/shadow as this
+   app's own .card class instead of touching borders. */
+.ct-page{display:flex; flex-direction:column; gap:16px;}
+.ct-topbar{
+  display:flex; align-items:center; gap:16px; flex-wrap:wrap; padding:10px 16px;
+  background:var(--surface); border:1px solid var(--outline-variant); border-radius:var(--r-lg); box-shadow:var(--shadow-1);
+}
+.ct-topbar-search{
+  flex:0 1 280px; min-width:160px; display:flex; align-items:center; gap:8px;
+  padding:7px 12px; border:1px solid var(--outline-variant); border-radius:8px; background:var(--surface-container-low);
+}
+.ct-topbar-search svg{width:14px; height:14px; flex-shrink:0; color:var(--on-surface-variant);}
+.ct-topbar-search input{flex:1 1 auto; min-width:0; border:none; background:none; font-size:12px; color:var(--on-surface);}
+.ct-topbar-search input:focus{outline:none;}
+.ct-topbar-legend{flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+.ct-topbar-legend-item{
+  display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px;
+  border:1px solid var(--outline-variant); background:var(--surface-container-low); cursor:pointer; font-size:11px; color:var(--on-surface-variant);
+}
+.ct-topbar-legend-item--active{border-color:var(--primary); background:var(--primary-container); color:var(--on-primary-container);}
+.ct-topbar-legend-dot{width:8px; height:8px; border-radius:50%; flex-shrink:0;}
+.ct-topbar-legend-count{font-weight:700; font-variant-numeric:tabular-nums;}
+.ct-topbar-clock{flex:0 0 auto; display:flex; align-items:center; gap:6px; font-size:11px; font-variant-numeric:tabular-nums; color:var(--on-surface-variant);}
+.ct-topbar-clock svg{width:13px; height:13px;}
+
+/* Allocate: Truck Options picked at order creation, listed above Stops. */
+.planner-truck-options{margin-bottom:18px;}
+.planner-truck-options-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px;}
+.planner-truck-options-head .planner-stops-label{margin-bottom:0;}
+.planner-truck-options-count{font-size:11px; font-weight:700; color:var(--on-surface-variant); font-variant-numeric:tabular-nums;}
+/* Own class, not .hint — .hint isn't styled as a standalone block here, so
+   it rendered as plain 14px body text next to the small uppercase labels. */
+.planner-truck-options-empty{padding:12px 14px; border:1px dashed var(--outline); border-radius:var(--r-md); background:var(--surface-alt); color:var(--on-surface-variant); font-size:12px; line-height:1.4; text-align:center;}
+.planner-truck-option{display:flex; align-items:center; gap:10px; padding:8px 10px; margin-bottom:6px; border:1px solid var(--outline-variant); border-radius:var(--r-md); background:var(--surface);}
+.planner-truck-option-num{flex-shrink:0; width:20px; height:20px; border-radius:50%; background:var(--primary-container); color:var(--primary); font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;}
+.planner-truck-option-icon{flex-shrink:0; width:26px; height:26px; color:var(--on-surface-variant);}
+.planner-truck-option-label{flex:1; min-width:0; font-size:13px; font-weight:600; color:var(--on-surface); overflow-wrap:break-word;}
+.planner-truck-option-size{flex-shrink:0; font-size:10.5px; font-weight:700; color:#fff; padding:2px 8px; border-radius:999px; white-space:nowrap;}
+
+/* Allocate as separated cards (prototype ceeefae): top bar, then the map
+   with the detail panel beside it, then the order list as its own card. */
+.planner-page.planner-page--cards{margin:0; padding:0; display:flex; flex-direction:column; gap:16px; height:calc(100vh - 100px); min-height:560px; margin-bottom:-48px; box-sizing:border-box;}
+.planner-page--cards > .ct-topbar{flex:0 0 auto;}
+.planner-shell{flex:1; min-height:0; display:flex; flex-direction:row; gap:16px;}
+.planner-page--cards .planner-side-panel{order:1; border-width:1px; border-radius:var(--r-lg);}
+.planner-page--cards .planner-map-panel{flex:1; min-width:0; min-height:0; overflow:hidden; position:relative; z-index:0; padding:0; border-radius:var(--r-lg);}
+.planner-page--cards .planner-orders-panel{flex:0 0 auto; height:274px; min-height:0; display:flex; flex-direction:column; padding:0; overflow:hidden; border-top:none; border-radius:var(--r-lg);}
+.planner-orders-scroll .planner-row.planner-row-selected,
+.planner-orders-scroll .planner-row.planner-row-selected:hover{background:var(--primary-container); box-shadow:none;}
+@media (max-width:1100px){
+  .planner-page.planner-page--cards{height:auto; min-height:0; margin-bottom:0;}
+  .planner-shell{flex:none; flex-direction:column;}
+  .planner-page--cards .planner-side-panel{width:auto !important;}
+}
+.ct-truck-sidebar-head{flex:0 0 auto; padding:12px 14px 8px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--on-surface-variant); border-bottom:1px solid var(--outline-variant);}

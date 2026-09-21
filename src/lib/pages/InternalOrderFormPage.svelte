@@ -170,6 +170,7 @@
 						agreementId: agreement?.agreementNumber ?? '',
 						transporterName,
 						fleetDescription: sp.fleetDescription,
+						truckOptions: [...(sp.truckOptions ?? [])],
 						loadingPoints: [...sp.loadingPoints],
 						unloadingPoints: [...sp.unloadingPoints],
 						items,

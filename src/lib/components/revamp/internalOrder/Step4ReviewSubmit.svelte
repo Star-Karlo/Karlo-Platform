@@ -5,6 +5,7 @@
 	import { formatDateTimeLabel } from '$lib/revamp/date.js';
 	import { pricingTypeLabel } from '$lib/revamp/pricingType.js';
 	import { additionalNeedsLabel } from '$lib/revamp/additionalNeeds.js';
+	import { describeTruckOption } from '$lib/revamp/truckOptions.js';
 	import { estimatedOrderValue } from '$lib/revamp/orderPricing.js';
 	import { ORDER_SAFETY_OPTIONS } from '$lib/revamp/orderSafety.js';
 	import FieldSelect from '../FieldSelect.svelte';
@@ -175,6 +176,15 @@
 				<input type="text" readonly value={lengthShipment(sp)} />
 			</div>
 		</div>
+
+		{#if sp.truckOptions?.length}
+			<div class="review-chip-group">
+				<span class="review-chip-label">Truck Options</span>
+				{#each sp.truckOptions as key (key)}
+					<span class="review-chip">{describeTruckOption(key).label}</span>
+				{/each}
+			</div>
+		{/if}
 
 		{#if sp.additionalNeeds.length}
 			<div class="review-chip-group">

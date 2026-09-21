@@ -22,6 +22,7 @@
 	import { goto } from '$app/navigation';
 	import {
 		ChevronDown,
+		Clock,
 		Copy,
 		MapPin,
 		Phone,
@@ -46,6 +47,7 @@
 	import { shipmentTypeLabel } from '$lib/revamp/shipmentType.js';
 	import { kontrakStatus } from '$lib/revamp/kontrakStatus';
 	import { statusLabel, statusBadgeClass } from '$lib/revamp/spotOrderStatus.js';
+	import { MAX_TRUCK_OPTIONS, describeTruckOption, truckOptionKeysOf } from '$lib/revamp/truckOptions.js';
 
 	let { basePath, title: _title = 'Planner' }: { basePath: string; title?: string } = $props();
 
@@ -169,10 +171,25 @@
 		await Promise.all([loadOrders(), loadPositions()]);
 		loading = false;
 	}
+	// Top bar clock — one shared 1 s tick.
+	let nowMs = $state(Date.now());
+	const pad2 = (n: number) => String(n).padStart(2, '0');
+	const topbarClockLabel = $derived.by(() => {
+		const d = new Date(nowMs);
+		return `${pad2(d.getHours())}.${pad2(d.getMinutes())}.${pad2(d.getSeconds())}`;
+	});
+	// Top bar search — narrows the same trucks the status pills do (Fleet
+	// Catalog rows and map markers both read filteredTrucks), by plate or driver.
+	let truckSearchQuery = $state('');
+
 	onMount(() => {
 		void loadAll();
 		const timer = setInterval(loadPositions, 60_000);
-		return () => clearInterval(timer);
+		const clock = setInterval(() => (nowMs = Date.now()), 1000);
+		return () => {
+			clearInterval(timer);
+			clearInterval(clock);
+		};
 	});
 
 	// ---------------------------------------------------------------------
@@ -367,13 +384,14 @@
 	let viewedTruckId = $state<string | null>(null);
 	let sidePanelMinimized = $state(false);
 	let stopsAccordionOpen = $state(true);
-	let truckLegendOpen = $state(false);
 	let truckStatusFilter = $state<'all' | TruckStatus>('all');
 
 	const selectedOrder = $derived(openOrders.find((o) => o.key === selectedOrderKey) ?? null);
 	const selectedTruck = $derived(vehicles.find((t) => t.id === selectedTruckId) ?? null);
 	const viewedTruck = $derived(vehicles.find((t) => t.id === viewedTruckId) ?? null);
 	const stops = $derived(stopsForOrder(selectedOrder));
+	/** Truck Options picked when the order was created (max 5), shown above Stops. */
+	const selectedTruckOptions = $derived(truckOptionKeysOf(selectedOrder?.raw).map(describeTruckOption));
 
 	// LTL — several orders on one truck
 	let ltlSelectMode = $state(false);
@@ -562,8 +580,10 @@
 		return d == null ? null : Math.round((d / AVERAGE_TRUCK_SPEED_KMH) * 60);
 	}
 	function equipmentMatch(t: Vehicle) {
+		const mine = typeLabel(t).toLowerCase();
+		if (selectedTruckOptions.some((o) => mine.includes(o.label.toLowerCase()) || o.label.toLowerCase().includes(mine))) return true;
 		const want = (selectedOrder?.truckTypeName ?? '').toLowerCase();
-		return !!want && typeLabel(t).toLowerCase().includes(want);
+		return !!want && mine.includes(want);
 	}
 	const transporterCandidates = $derived.by(() => {
 		let list = vehicles.filter((t) => truckStatusOf(t) === 'available');
@@ -596,8 +616,7 @@
 	// ---------------------------------------------------------------------
 	const FLEET_STATUS_RANK: Record<TruckStatus, number> = { available: 0, planned: 1, onduty: 2, unpaired: 3, unavailable: 4 };
 	const fleetCatalogTrucks = $derived.by(() => {
-		let list = vehicles;
-		if (truckStatusFilter !== 'all') list = list.filter((t) => truckStatusOf(t) === truckStatusFilter);
+		let list = filteredTrucks;
 		if (findTransporterOpen) {
 			if (transporterTypeFilter.length) list = list.filter((t) => transporterTypeFilter.includes(typeLabel(t)));
 			list = list.filter((t) => {
@@ -673,9 +692,12 @@
 	// Map
 	// ---------------------------------------------------------------------
 	let flyTo = $state<[number, number] | null>(null);
-	const filteredTrucks = $derived(
-		truckStatusFilter === 'all' ? vehicles : vehicles.filter((t) => truckStatusOf(t) === truckStatusFilter)
-	);
+	const filteredTrucks = $derived.by(() => {
+		let list = truckStatusFilter === 'all' ? vehicles : vehicles.filter((t) => truckStatusOf(t) === truckStatusFilter);
+		const q = truckSearchQuery.trim().toLowerCase();
+		if (q) list = list.filter((t) => t.licensePlate.toLowerCase().includes(q) || (t.driver?.fullName ?? '').toLowerCase().includes(q));
+		return list;
+	});
 	const markers = $derived.by<MapMarker[]>(() => {
 		const out: MapMarker[] = [];
 		for (const t of filteredTrucks) {
@@ -737,7 +759,29 @@
 	}
 </script>
 
-<div class="planner-page">
+<div class="planner-page planner-page--cards">
+	<div class="ct-topbar">
+		<div class="ct-topbar-search">
+			<Search size={14} />
+			<input type="text" bind:value={truckSearchQuery} placeholder="Cari nomor polisi atau pengemudi" />
+		</div>
+		<div class="ct-topbar-legend">
+			<button type="button" class="ct-topbar-legend-item" class:ct-topbar-legend-item--active={truckStatusFilter === 'all'} onclick={() => (truckStatusFilter = 'all')}>
+				<span class="ct-topbar-legend-label">Semua Status</span>
+				<span class="ct-topbar-legend-count">{vehicles.length}</span>
+			</button>
+			{#each TRUCK_STATUS_LIST as s (s.key)}
+				<button type="button" class="ct-topbar-legend-item" class:ct-topbar-legend-item--active={truckStatusFilter === s.key} onclick={() => (truckStatusFilter = truckStatusFilter === s.key ? 'all' : s.key)}>
+					<span class="ct-topbar-legend-dot" style="background:{s.color}"></span>
+					<span class="ct-topbar-legend-label">{s.label}</span>
+					<span class="ct-topbar-legend-count">{truckStatusCounts[s.key]}</span>
+				</button>
+			{/each}
+		</div>
+		<div class="ct-topbar-clock"><Clock size={13} /> {topbarClockLabel}</div>
+	</div>
+
+	<div class="planner-shell">
 	{#if selectedOrder || viewedTruck || ltlPanelActive}
 		<div class="card planner-side-panel" class:planner-side-panel-minimized={sidePanelMinimized} style="width:{sidePanelMinimized ? 56 : 340}px">
 			<button type="button" class="planner-side-minimize" title={sidePanelMinimized ? 'Perbesar' : 'Perkecil'} onclick={() => (sidePanelMinimized = !sidePanelMinimized)}>
@@ -830,6 +874,21 @@
 						<div class="planner-muatan-item"><div class="planner-muatan-label">Tonase</div><div class="planner-muatan-value">{selectedOrder.totalTonase}</div></div>
 						<div class="planner-muatan-item"><div class="planner-muatan-label">Qty</div><div class="planner-muatan-value">{selectedOrder.totalQty}</div></div>
 						<div class="planner-muatan-item"><div class="planner-muatan-label">Volume</div><div class="planner-muatan-value">{selectedOrder.totalVolume}</div></div>
+					</div>
+					<div class="planner-truck-options">
+						<div class="planner-truck-options-head">
+							<span class="planner-stops-label">Truck Options</span>
+							<span class="planner-truck-options-count">{selectedTruckOptions.length}/{MAX_TRUCK_OPTIONS}</span>
+						</div>
+						{#each selectedTruckOptions as opt, i (opt.key)}
+							<div class="planner-truck-option">
+								<span class="planner-truck-option-num">{i + 1}</span>
+								<span class="planner-truck-option-icon"><TruckIcon size={20} /></span>
+								<span class="planner-truck-option-label">{opt.label}</span>
+								{#if opt.size}<span class="planner-truck-option-size" style="background:{opt.color}">{opt.size}</span>{/if}
+							</div>
+						{/each}
+						{#if !selectedTruckOptions.length}<div class="planner-truck-options-empty">Belum ada pilihan truck pada order ini.</div>{/if}
 					</div>
 					<button type="button" class="planner-stops-label planner-stops-toggle" onclick={() => (stopsAccordionOpen = !stopsAccordionOpen)}>
 						Stops <span style="display:inline-flex; transform:{stopsAccordionOpen ? 'rotate(180deg)' : 'none'}"><ChevronDown size={14} /></span>
@@ -936,173 +995,141 @@
 		</div>
 	{/if}
 
-	<div class="planner-main">
-		<div class="planner-workspace">
-			<div class="card planner-combined-panel">
-				<div class="planner-map-panel">
-					<MapView {markers} {lines} {fitKey} {flyTo} class="planner-map-canvas" />
-					<div class="planner-map-legends">
-						{#if activeTab !== 'vendor'}
-							{#if !truckLegendOpen}
-								<button type="button" class="planner-truck-legend-toggle" title="Map Legend & Icon Filter" onclick={() => (truckLegendOpen = true)}><TruckIcon size={16} /></button>
-							{:else}
-								<div class="planner-truck-legend">
-									<button type="button" class="planner-truck-legend-head" onclick={() => (truckLegendOpen = false)}>
-										<span>Map Legend &amp; Icon Filter</span><ChevronDown size={14} />
-									</button>
-									<div class="planner-truck-legend-body">
-										<label class="planner-truck-legend-option">
-											<input type="radio" name="truckStatusFilter" value="all" bind:group={truckStatusFilter} />
-											<span class="planner-truck-legend-label">Semua Status</span>
-											<span class="planner-truck-legend-count">{vehicles.length}</span>
-										</label>
-										{#each TRUCK_STATUS_LIST as s (s.key)}
-											<label class="planner-truck-legend-option">
-												<input type="radio" name="truckStatusFilter" value={s.key} bind:group={truckStatusFilter} />
-												<span class="planner-truck-legend-dot" style="background:{s.color}"></span>
-												<span class="planner-truck-legend-label">{s.label}</span>
-												<span class="planner-truck-legend-count">{truckStatusCounts[s.key]}</span>
-											</label>
-										{/each}
-										<button type="button" class="btn btn-outline btn-sm planner-truck-legend-reset" onclick={() => (truckStatusFilter = 'all')}>Reset</button>
-									</div>
-								</div>
-							{/if}
-							<div class="planner-map-legend">
-								<span><span class="planner-legend-icon planner-legend-icon--pickup"><MapPin size={16} /></span> Muat</span>
-								<span><span class="planner-legend-icon planner-legend-icon--dropoff"><MapPin size={16} /></span> Bongkar</span>
-							</div>
-						{/if}
-					</div>
-				</div>
-
-				<div class="planner-orders-panel">
-					<div class="planner-orders-head">
-						<div class="method-tabs">
-							<button class="method-tab" class:active={activeTab === 'orders'} onclick={() => (activeTab = 'orders')}>Open Orders ({openOrders.length})</button>
-							<button class="method-tab" class:active={activeTab === 'fleet'} onclick={() => (activeTab = 'fleet')}>Fleet Catalog ({fleetCatalogTrucks.length})</button>
-							<button class="method-tab" class:active={activeTab === 'vendor'} onclick={() => (activeTab = 'vendor')}>Transporter Catalog ({vendors.length})</button>
-						</div>
-					</div>
-					<div class="planner-orders-scroll">
-						{#if activeTab === 'orders'}
-							<table class="planner-table">
-								<colgroup>
-									<col style="width:9%" /><col style="width:12%" /><col style="width:13%" /><col style="width:15%" /><col style="width:26%" /><col style="width:16%" /><col style="width:9%" />
-								</colgroup>
-								<thead>
-									<tr>
-										<th class="planner-ltl-col">
-											<label class="planner-ltl-toggle" title="Aktifkan untuk memilih beberapa order sekaligus">
-												<input type="checkbox" bind:checked={ltlSelectMode} />
-												<span class="planner-ltl-switch"></span>
-												LTL
-											</label>
-										</th>
-										<th>Type Pengiriman</th><th>ID Order</th><th>Klien</th><th>Rute</th><th>Status</th><th>Kontrol</th>
-									</tr>
-								</thead>
-								<tbody>
-									{#if loading}
-										<tr><td colspan="7"><div class="empty">Memuat…</div></td></tr>
-									{:else if !openOrders.length}
-										<tr><td colspan="7"><div class="empty"><div class="eic">📦</div>Tidak ada order terbuka.</div></td></tr>
-									{/if}
-									{#each pagedOpenOrders as o (o.key)}
-										<tr class="planner-row" class:planner-row-selected={selectedOrderKey === o.key || ltlSelectedKeys.includes(o.key)} onclick={() => selectOrder(o)}>
-											<td class="planner-ltl-col">
-												<input type="checkbox" class="planner-ltl-check" disabled={!ltlSelectMode} checked={ltlSelectedKeys.includes(o.key)} onclick={(e) => toggleLtlOrder(o, e)} />
-											</td>
-											<td><span class="badge" class:badge-active={o.shipmentType === 'Multi Shipment'} class:badge-planner={o.shipmentType !== 'Multi Shipment'}>{o.shipmentType}</span></td>
-											<td><b>{o.orderId}</b></td>
-											<td>{o.shipperName}</td>
-											<td>{o.rute || '-'}</td>
-											<td><span class="badge {o.statusBadgeClass}">{o.statusLabel}</span></td>
-											<td>
-												<div class="action-cell">
-													<button class="mini-icon-btn" title="Lihat detail" onclick={(e) => viewOrder(o, e)}><Search size={14} /></button>
-													<button class="mini-icon-btn" title="Salin kode order" onclick={(e) => copyOrderCode(o, e)}><Copy size={14} /></button>
-												</div>
-											</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						{:else if activeTab === 'fleet'}
-							<table class="planner-table">
-								<thead>
-									<tr>
-										<th>No Polisi</th><th>Tipe Truck</th><th>Driver</th><th>Lokasi</th><th>Last Update GPS</th><th>Ngosong</th><th>Status</th>
-										{#if findTransporterOpen}<th>Jarak</th>{/if}
-										<th>Kontrol</th>
-									</tr>
-								</thead>
-								<tbody>
-									{#if !fleetCatalogTrucks.length}
-										<tr><td colspan={findTransporterOpen ? 9 : 8}><div class="empty"><div class="eic">🚚</div>Tidak ada truck pada status ini.</div></td></tr>
-									{/if}
-									{#each pagedFleetCatalogTrucks as t (t.id)}
-										{@const st = truckStatusOf(t)}
-										<tr class="planner-row" class:planner-row-selected={selectedTruckId === t.id} class:planner-row-disabled={st !== 'available'} onclick={() => selectTruck(t)}>
-											<td><b>{t.licensePlate}</b></td>
-											<td>{typeLabel(t)}</td>
-											<td>{t.driver?.fullName ?? '-'}</td>
-											<td>{truckLocation(t)}</td>
-											<td>{formatLastGpsUpdate(t)}</td>
-											<td>{formatNgosong(t)}</td>
-											<td>
-												<span class="planner-truck-status-badge">
-													<span class="planner-truck-legend-dot" style="background:{TRUCK_STATUS_META[st].color}"></span>
-													{TRUCK_STATUS_META[st].label}
-												</span>
-											</td>
-											{#if findTransporterOpen}<td>{truckDistanceKm(t) != null ? `${truckDistanceKm(t)} km` : '-'}</td>{/if}
-											<td>
-												<div class="action-cell" style="align-items:center;">
-													<button class="mini-icon-btn" title="Lihat detail truck" onclick={(e) => viewTruckDetail(t, e)}><TruckIcon size={14} /></button>
-													<button type="button" class="planner-ft-assign-btn planner-ft-assign-btn-sm" disabled={st !== 'available'} onclick={(e) => confirmAssign(t, e)}>Assign</button>
-												</div>
-											</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						{:else}
-							<table class="planner-table">
-								<thead>
-									<tr><th>Nama Perusahaan</th><th>PIC</th><th>Sektor</th><th>Status</th><th>Kontrol</th></tr>
-								</thead>
-								<tbody>
-									{#if !vendors.length}
-										<tr><td colspan="5"><div class="empty"><div class="eic">🤝</div>Belum ada vendor transporter terdaftar. Hubungi Customer Support Karlo untuk menambahkan.</div></td></tr>
-									{/if}
-									{#each pagedVendorCatalog as v (v.id)}
-										<tr class="planner-row" class:planner-row-disabled={v.status && v.status !== 'active'}>
-											<td><b>{v.name ?? v.companyName ?? '-'}</b></td>
-											<td>{v.profile?.picName ?? v.picName ?? '-'}</td>
-											<td>{v.profile?.industrySector ?? v.industrySector ?? '-'}</td>
-											<td><span class="badge" class:badge-active={!v.status || v.status === 'active'} class:badge-fail={v.status && v.status !== 'active'}>{!v.status || v.status === 'active' ? 'Aktif' : 'Nonaktif'}</span></td>
-											<td>
-												<div class="action-cell" style="align-items:center;">
-													<button type="button" class="planner-ft-assign-btn planner-ft-assign-btn-sm" disabled title="Penugasan ke vendor transporter dilakukan dari halaman order">Assign</button>
-												</div>
-											</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						{/if}
-					</div>
-					{#if activeTab === 'orders' && openOrders.length}
-						<div class="planner-orders-foot"><Pagination totalItems={openOrders.length} pageSize={ORDERS_PAGE_SIZE} bind:page={ordersPage} /></div>
-					{:else if activeTab === 'fleet' && fleetCatalogTrucks.length}
-						<div class="planner-orders-foot"><Pagination totalItems={fleetCatalogTrucks.length} pageSize={FLEET_PAGE_SIZE} bind:page={fleetPage} /></div>
-					{:else if activeTab === 'vendor' && vendors.length}
-						<div class="planner-orders-foot"><Pagination totalItems={vendors.length} pageSize={VENDOR_PAGE_SIZE} bind:page={vendorPage} /></div>
-					{/if}
-				</div>
+	<div class="card planner-map-panel">
+		<MapView {markers} {lines} {fitKey} {flyTo} class="planner-map-canvas" />
+		<div class="planner-map-legends">
+			<div class="planner-map-legend">
+				<span><span class="planner-legend-icon planner-legend-icon--pickup"><MapPin size={16} /></span> Muat</span>
+				<span><span class="planner-legend-icon planner-legend-icon--dropoff"><MapPin size={16} /></span> Bongkar</span>
 			</div>
 		</div>
+	</div>
+	</div>
+
+	<div class="card planner-orders-panel">
+		<div class="planner-orders-head">
+			<div class="method-tabs">
+				<button class="method-tab" class:active={activeTab === 'orders'} onclick={() => (activeTab = 'orders')}>Open Orders ({openOrders.length})</button>
+				<button class="method-tab" class:active={activeTab === 'fleet'} onclick={() => (activeTab = 'fleet')}>Fleet Catalog ({fleetCatalogTrucks.length})</button>
+				<button class="method-tab" class:active={activeTab === 'vendor'} onclick={() => (activeTab = 'vendor')}>Transporter Catalog ({vendors.length})</button>
+			</div>
+		</div>
+		<div class="planner-orders-scroll">
+			{#if activeTab === 'orders'}
+				<table class="planner-table">
+					<colgroup>
+						<col style="width:9%" /><col style="width:12%" /><col style="width:13%" /><col style="width:15%" /><col style="width:26%" /><col style="width:16%" /><col style="width:9%" />
+					</colgroup>
+					<thead>
+						<tr>
+							<th class="planner-ltl-col">
+								<label class="planner-ltl-toggle" title="Aktifkan untuk memilih beberapa order sekaligus">
+									<input type="checkbox" bind:checked={ltlSelectMode} />
+									<span class="planner-ltl-switch"></span>
+									LTL
+								</label>
+							</th>
+							<th>Type Pengiriman</th><th>ID Order</th><th>Klien</th><th>Rute</th><th>Status</th><th>Kontrol</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#if loading}
+							<tr><td colspan="7"><div class="empty">Memuat…</div></td></tr>
+						{:else if !openOrders.length}
+							<tr><td colspan="7"><div class="empty"><div class="eic">📦</div>Tidak ada order terbuka.</div></td></tr>
+						{/if}
+						{#each pagedOpenOrders as o (o.key)}
+							<tr class="planner-row" class:planner-row-selected={selectedOrderKey === o.key || ltlSelectedKeys.includes(o.key)} onclick={() => selectOrder(o)}>
+								<td class="planner-ltl-col">
+									<input type="checkbox" class="planner-ltl-check" disabled={!ltlSelectMode} checked={ltlSelectedKeys.includes(o.key)} onclick={(e) => toggleLtlOrder(o, e)} />
+								</td>
+								<td><span class="badge" class:badge-active={o.shipmentType === 'Multi Shipment'} class:badge-planner={o.shipmentType !== 'Multi Shipment'}>{o.shipmentType}</span></td>
+								<td><b>{o.orderId}</b></td>
+								<td>{o.shipperName}</td>
+								<td>{o.rute || '-'}</td>
+								<td><span class="badge {o.statusBadgeClass}">{o.statusLabel}</span></td>
+								<td>
+									<div class="action-cell">
+										<button class="mini-icon-btn" title="Lihat detail" onclick={(e) => viewOrder(o, e)}><Search size={14} /></button>
+										<button class="mini-icon-btn" title="Salin kode order" onclick={(e) => copyOrderCode(o, e)}><Copy size={14} /></button>
+									</div>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			{:else if activeTab === 'fleet'}
+				<table class="planner-table">
+					<thead>
+						<tr>
+							<th>No Polisi</th><th>Tipe Truck</th><th>Driver</th><th>Lokasi</th><th>Last Update GPS</th><th>Ngosong</th><th>Status</th>
+							{#if findTransporterOpen}<th>Jarak</th>{/if}
+							<th>Kontrol</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#if !fleetCatalogTrucks.length}
+							<tr><td colspan={findTransporterOpen ? 9 : 8}><div class="empty"><div class="eic">🚚</div>Tidak ada truck pada status ini.</div></td></tr>
+						{/if}
+						{#each pagedFleetCatalogTrucks as t (t.id)}
+							{@const st = truckStatusOf(t)}
+							<tr class="planner-row" class:planner-row-selected={selectedTruckId === t.id} class:planner-row-disabled={st !== 'available'} onclick={() => selectTruck(t)}>
+								<td><b>{t.licensePlate}</b></td>
+								<td>{typeLabel(t)}</td>
+								<td>{t.driver?.fullName ?? '-'}</td>
+								<td>{truckLocation(t)}</td>
+								<td>{formatLastGpsUpdate(t)}</td>
+								<td>{formatNgosong(t)}</td>
+								<td>
+									<span class="planner-truck-status-badge">
+										<span class="planner-truck-legend-dot" style="background:{TRUCK_STATUS_META[st].color}"></span>
+										{TRUCK_STATUS_META[st].label}
+									</span>
+								</td>
+								{#if findTransporterOpen}<td>{truckDistanceKm(t) != null ? `${truckDistanceKm(t)} km` : '-'}</td>{/if}
+								<td>
+									<div class="action-cell" style="align-items:center;">
+										<button class="mini-icon-btn" title="Lihat detail truck" onclick={(e) => viewTruckDetail(t, e)}><TruckIcon size={14} /></button>
+										<button type="button" class="planner-ft-assign-btn planner-ft-assign-btn-sm" disabled={st !== 'available'} onclick={(e) => confirmAssign(t, e)}>Assign</button>
+									</div>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			{:else}
+				<table class="planner-table">
+					<thead>
+						<tr><th>Nama Perusahaan</th><th>PIC</th><th>Sektor</th><th>Status</th><th>Kontrol</th></tr>
+					</thead>
+					<tbody>
+						{#if !vendors.length}
+							<tr><td colspan="5"><div class="empty"><div class="eic">🤝</div>Belum ada vendor transporter terdaftar. Hubungi Customer Support Karlo untuk menambahkan.</div></td></tr>
+						{/if}
+						{#each pagedVendorCatalog as v (v.id)}
+							<tr class="planner-row" class:planner-row-disabled={v.status && v.status !== 'active'}>
+								<td><b>{v.name ?? v.companyName ?? '-'}</b></td>
+								<td>{v.profile?.picName ?? v.picName ?? '-'}</td>
+								<td>{v.profile?.industrySector ?? v.industrySector ?? '-'}</td>
+								<td><span class="badge" class:badge-active={!v.status || v.status === 'active'} class:badge-fail={v.status && v.status !== 'active'}>{!v.status || v.status === 'active' ? 'Aktif' : 'Nonaktif'}</span></td>
+								<td>
+									<div class="action-cell" style="align-items:center;">
+										<button type="button" class="planner-ft-assign-btn planner-ft-assign-btn-sm" disabled title="Penugasan ke vendor transporter dilakukan dari halaman order">Assign</button>
+									</div>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			{/if}
+		</div>
+		{#if activeTab === 'orders' && openOrders.length}
+			<div class="planner-orders-foot"><Pagination totalItems={openOrders.length} pageSize={ORDERS_PAGE_SIZE} bind:page={ordersPage} /></div>
+		{:else if activeTab === 'fleet' && fleetCatalogTrucks.length}
+			<div class="planner-orders-foot"><Pagination totalItems={fleetCatalogTrucks.length} pageSize={FLEET_PAGE_SIZE} bind:page={fleetPage} /></div>
+		{:else if activeTab === 'vendor' && vendors.length}
+			<div class="planner-orders-foot"><Pagination totalItems={vendors.length} pageSize={VENDOR_PAGE_SIZE} bind:page={vendorPage} /></div>
+		{/if}
 	</div>
 </div>
 

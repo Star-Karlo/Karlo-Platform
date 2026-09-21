@@ -29,6 +29,7 @@
 	import FleetDriverInfoCard from '$lib/components/revamp/FleetDriverInfoCard.svelte';
 	import { initials } from '$lib/revamp/initials.js';
 	import { additionalNeedsLabel } from '$lib/revamp/additionalNeeds.js';
+	import { describeTruckOption } from '$lib/revamp/truckOptions.js';
 	import { orderSafetyLabel } from '$lib/revamp/orderSafety.js';
 	import { computeUangSangu, computeOrderKontrakRecon, reconStatusLabel } from '$lib/revamp/uangSangu.js';
 	import { statusLabel, statusBadgeClass, atOrPassed, STATUS_SEQUENCE } from '$lib/revamp/spotOrderStatus.js';
@@ -1363,6 +1364,14 @@
 						<span class="chev"><span class="icon-wrap"><ChevronDown size={14} /></span></span>
 					</div>
 					<div class="detail-section-body" style:display={sectionOpen.permintaan ? undefined : 'none'}>
+						{#if order.detail?.truckOptions?.length}
+							<div class="review-chip-group">
+								<span class="review-chip-label">Truck Options</span>
+								{#each order.detail.truckOptions as key (key)}
+									<span class="review-chip">{describeTruckOption(key).label}</span>
+								{/each}
+							</div>
+						{/if}
 						{#if order.additionalNeeds?.length}
 							<div class="review-chip-group">
 								<span class="review-chip-label">Additional Needs</span>

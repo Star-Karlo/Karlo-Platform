@@ -17,7 +17,7 @@
 	 */
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { Search, Truck, MapPin, X, Fuel, Gauge, Radio, Mountain, Battery, Activity, Bell, ZoomIn } from 'lucide-svelte';
+	import { Search, Truck, MapPin, X, Fuel, Gauge, Radio, Mountain, Battery, Activity, Bell, ZoomIn, Clock } from 'lucide-svelte';
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { orderStore, orderActions } from '$lib/stores/orders';
@@ -84,6 +84,14 @@
 	let liveError = $state('');
 	let liveAt = $state<Date | null>(null);
 	let liveTimer: ReturnType<typeof setInterval> | undefined;
+	// Top bar clock (prototype 385e41e) — one shared 1 s tick.
+	let clockTimer: ReturnType<typeof setInterval> | undefined;
+	let nowMs = $state(Date.now());
+	const pad2 = (n: number) => String(n).padStart(2, '0');
+	let clockLabel = $derived.by(() => {
+		const d = new Date(nowMs);
+		return `${pad2(d.getHours())}.${pad2(d.getMinutes())}.${pad2(d.getSeconds())}`;
+	});
 
 	async function refreshLive() {
 		try {
@@ -103,8 +111,12 @@
 		void loadClients();
 		void refreshLive();
 		liveTimer = setInterval(() => void refreshLive(), LIVE_POLL_MS);
+		clockTimer = setInterval(() => (nowMs = Date.now()), 1000);
 	});
-	onDestroy(() => clearInterval(liveTimer));
+	onDestroy(() => {
+		clearInterval(liveTimer);
+		clearInterval(clockTimer);
+	});
 
 	let lastActing = $state<string | null>(null);
 	$effect(() => {
@@ -376,11 +388,13 @@
 		<span class="hint" style="margin-left:auto;">
 			{#if liveAt}GPS dari FMS · {liveAt.toLocaleTimeString('id-ID')}{:else if liveError}{liveError}{/if}
 		</span>
+		<span class="ct-topbar-clock"><Clock size={13} /> {clockLabel}</span>
 	</div>
 
 	<div class="ct2-main">
 		<!-- Vehicle list -->
 		<aside class="ct2-list">
+			<div class="ct-truck-sidebar-head">Armada ({listed.length})</div>
 			{#if needsClient}
 				<div class="ct2-empty">Pilih klien untuk melihat armadanya.</div>
 			{:else if live.length === 0}

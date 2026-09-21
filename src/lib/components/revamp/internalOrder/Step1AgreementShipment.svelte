@@ -5,6 +5,9 @@
 	import WarehouseFormModal from '../WarehouseFormModal.svelte';
 	import AgreementPickerModal from '../AgreementPickerModal.svelte';
 	import WarehouseSearchField from '../WarehouseSearchField.svelte';
+	import TruckTypeMatrixRevamp from '../TruckTypeMatrixRevamp.svelte';
+	import { MAX_TRUCK_OPTIONS, describeTruckOption } from '$lib/revamp/truckOptions.js';
+	import { toast } from '$lib/stores/ui';
 	import type { Customer, Warehouse, Wizard } from './wizardTypes';
 
 	let {
@@ -20,6 +23,20 @@
 	} = $props();
 
 	let customerOptions = $derived(customers.map((c) => ({ value: c.name, label: c.name })));
+
+	/* Truck Options — the matrix is collapsed behind a button; the chips
+	   above it are the compact summary. */
+	let truckMatrixOpen = $state<Record<number, boolean>>({});
+	function toggleTruckMatrix(i: number) {
+		truckMatrixOpen = { ...truckMatrixOpen, [i]: !truckMatrixOpen[i] };
+	}
+	function removeTruckOption(i: number, key: string) {
+		const sp = wizard.shipments[i];
+		sp.truckOptions = (sp.truckOptions ?? []).filter((k) => k !== key);
+	}
+	function onTruckOptionLimit() {
+		toast(`Maksimal ${MAX_TRUCK_OPTIONS} Truck Options per order`);
+	}
 
 	/* Changing the customer invalidates any agreement already picked for a
 	   different customer. */
@@ -223,6 +240,29 @@
 						onclick={() => addUnloadingPoint(i)}>+ Tambah Titik Bongkar</button
 					>
 				</div>
+			</div>
+
+			<div class="field">
+				<label for="truck-options-{i}">Truck Options <span class="hint" style="font-weight:400;">(maks. {MAX_TRUCK_OPTIONS})</span></label>
+				<div class="hint" style="margin-bottom:8px;">Pilih hingga {MAX_TRUCK_OPTIONS} jenis truck yang bisa dipakai untuk order ini — jadi acuan planner saat menugaskan truck.</div>
+				{#if sp.truckOptions?.length}
+					<div class="review-chip-group" style="margin-bottom:10px;">
+						{#each sp.truckOptions as key (key)}
+							<span class="review-chip" style="display:inline-flex; align-items:center; gap:6px;">
+								{describeTruckOption(key).label}
+								<button type="button" title="Hapus" style="border:none; background:none; cursor:pointer; padding:0; line-height:1; color:var(--on-surface-variant);" onclick={() => removeTruckOption(i, key)}>×</button>
+							</span>
+						{/each}
+					</div>
+				{/if}
+				<button id="truck-options-{i}" type="button" class="btn btn-outline btn-sm" onclick={() => toggleTruckMatrix(i)}>
+					{truckMatrixOpen[i] ? 'Tutup Pilihan Truck' : '+ Pilih Jenis Truck'} ({sp.truckOptions?.length ?? 0}/{MAX_TRUCK_OPTIONS})
+				</button>
+				{#if truckMatrixOpen[i]}
+					<div style="margin-top:10px;">
+						<TruckTypeMatrixRevamp bind:value={sp.truckOptions} max={MAX_TRUCK_OPTIONS} onLimitExceeded={onTruckOptionLimit} />
+					</div>
+				{/if}
 			</div>
 
 			<div class="field" style="margin-bottom:0;">
