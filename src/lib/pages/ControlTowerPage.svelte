@@ -17,7 +17,16 @@
 	 */
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { Search, Truck, MapPin, X, Fuel, Gauge, Radio, Mountain, Battery, Activity, Bell, ZoomIn, Clock } from 'lucide-svelte';
+	import { Search, Truck, MapPin, X, Fuel, Gauge, Radio, Mountain, Battery, Activity, Bell, ZoomIn, Clock, ChevronRight, Filter, Download, FileText, Copy, AlertCircle, Scale } from 'lucide-svelte';
+	import { toast } from '$lib/stores/ui';
+	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
+	import { kontrakStatus } from '$lib/revamp/kontrakStatus';
+	import { statusLabel, statusBadgeClass } from '$lib/revamp/spotOrderStatus.js';
+	import { shipmentTypeLabel } from '$lib/revamp/shipmentType.js';
+	import { computeUangSangu, computePostTripReconciliation } from '$lib/revamp/uangSangu.js';
+	import { loadTripAllowance, tripAllowanceDefaults, type TripAllowanceSettings } from '$lib/revamp/tripAllowanceSettings';
+	import { copyText } from '$lib/revamp/clipboard.js';
+	import { formatTimestampLabel } from '$lib/revamp/date.js';
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { orderStore, orderActions } from '$lib/stores/orders';
@@ -170,24 +179,348 @@
 	}
 
 	// ------------------------------------------------------------------------
-	// Orders, by category — the order book at the bottom.
+	// Order Control — the bottom panel. Same eight categories as the
+	// prototype (ControlTowerView.vue), read off the console's own status
+	// mapping (kontrakStatus → the prototype's status keys) so a truck shown
+	// here as Planned is the one coloured Planned on the map.
 	// ------------------------------------------------------------------------
-	const CATEGORIES: { key: string; label: string; statuses: string[]; kinds?: string[] }[] = [
-		{ key: 'planned', label: 'Order Planned', statuses: ['approved', 'readyToPlan'] },
-		{ key: 'single', label: 'Order Single Shipment', statuses: ['assigned', 'inTransit'], kinds: ['standard'] },
-		{ key: 'threepl', label: 'Order 3PL', statuses: ['assigned', 'inTransit'], kinds: ['threepl'] },
-		{ key: 'empty', label: 'Empty Order', statuses: ['assigned', 'inTransit'], kinds: ['empty'] },
-		{ key: 'delivered', label: 'Verifikasi POD', statuses: ['delivered'] },
-		{ key: 'done', label: 'Selesai', statuses: ['completed'] }
-	];
-	let activeCategory = $state('single');
+	const PLANNED_STATUSES = new Set(['penugasan_pengemudi', 'pengemudi_ditugaskan', 'pengemudi_menerima_order']);
+	const ONDUTY_STATUSES = new Set([
+		'menuju_lokasi_muat', 'tiba_lokasi_muat', 'proses_muat_barang', 'verifikasi_pod_muat', 'pod_muat_terverifikasi',
+		'menuju_lokasi_bongkar', 'tiba_lokasi_bongkar', 'proses_bongkar_muatan', 'verifikasi_pod_bongkar',
+		'pod_bongkar_terverifikasi', 'menunggu_konfirmasi_pengiriman', 'pengiriman_terkonfirmasi'
+	]);
+	let tripAllowance = $state<TripAllowanceSettings>(tripAllowanceDefaults());
+	onMount(() => {
+		loadTripAllowance().then((r) => (tripAllowance = r.settings)).catch(() => {});
+	});
+
+	type Shipment = {
+		key: string;
+		raw: any;
+		status: string;
+		shipmentType: string;
+		orderId: string;
+		shipperName: string;
+		muatKota: string;
+		bongkarKota: string;
+		plate: string;
+		driver: string;
+		statusLabel: string;
+		statusBadgeClass: string;
+		muatan: string;
+		weightKg: number | null;
+		pickupAt: Date | null;
+		sanguFinal: boolean;
+		reconPending: boolean;
+	};
 	let allOrders = $derived($orderStore.orders ?? []);
-	function inCategory(o: any, c: (typeof CATEGORIES)[number]): boolean {
-		return c.statuses.includes(o.statusCode) && (!c.kinds || c.kinds.includes(o.orderKind ?? 'standard'));
+	/** Every assigned order, in the prototype's row shape. */
+	let activeShipments = $derived.by<Shipment[]>(() =>
+		allOrders
+			.filter((o) => o.truckId && !['draft', 'submitted', 'cancelled', 'rejected', 'completed'].includes(o.statusCode ?? ''))
+			.map((o: any) => {
+				const d = o.detail ?? {};
+				const status = kontrakStatus(o);
+				const withStatus = { ...o, status };
+				let reconPending = false;
+				try {
+					const us = computeUangSangu(withStatus, tripAllowance);
+					const recon = computePostTripReconciliation(withStatus, tripAllowance, us.uangMakan.value);
+					reconPending = !!recon && recon.status === 'belum_diproses';
+				} catch {
+					reconPending = false;
+				}
+				const loadingIds: string[] = d.loadingPoints ?? (o.originWarehouseId ? [o.originWarehouseId] : []);
+				const unloadingIds: string[] = d.unloadingPoints ?? (o.destinationWarehouseId ? [o.destinationWarehouseId] : []);
+				return {
+					key: o.id,
+					raw: o,
+					status,
+					shipmentType: shipmentTypeLabel({ detail: d, loadingPoints: loadingIds, unloadingPoints: unloadingIds }),
+					orderId: o.orderNumber ?? o.id,
+					shipperName: o.shipperCompanyName ?? d.shipperName ?? klien(o),
+					muatKota: warehouse(loadingIds[0])?.city || o.originWarehouseName || '-',
+					bongkarKota: warehouse(unloadingIds[unloadingIds.length - 1])?.city || o.destinationWarehouseName || '-',
+					plate: o.truckPoliceNumber || liveFor(o)?.license_plate || '-',
+					driver: o.driverName || liveFor(o)?.driver?.name || '-',
+					statusLabel: statusLabel(status),
+					statusBadgeClass: statusBadgeClass(status),
+					muatan: d.muatan ?? o.cargoTypeName ?? '-',
+					weightKg: o.weightKg != null ? Number(o.weightKg) : d.totalTonnage != null ? Number(d.totalTonnage) : null,
+					pickupAt: o.pickupAt ? new Date(o.pickupAt) : null,
+					sanguFinal: !!d.uangSanguFinalized,
+					reconPending
+				};
+			})
+	);
+	const KPI_CARDS = [
+		{ key: 'planned', label: 'Order Planned' },
+		{ key: 'onduty', label: 'Order Single Shipment' },
+		{ key: 'ltl', label: 'Order LTL' },
+		{ key: 'multishipment', label: 'Order Multishipment' },
+		{ key: 'podMuat', label: 'Verifikasi POD Muat' },
+		{ key: 'podBongkar', label: 'Verifikasi POD Bongkar' },
+		{ key: 'sangu', label: 'Finalisasi Uang Sangu' },
+		{ key: 'recon', label: 'Finalisasi Rekonsiliasi' }
+	] as const;
+	type CategoryKey = (typeof KPI_CARDS)[number]['key'];
+	let categorized = $derived.by<Record<CategoryKey, Shipment[]>>(() => {
+		const list = activeShipments;
+		return {
+			planned: list.filter((s) => PLANNED_STATUSES.has(s.status)),
+			onduty: list.filter((s) => ONDUTY_STATUSES.has(s.status) && s.shipmentType === 'Single Shipment'),
+			ltl: list.filter((s) => !!s.raw.detail?.isLtl),
+			multishipment: list.filter((s) => s.shipmentType === 'Multi Shipment'),
+			podMuat: list.filter((s) => s.status === 'verifikasi_pod_muat'),
+			podBongkar: list.filter((s) => s.status === 'verifikasi_pod_bongkar'),
+			sangu: list.filter((s) => !s.sanguFinal),
+			recon: list.filter((s) => s.reconPending)
+		};
+	});
+	let ltlGroupCount = $derived(new Set(categorized.ltl.map((s) => s.raw.detail?.ltlGroupId).filter(Boolean)).size);
+	let kpiCards = $derived(KPI_CARDS.map((c) => ({ ...c, count: c.key === 'ltl' ? ltlGroupCount : categorized[c.key].length })));
+	let activeCategory = $state<CategoryKey | null>('onduty');
+	function selectCategory(key: CategoryKey) {
+		activeCategory = activeCategory === key ? null : key;
+		selectedOrderId = '';
 	}
-	let counts = $derived(Object.fromEntries(CATEGORIES.map((c) => [c.key, allOrders.filter((o) => inCategory(o, c)).length])));
-	let category = $derived(CATEGORIES.find((c) => c.key === activeCategory));
-	let categoryOrders = $derived(category ? allOrders.filter((o) => inCategory(o, category)) : []);
+	let activeCategoryOrders = $derived(activeCategory ? categorized[activeCategory] : []);
+	/** What the map draws: the open tab's orders (unfiltered, as in the prototype). */
+	let categoryOrders = $derived(activeCategoryOrders.map((s) => s.raw));
+
+	// --- Advance Search (Filter) — narrows the open tab only ---------------
+	let orderFilterOpen = $state(false);
+	let orderSearchQuery = $state('');
+	let orderStatusFilterKeys = $state<string[]>([]);
+	let orderCustomerFilter = $state<string[]>([]);
+	let orderCargoFilter = $state<string[]>([]);
+	let orderMuatKotaFilter = $state<string[]>([]);
+	let orderBongkarKotaFilter = $state<string[]>([]);
+	let orderWeightMin = $state('');
+	let orderWeightMax = $state('');
+	let orderPickupDateFrom = $state('');
+	let orderPickupDateTo = $state('');
+	let orderPlateFilter = $state<string[]>([]);
+	let orderDriverFilter = $state<string[]>([]);
+	function distinctOptions(getValue: (s: Shipment) => string) {
+		const seen = new Map<string, number>();
+		for (const s of activeCategoryOrders) {
+			const v = getValue(s);
+			if (!v || v === '-') continue;
+			seen.set(v, (seen.get(v) || 0) + 1);
+		}
+		return [...seen.entries()].map(([value, count]) => ({ value, label: `${value} (${count})` })).sort((a, b) => a.value.localeCompare(b.value));
+	}
+	let availableStatusOptions = $derived.by(() => {
+		const seen = new Map<string, number>();
+		for (const s of activeCategoryOrders) seen.set(s.status, (seen.get(s.status) || 0) + 1);
+		return [...seen.entries()].sort((a, b) => b[1] - a[1]).map(([value, count]) => ({ value, label: `${statusLabel(value)} (${count})` }));
+	});
+	let availableCustomerOptions = $derived(distinctOptions((s) => s.shipperName));
+	let availableCargoOptions = $derived(distinctOptions((s) => s.muatan));
+	let availableMuatKotaOptions = $derived(distinctOptions((s) => s.muatKota));
+	let availableBongkarKotaOptions = $derived(distinctOptions((s) => s.bongkarKota));
+	let availablePlateOptions = $derived(distinctOptions((s) => s.plate));
+	let availableDriverOptions = $derived(distinctOptions((s) => s.driver));
+	let orderFilterActiveCount = $derived(
+		(orderSearchQuery.trim() ? 1 : 0) + orderStatusFilterKeys.length + orderCustomerFilter.length + orderCargoFilter.length +
+			orderMuatKotaFilter.length + orderBongkarKotaFilter.length + (orderWeightMin !== '' ? 1 : 0) + (orderWeightMax !== '' ? 1 : 0) +
+			(orderPickupDateFrom ? 1 : 0) + (orderPickupDateTo ? 1 : 0) + orderPlateFilter.length + orderDriverFilter.length
+	);
+	let orderFilterActive = $derived(orderFilterActiveCount > 0);
+	let filteredCategoryOrders = $derived.by(() => {
+		let list = activeCategoryOrders;
+		const q = orderSearchQuery.trim().toLowerCase();
+		if (q) list = list.filter((s) => s.orderId.toLowerCase().includes(q));
+		if (orderStatusFilterKeys.length) list = list.filter((s) => orderStatusFilterKeys.includes(s.status));
+		if (orderCustomerFilter.length) list = list.filter((s) => orderCustomerFilter.includes(s.shipperName));
+		if (orderCargoFilter.length) list = list.filter((s) => orderCargoFilter.includes(s.muatan));
+		if (orderMuatKotaFilter.length) list = list.filter((s) => orderMuatKotaFilter.includes(s.muatKota));
+		if (orderBongkarKotaFilter.length) list = list.filter((s) => orderBongkarKotaFilter.includes(s.bongkarKota));
+		if (orderWeightMin !== '') list = list.filter((s) => (s.weightKg ?? -Infinity) >= Number(orderWeightMin));
+		if (orderWeightMax !== '') list = list.filter((s) => (s.weightKg ?? Infinity) <= Number(orderWeightMax));
+		if (orderPickupDateFrom || orderPickupDateTo) {
+			list = list.filter((s) => {
+				if (!s.pickupAt) return false;
+				if (orderPickupDateFrom && s.pickupAt < new Date(`${orderPickupDateFrom}T00:00:00`)) return false;
+				if (orderPickupDateTo && s.pickupAt > new Date(`${orderPickupDateTo}T23:59:59`)) return false;
+				return true;
+			});
+		}
+		if (orderPlateFilter.length) list = list.filter((s) => orderPlateFilter.includes(s.plate));
+		if (orderDriverFilter.length) list = list.filter((s) => orderDriverFilter.includes(s.driver));
+		return list;
+	});
+	function resetOrderFilter() {
+		orderSearchQuery = '';
+		orderStatusFilterKeys = [];
+		orderCustomerFilter = [];
+		orderCargoFilter = [];
+		orderMuatKotaFilter = [];
+		orderBongkarKotaFilter = [];
+		orderWeightMin = '';
+		orderWeightMax = '';
+		orderPickupDateFrom = '';
+		orderPickupDateTo = '';
+		orderPlateFilter = [];
+		orderDriverFilter = [];
+	}
+	// "Saved filter" — this browser only, re-applied on the next visit.
+	const ORDER_FILTER_STORAGE_KEY = 'ct-order-filter';
+	let orderFilterSaveEnabled = $state(false);
+	function filterSnapshot() {
+		return {
+			category: activeCategory, search: orderSearchQuery, status: orderStatusFilterKeys, customer: orderCustomerFilter, cargo: orderCargoFilter,
+			muat: orderMuatKotaFilter, bongkar: orderBongkarKotaFilter, wmin: orderWeightMin, wmax: orderWeightMax, from: orderPickupDateFrom, to: orderPickupDateTo,
+			plate: orderPlateFilter, driver: orderDriverFilter
+		};
+	}
+	function onOrderFilterSaveToggle() {
+		try {
+			if (orderFilterSaveEnabled) localStorage.setItem(ORDER_FILTER_STORAGE_KEY, JSON.stringify(filterSnapshot()));
+			else localStorage.removeItem(ORDER_FILTER_STORAGE_KEY);
+		} catch {
+			/* private mode */
+		}
+	}
+	onMount(() => {
+		try {
+			const raw = localStorage.getItem(ORDER_FILTER_STORAGE_KEY);
+			if (!raw) return;
+			const f = JSON.parse(raw);
+			orderFilterSaveEnabled = true;
+			if (f.category) activeCategory = f.category;
+			orderSearchQuery = f.search ?? ''; orderStatusFilterKeys = f.status ?? []; orderCustomerFilter = f.customer ?? []; orderCargoFilter = f.cargo ?? [];
+			orderMuatKotaFilter = f.muat ?? []; orderBongkarKotaFilter = f.bongkar ?? []; orderWeightMin = f.wmin ?? ''; orderWeightMax = f.wmax ?? '';
+			orderPickupDateFrom = f.from ?? ''; orderPickupDateTo = f.to ?? ''; orderPlateFilter = f.plate ?? []; orderDriverFilter = f.driver ?? [];
+		} catch {
+			/* ignore */
+		}
+	});
+	$effect(() => {
+		if (orderFilterSaveEnabled) {
+			const snap = JSON.stringify(filterSnapshot());
+			try { localStorage.setItem(ORDER_FILTER_STORAGE_KEY, snap); } catch { /* ignore */ }
+		}
+	});
+	let lastCategoryForFilter = $state<CategoryKey | null>(null);
+	$effect(() => {
+		const c = activeCategory;
+		if (lastCategoryForFilter !== null && c !== lastCategoryForFilter && !orderFilterSaveEnabled) resetOrderFilter();
+		lastCategoryForFilter = c;
+	});
+
+	// --- LTL groups: one row per group, with a switcher through its orders ---
+	let ltlFocusIndex = $state<Record<string, number>>({});
+	let ltlGroupRows = $derived.by(() => {
+		const groups: { groupKey: string; orders: Shipment[] }[] = [];
+		const seen = new Set<string>();
+		for (const s of filteredCategoryOrders) {
+			const gid = s.raw.detail?.ltlGroupId || s.key;
+			if (seen.has(gid)) continue;
+			seen.add(gid);
+			groups.push({ groupKey: gid, orders: categorized.ltl.filter((o) => (o.raw.detail?.ltlGroupId || o.key) === gid) });
+		}
+		return groups;
+	});
+	function ltlFocused(g: { groupKey: string; orders: Shipment[] }) {
+		return g.orders[ltlFocusIndex[g.groupKey] || 0] || g.orders[0];
+	}
+	function ltlCycle(g: { groupKey: string; orders: Shipment[] }, dir: number) {
+		const n = g.orders.length;
+		const next = ((ltlFocusIndex[g.groupKey] || 0) + dir + n) % n;
+		ltlFocusIndex = { ...ltlFocusIndex, [g.groupKey]: next };
+		if (g.orders.some((o) => o.key === selectedOrderId)) selectedOrderId = g.orders[next].key;
+	}
+	let ocTabsEl = $state<HTMLDivElement | null>(null);
+	function scrollOcTabsRight() {
+		ocTabsEl?.scrollBy({ left: 220, behavior: 'smooth' });
+	}
+
+	// --- Export: pick rows, then CSV or PDF (print) -----------------------------
+	let exportSelectMode = $state(false);
+	let selectedExportKeys = $state<string[]>([]);
+	let exportPrintRows = $state<Shipment[]>([]);
+	function exportableRows(): Shipment[] {
+		return activeCategory === 'ltl' ? ltlGroupRows.flatMap((g) => g.orders) : filteredCategoryOrders;
+	}
+	function startExportSelection() {
+		exportSelectMode = true;
+		selectedExportKeys = [];
+	}
+	function cancelExportSelection() {
+		exportSelectMode = false;
+		selectedExportKeys = [];
+	}
+	const isExportSelected = (key: string) => selectedExportKeys.includes(key);
+	function toggleExportKey(key: string) {
+		selectedExportKeys = isExportSelected(key) ? selectedExportKeys.filter((k) => k !== key) : [...selectedExportKeys, key];
+	}
+	function toggleGroupExportKeys(g: { orders: Shipment[] }) {
+		const keys = g.orders.map((o) => o.key);
+		const all = keys.every(isExportSelected);
+		selectedExportKeys = all ? selectedExportKeys.filter((k) => !keys.includes(k)) : [...new Set([...selectedExportKeys, ...keys])];
+	}
+	let allExportSelected = $derived(exportableRows().length > 0 && exportableRows().every((s) => isExportSelected(s.key)));
+	function toggleSelectAllExport() {
+		selectedExportKeys = allExportSelected ? [] : exportableRows().map((s) => s.key);
+	}
+	const EXPORT_COLUMNS = ['Type Pengiriman', 'ID Order', 'Klien', 'Rute', 'Armada', 'Driver', 'Status', 'Jenis Muatan', 'Tonase Plan (Kg)', 'Pickup', 'Uang Sangu', 'Rekonsiliasi'];
+	function exportRow(s: Shipment): string[] {
+		return [
+			s.shipmentType, s.orderId, s.shipperName, `${s.muatKota} → ${s.bongkarKota}`, s.plate, s.driver, s.statusLabel, s.muatan,
+			s.weightKg != null ? String(s.weightKg) : '', s.pickupAt ? formatTimestampLabel(s.pickupAt) : '',
+			s.sanguFinal ? 'Final' : 'Belum Finalisasi', s.reconPending ? 'Belum Diproses' : 'Sudah Diproses'
+		];
+	}
+	function selectedExportRows(): Shipment[] | null {
+		const rows = exportableRows().filter((s) => isExportSelected(s.key));
+		if (!rows.length) {
+			toast('Pilih minimal satu order untuk diekspor');
+			return null;
+		}
+		return rows;
+	}
+	const csvField = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+	function exportOrdersCsv() {
+		const rows = selectedExportRows();
+		if (!rows) return;
+		const lines = [EXPORT_COLUMNS.map(csvField).join(',')];
+		for (const s of rows) lines.push(exportRow(s).map(csvField).join(','));
+		const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `control-tower-${activeCategory}-${new Date().toISOString().slice(0, 10)}.csv`;
+		a.rel = 'noopener';
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		setTimeout(() => URL.revokeObjectURL(url), 1500);
+		toast('Export CSV berhasil diunduh');
+		cancelExportSelection();
+	}
+	function exportOrdersPdf() {
+		const rows = selectedExportRows();
+		if (!rows) return;
+		exportPrintRows = rows;
+		document.body.classList.add('ct-printing-export');
+		const done = () => {
+			document.body.classList.remove('ct-printing-export');
+			window.removeEventListener('afterprint', done);
+			cancelExportSelection();
+		};
+		window.addEventListener('afterprint', done);
+		setTimeout(() => window.print(), 50);
+	}
+	async function copyOrderCode(s: Shipment) {
+		await copyText(s.orderId);
+		toast(`ID Order ${s.orderId} disalin`);
+	}
+	function openOrderDetail(s: Shipment) {
+		goto(`${basePath.replace(/\/control-tower$/, '')}/order/${s.raw.id}`);
+	}
 
 	/** The order a truck is on right now: the live one first, else the most recently assigned. */
 	const ACTIVE: string[] = ['inTransit', 'assigned', 'delivered', 'approved', 'readyToPlan'];
@@ -197,12 +530,15 @@
 		return mine.sort((a, b) => ACTIVE.indexOf(a.statusCode ?? '') - ACTIVE.indexOf(b.statusCode ?? ''))[0] ?? null;
 	}
 
-	function warehouse(id?: string) {
+	function warehouse(id?: string): any {
 		if (!id) return null;
 		return ($warehouseStore.warehouses ?? []).find((w: any) => w.id === id) ?? null;
 	}
 	function coordsOf(id?: string): [number, number] | null {
-		const c = warehouse(id)?.location?.coordinates;
+		const w = warehouse(id);
+		if (!w) return null;
+		if (typeof w.longitude === 'number' && typeof w.latitude === 'number') return [w.longitude, w.latitude];
+		const c = w.location?.coordinates;
 		return Array.isArray(c) && c.length === 2 ? [c[0], c[1]] : null;
 	}
 	function klien(o: any): string {
@@ -585,43 +921,194 @@
 		{/if}
 	</div>
 
-	<!-- Order book -->
-	<div class="ct2-orders">
-		<div class="order-tabs-row">
-			{#each CATEGORIES as c}
-				<button type="button" class="order-tab {activeCategory === c.key ? 'active' : ''}" onclick={() => (activeCategory = c.key)}>
-					{c.label} ({counts[c.key] ?? 0})
-				</button>
-			{/each}
+	<!-- Order Control -->
+	<div class="ct2-orders ct-oc-panel">
+		<div class="ct-oc-head">
+			<div class="ct-oc-tabs-row">
+				<div bind:this={ocTabsEl} class="method-tabs ct-oc-tabs">
+					{#each kpiCards as c (c.key)}
+						<button type="button" class="method-tab" class:active={activeCategory === c.key} onclick={() => selectCategory(c.key)}>
+							{c.label} ({c.count})
+						</button>
+					{/each}
+				</div>
+				<div class="ct-oc-tabs-actions">
+					<button type="button" class="ct-oc-tabs-scroll" title="Geser tab ke kanan" onclick={scrollOcTabsRight}><ChevronRight size={12} /></button>
+					{#if !exportSelectMode}
+						<button type="button" class="btn btn-outline btn-sm ct-oc-export-btn" class:ct-oc-filter-btn--active={orderFilterActive} title="Advance Search" onclick={() => (orderFilterOpen = true)}>
+							<Filter size={14} /><span>Filter</span>
+							{#if orderFilterActive}<span class="ct-oc-filter-badge">{orderFilterActiveCount}</span>{/if}
+						</button>
+						<button type="button" class="btn btn-outline btn-sm ct-oc-export-btn" title="Pilih order untuk diekspor" onclick={startExportSelection}>
+							<Download size={14} /><span>Export</span>
+						</button>
+					{:else}
+						<span class="ct-export-count">{selectedExportKeys.length} dipilih</span>
+						<button type="button" class="btn btn-outline btn-sm ct-oc-export-btn" onclick={exportOrdersCsv}><Download size={14} /><span>CSV</span></button>
+						<button type="button" class="btn btn-outline btn-sm ct-oc-export-btn" onclick={exportOrdersPdf}><FileText size={14} /><span>PDF</span></button>
+						<button type="button" class="mini-icon-btn" title="Batal" onclick={cancelExportSelection}><X size={14} /></button>
+					{/if}
+				</div>
+			</div>
 		</div>
-		{#if needsClient}
-			<div class="ct2-empty">Pilih klien untuk melihat order mereka.</div>
-		{:else if categoryOrders.length === 0}
-			<div class="ct2-empty">Tidak ada order pada kategori ini.</div>
-		{:else}
-			<div class="spot-order-scroll">
-				<table class="spot-order-table" style="min-width:1000px;">
-					<thead><tr><th>Tipe Pengiriman</th><th>ID Order</th><th>Klien</th><th>Rute</th><th>Armada</th><th>Status</th><th>Posisi (FMS)</th><th></th></tr></thead>
+		<div class="ct-oc-scroll">
+			{#if needsClient}
+				<div class="ct-oc-empty">Pilih klien untuk melihat order mereka.</div>
+			{:else if !activeCategory}
+				<div class="ct-oc-empty">Pilih salah satu tab di atas untuk melihat daftar order-nya.</div>
+			{:else}
+				<table class="planner-table ct-oc-table">
+					<thead>
+						<tr>
+							{#if exportSelectMode}<th class="ct-oc-checkbox-cell"><input type="checkbox" checked={allExportSelected} onchange={toggleSelectAllExport} /></th>{/if}
+							<th>Type Pengiriman</th><th>ID Order</th><th>Klien</th><th>Rute</th><th>Armada</th><th>Status</th><th>Kontrol</th>
+						</tr>
+					</thead>
 					<tbody>
-						{#each categoryOrders as o (o.id)}
-							{@const v = liveFor(o)}
-							<tr class={o.id === selectedOrder?.id ? 'ct2-row-active' : ''} onclick={() => selectOrderRow(o)} style="cursor:pointer;">
-								<td><span class="badge badge-active">{kindLabel(o)}</span></td>
-								<td class="mono">{o.orderNumber}</td>
-								<td>{klien(o)}</td>
-								<td>{routeLabel(o)}</td>
-								<td>{o.truckPoliceNumber ?? '—'}{v?.driver?.name ? ` · ${v.driver.name}` : ''}</td>
-								<td><span class="badge badge-wait">{o.statusAlias ?? o.status ?? o.statusCode}</span></td>
-								<td>
-									{#if v}<span class="ct2-dot" style="background:{STATE_COLOUR[v.drive_state]}"></span> {where(v)} · {Math.round(v.position?.speed ?? 0)} km/j
-									{:else}<span class="hint">tidak di FMS</span>{/if}
-								</td>
-								<td><button type="button" class="frozen-icon-btn" title="Lihat di peta" onclick={(e) => { e.stopPropagation(); selectOrderRow(o); }}><ZoomIn size={14} /></button></td>
-							</tr>
-						{/each}
+						{#if activeCategory === 'ltl'}
+							{#if !ltlGroupRows.length}
+								<tr><td colspan={exportSelectMode ? 8 : 7}><div class="ct-oc-empty">{orderFilterActive ? 'Tidak ada order yang cocok dengan filter.' : 'Tidak ada order pada kategori ini.'}</div></td></tr>
+							{/if}
+							{#each ltlGroupRows as g (g.groupKey)}
+								{@const f = ltlFocused(g)}
+								<tr class="planner-row" class:planner-row-selected={g.orders.some((o) => o.key === selectedOrderId)} onclick={() => selectOrderRow(f.raw)}>
+									{#if exportSelectMode}
+										<td class="ct-oc-checkbox-cell" onclick={(e) => e.stopPropagation()} role="presentation"><input type="checkbox" checked={g.orders.every((o) => isExportSelected(o.key))} onchange={() => toggleGroupExportKeys(g)} /></td>
+									{/if}
+									<td><span class="badge badge-active">LTL</span></td>
+									<td>
+										<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+										<div class="ct-oc-switcher" onclick={(e) => e.stopPropagation()}>
+											<button type="button" class="ct-oc-switcher-btn" disabled={g.orders.length < 2} onclick={() => ltlCycle(g, -1)}>‹</button>
+											<b class="mono">{f.orderId}</b>
+											<button type="button" class="ct-oc-switcher-btn" disabled={g.orders.length < 2} onclick={() => ltlCycle(g, 1)}>›</button>
+										</div>
+									</td>
+									<td>{f.shipperName}</td>
+									<td>{f.muatKota} → {f.bongkarKota}</td>
+									<td><span class="plate mono">{f.plate}</span> · {f.driver}</td>
+									<td><span class="badge {f.statusBadgeClass}">{f.statusLabel}</span></td>
+									<td>
+										<div class="action-cell">
+											<button class="mini-icon-btn" title="Lihat detail" onclick={(e) => { e.stopPropagation(); openOrderDetail(f); }}><Search size={14} /></button>
+											<button class="mini-icon-btn" title="Lihat di peta" onclick={(e) => { e.stopPropagation(); selectOrderRow(f.raw); }}><ZoomIn size={14} /></button>
+											<button class="mini-icon-btn" title="Salin ID order" onclick={(e) => { e.stopPropagation(); copyOrderCode(f); }}><Copy size={14} /></button>
+										</div>
+									</td>
+								</tr>
+							{/each}
+						{:else}
+							{#if !filteredCategoryOrders.length}
+								<tr><td colspan={exportSelectMode ? 8 : 7}><div class="ct-oc-empty">{orderFilterActive ? 'Tidak ada order yang cocok dengan filter.' : 'Tidak ada order pada kategori ini.'}</div></td></tr>
+							{/if}
+							{#each filteredCategoryOrders as s (s.key)}
+								<tr class="planner-row" class:planner-row-selected={selectedOrderId === s.key} onclick={() => selectOrderRow(s.raw)}>
+									{#if exportSelectMode}
+										<td class="ct-oc-checkbox-cell" onclick={(e) => e.stopPropagation()} role="presentation"><input type="checkbox" checked={isExportSelected(s.key)} onchange={() => toggleExportKey(s.key)} /></td>
+									{/if}
+									<td><span class="badge badge-active">{s.shipmentType}</span></td>
+									<td><b class="mono">{s.orderId}</b></td>
+									<td>{s.shipperName}</td>
+									<td>{s.muatKota} → {s.bongkarKota}</td>
+									<td><span class="plate mono">{s.plate}</span> · {s.driver}</td>
+									<td>
+										<span class="badge {s.statusBadgeClass}">{s.statusLabel}</span>
+										{#if activeCategory === 'sangu'}<div class="ct-oc-extra"><AlertCircle size={10} />Belum Finalisasi</div>{/if}
+										{#if activeCategory === 'recon'}<div class="ct-oc-extra"><Scale size={10} />Belum Diproses</div>{/if}
+									</td>
+									<td>
+										<div class="action-cell">
+											<button class="mini-icon-btn" title="Lihat detail" onclick={(e) => { e.stopPropagation(); openOrderDetail(s); }}><Search size={14} /></button>
+											<button class="mini-icon-btn" title="Lihat di peta" onclick={(e) => { e.stopPropagation(); selectOrderRow(s.raw); }}><ZoomIn size={14} /></button>
+											<button class="mini-icon-btn" title="Salin ID order" onclick={(e) => { e.stopPropagation(); copyOrderCode(s); }}><Copy size={14} /></button>
+										</div>
+									</td>
+								</tr>
+							{/each}
+						{/if}
 					</tbody>
 				</table>
-			</div>
-		{/if}
+			{/if}
+		</div>
 	</div>
+</div>
+
+<!-- Advance Search -->
+{#if orderFilterOpen}
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div class="modal-overlay" onclick={(e) => { if (e.target === e.currentTarget) orderFilterOpen = false; }}>
+		<div class="modal-box modal-box-lg ct-filter-modal" role="dialog" aria-modal="true">
+			<div class="ct-filter-modal-head">
+				<h3>Advance Search</h3>
+				<button type="button" class="mini-icon-btn" title="Tutup" onclick={() => (orderFilterOpen = false)}><X size={14} /></button>
+			</div>
+			<div class="modal-scroll-body">
+				<fieldset class="ct-filter-section">
+					<legend>Order</legend>
+					<div class="three-col">
+						<div class="field" style="margin-bottom:0;">
+							<label for="ctf-id">ID Order</label>
+							<div class="ct-oc-filter-search ct-oc-filter-search--pill"><Search size={13} /><input id="ctf-id" type="text" bind:value={orderSearchQuery} placeholder="Contoh: ORM26080101..." /></div>
+						</div>
+						<div class="field" style="margin-bottom:0;"><label for="ctf-status">Status</label><FieldSelect bind:value={orderStatusFilterKeys} options={availableStatusOptions} multiple chipsBelow placeholder="Semua Status" /></div>
+						<div class="field" style="margin-bottom:0;"><label for="ctf-klien">Klien</label><FieldSelect bind:value={orderCustomerFilter} options={availableCustomerOptions} multiple searchable chipsBelow placeholder="Semua Klien" /></div>
+					</div>
+				</fieldset>
+				<fieldset class="ct-filter-section">
+					<legend>Muatan</legend>
+					<div class="three-col">
+						<div class="field" style="margin-bottom:0;"><label for="ctf-cargo">Jenis Muatan</label><FieldSelect bind:value={orderCargoFilter} options={availableCargoOptions} multiple searchable chipsBelow placeholder="Semua Jenis Muatan" /></div>
+						<div class="field" style="margin-bottom:0;"><label for="ctf-wmin">Tonase Min (Kg)</label><input id="ctf-wmin" type="number" min="0" class="ct-filter-plain-input" bind:value={orderWeightMin} placeholder="0" /></div>
+						<div class="field" style="margin-bottom:0;"><label for="ctf-wmax">Tonase Max (Kg)</label><input id="ctf-wmax" type="number" min="0" class="ct-filter-plain-input" bind:value={orderWeightMax} placeholder="Tidak terbatas" /></div>
+					</div>
+				</fieldset>
+				<fieldset class="ct-filter-section">
+					<legend>Rute &amp; Jadwal</legend>
+					<div class="four-col">
+						<div class="field" style="margin-bottom:0;"><label for="ctf-muat">Kota Muat</label><FieldSelect bind:value={orderMuatKotaFilter} options={availableMuatKotaOptions} multiple searchable chipsBelow placeholder="Semua Kota" /></div>
+						<div class="field" style="margin-bottom:0;"><label for="ctf-bongkar">Kota Bongkar</label><FieldSelect bind:value={orderBongkarKotaFilter} options={availableBongkarKotaOptions} multiple searchable chipsBelow placeholder="Semua Kota" /></div>
+						<div class="field" style="margin-bottom:0;"><label for="ctf-from">Pickup Dari</label><input id="ctf-from" type="date" class="ct-filter-plain-input" bind:value={orderPickupDateFrom} /></div>
+						<div class="field" style="margin-bottom:0;"><label for="ctf-to">Pickup Sampai</label><input id="ctf-to" type="date" class="ct-filter-plain-input" bind:value={orderPickupDateTo} /></div>
+					</div>
+				</fieldset>
+				<fieldset class="ct-filter-section">
+					<legend>Armada</legend>
+					<div class="two-col">
+						<div class="field" style="margin-bottom:0;"><label for="ctf-plate">Plat Nomor</label><FieldSelect bind:value={orderPlateFilter} options={availablePlateOptions} multiple searchable chipsBelow placeholder="Semua Armada" /></div>
+						<div class="field" style="margin-bottom:0;"><label for="ctf-driver">Driver</label><FieldSelect bind:value={orderDriverFilter} options={availableDriverOptions} multiple searchable chipsBelow placeholder="Semua Driver" /></div>
+					</div>
+				</fieldset>
+			</div>
+			<div class="modal-actions ct-filter-modal-actions">
+				<label class="ct-filter-saved-toggle" title="Simpan filter ini sebagai default, otomatis diterapkan lagi tiap Control Tower dibuka">
+					<span class="ct-filter-saved-toggle-switch">
+						<input type="checkbox" bind:checked={orderFilterSaveEnabled} onchange={onOrderFilterSaveToggle} />
+						<span class="ct-filter-saved-toggle-track"><span class="ct-filter-saved-toggle-thumb"></span></span>
+					</span>
+					<span>Saved filter</span>
+				</label>
+				<div class="ct-filter-modal-actions-buttons">
+					<button type="button" class="btn btn-outline" disabled={!orderFilterActive} onclick={resetOrderFilter}>Clear</button>
+					<button type="button" class="btn btn-primary" onclick={() => (orderFilterOpen = false)}>Search</button>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Printable export (PDF) -->
+<div class="ct-export-print">
+	<div class="ct-report-cover">
+		<span class="ct-report-cover-eyebrow">Control Tower</span>
+		<h1>{kpiCards.find((c) => c.key === activeCategory)?.label ?? 'Order Control'}</h1>
+		<p class="ct-export-print-meta">{exportPrintRows.length} order · dicetak {new Date().toLocaleString('id-ID')}</p>
+	</div>
+	<table>
+		<thead><tr>{#each EXPORT_COLUMNS as c (c)}<th>{c}</th>{/each}</tr></thead>
+		<tbody>
+			{#each exportPrintRows as s (s.key)}
+				<tr>{#each exportRow(s) as v, i (i)}<td>{v}</td>{/each}</tr>
+			{/each}
+		</tbody>
+	</table>
 </div>

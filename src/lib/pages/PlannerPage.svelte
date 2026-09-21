@@ -823,8 +823,16 @@
 		const { truck, orders: targets } = confirming;
 		pairing = true;
 		try {
-			for (const o of targets) {
+			// An LTL group is tagged on each order's detail (isLtl, ltlGroupId,
+			// ltlShipmentLabel) — what Control Tower's "Order LTL" tab groups on.
+			const ltlGroupId = targets.length > 1 ? `ltl-${Date.now().toString(36)}` : null;
+			for (const [i, o] of targets.entries()) {
 				await api.put(ENDPOINTS.orders.assign(o.raw.id), { driverId: truck.currentDriverId, truckId: truck.id });
+				if (ltlGroupId) {
+					await api
+						.patch(`${ENDPOINTS.orders.one(o.raw.id)}/detail`, { isLtl: true, ltlGroupId, ltlShipmentLabel: `Shipment ${i + 1}` })
+						.catch(() => {});
+				}
 			}
 			toast(
 				targets.length > 1
