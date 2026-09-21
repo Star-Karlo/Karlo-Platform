@@ -17,7 +17,7 @@
 	 */
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { Search, Truck, MapPin, X, Fuel, Gauge, Radio, Mountain, Battery, Activity, Bell, ZoomIn, Clock, ChevronRight, Filter, Download, FileText, Copy, AlertCircle, Scale } from 'lucide-svelte';
+	import { Search, Truck, MapPin, X, Fuel, Gauge, Radio, Mountain, Battery, Activity, Bell, ZoomIn, Clock, ChevronDown, Filter, Download, FileText, Copy, AlertCircle, Scale } from 'lucide-svelte';
 	import { toast } from '$lib/stores/ui';
 	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
 	import { kontrakStatus } from '$lib/revamp/kontrakStatus';
@@ -933,7 +933,7 @@
 					{/each}
 				</div>
 				<div class="ct-oc-tabs-actions">
-					<button type="button" class="ct-oc-tabs-scroll" title="Geser tab ke kanan" onclick={scrollOcTabsRight}><ChevronRight size={12} /></button>
+					<button type="button" class="ct-oc-tabs-scroll" title="Geser tab ke kanan" onclick={scrollOcTabsRight}><ChevronDown size={12} /></button>
 					{#if !exportSelectMode}
 						<button type="button" class="btn btn-outline btn-sm ct-oc-export-btn" class:ct-oc-filter-btn--active={orderFilterActive} title="Advance Search" onclick={() => (orderFilterOpen = true)}>
 							<Filter size={14} /><span>Filter</span>
