@@ -428,8 +428,27 @@
 	const selectedTruck = $derived(vehicles.find((t) => t.id === selectedTruckId) ?? null);
 	const viewedTruck = $derived(vehicles.find((t) => t.id === viewedTruckId) ?? null);
 	const stops = $derived(stopsForOrder(selectedOrder));
-	/** Truck Options picked when the order was created (max 5), shown above Stops. */
-	const selectedTruckOptions = $derived(truckOptionKeysOf(selectedOrder?.raw).map(describeTruckOption));
+	/**
+	 * Truck Options come from the agreement the order was placed under. An
+	 * internal order copies them onto its detail at creation; for any other
+	 * order they are read from the agreement itself.
+	 */
+	let agreementTruckOptions = $state<string[]>([]);
+	$effect(() => {
+		const o = selectedOrder;
+		agreementTruckOptions = [];
+		if (!o || truckOptionKeysOf(o.raw).length || !o.raw.agreementId) return;
+		api.get(ENDPOINTS.agreements.one(o.raw.agreementId))
+			.then((r) => {
+				if (selectedOrder?.key !== o.key) return;
+				const d = r.data?.data?.detail ?? {};
+				agreementTruckOptions = Array.isArray(d.truckOptions) ? d.truckOptions.slice(0, MAX_TRUCK_OPTIONS) : [];
+			})
+			.catch(() => {});
+	});
+	const selectedTruckOptions = $derived(
+		(truckOptionKeysOf(selectedOrder?.raw).length ? truckOptionKeysOf(selectedOrder?.raw) : agreementTruckOptions).map(describeTruckOption)
+	);
 
 	// LTL — several orders on one truck
 	let ltlSelectMode = $state(false);

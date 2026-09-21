@@ -25,6 +25,8 @@
 	import { toAgreementRow, type AgreementRow, type AgreementRouteEntry } from '$lib/revamp/agreementView';
 	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
 	import TruckTypeMatrixRevamp from '$lib/components/revamp/TruckTypeMatrixRevamp.svelte';
+	import { TRUCK_BODY_TYPES, TRUCK_SIZES, truckTypeKey } from '$lib/revamp/truckTypes.js';
+	import { MAX_TRUCK_OPTIONS, describeTruckOption } from '$lib/revamp/truckOptions.js';
 
 	let { basePath = '/t', id = null }: { basePath?: string; id?: string | null } = $props();
 
@@ -55,11 +57,22 @@
 	let cargoItemsLoaded = $state(false);
 
 	let customerOptions = $derived(customers.map((c) => ({ value: c.name, label: c.name })));
-	let truckTypeOptions = $derived(
-		Array.from(new Set(truckTypeNames.filter(Boolean)))
-			.sort()
-			.map((t) => ({ value: t, label: t }))
-	);
+	// Truck Options: the (max 5) truck types the planner may assign to orders
+	// under this agreement, chosen from the types the cargo item allows.
+	// "Body|Size" keys, the same vocabulary the matrix and Allocate use.
+	let truckOptionChoices = $derived.by(() => {
+		const keys = form.truckTypeMatrix.length
+			? form.truckTypeMatrix
+			: TRUCK_BODY_TYPES.flatMap((b: string) => TRUCK_SIZES.map((sz: string) => truckTypeKey(b, sz)));
+		return keys.map((k: string) => ({ value: k, label: describeTruckOption(k).label }));
+	});
+	function onTruckOptionsChange(v: string | string[]) {
+		const arr = Array.isArray(v) ? v : [];
+		if (arr.length > MAX_TRUCK_OPTIONS) {
+			toast(`Maksimal ${MAX_TRUCK_OPTIONS} Truck Options per agreement`);
+			form.truckOptions = arr.slice(0, MAX_TRUCK_OPTIONS);
+		}
+	}
 	const DURATION_TYPE_OPTIONS = [
 		{ value: 'monthly', label: 'Bulanan' },
 		{ value: 'yearly', label: 'Tahunan' }
@@ -103,6 +116,7 @@
 		paymentType: '',
 		incomeTaxStatus: '',
 		truckTypeOptional: [] as string[],
+		truckOptions: [] as string[],
 		termsAndCondition: '',
 		documentData: '',
 		documentName: '',
@@ -221,6 +235,7 @@
 		form.paymentType = a.paymentType || '';
 		form.incomeTaxStatus = a.incomeTaxStatus || '';
 		form.truckTypeOptional = Array.isArray(a.truckTypeOptional) ? a.truckTypeOptional : [];
+		form.truckOptions = Array.isArray(a.truckOptions) ? a.truckOptions.slice(0, MAX_TRUCK_OPTIONS) : [];
 		form.termsAndCondition = a.termsAndCondition || '';
 		form.documentData = a.documentData || '';
 		form.documentName = a.documentName || '';
@@ -381,6 +396,7 @@
 				paymentType: form.paymentType,
 				incomeTaxStatus: form.incomeTaxStatus,
 				truckTypeOptional: form.truckTypeOptional,
+				truckOptions: form.truckOptions.slice(0, MAX_TRUCK_OPTIONS),
 				termsAndCondition: form.termsAndCondition.trim(),
 				documentData: form.documentData,
 				documentName: form.documentName,
@@ -643,12 +659,17 @@
 	</div>
 
 	<div class="field">
-		<label>Truck Type (opsional)</label>
+		<label>Truck Options (opsional, maks. {MAX_TRUCK_OPTIONS})</label>
+		<div class="hint" style="margin-bottom:8px;">
+			Jenis truck pilihan untuk agreement ini — tampil sebagai acuan planner saat menugaskan truck ke order dari agreement ini.
+		</div>
 		<FieldSelect
-			bind:value={form.truckTypeOptional}
-			options={truckTypeOptions}
+			bind:value={form.truckOptions}
+			options={truckOptionChoices}
 			placeholder="Pilih jenis truck (opsional)"
 			multiple
+			chipsBelow
+			onchange={onTruckOptionsChange}
 		/>
 	</div>
 	<div class="two-col">

@@ -5,9 +5,7 @@
 	import WarehouseFormModal from '../WarehouseFormModal.svelte';
 	import AgreementPickerModal from '../AgreementPickerModal.svelte';
 	import WarehouseSearchField from '../WarehouseSearchField.svelte';
-	import TruckTypeMatrixRevamp from '../TruckTypeMatrixRevamp.svelte';
-	import { MAX_TRUCK_OPTIONS, describeTruckOption } from '$lib/revamp/truckOptions.js';
-	import { toast } from '$lib/stores/ui';
+	import { MAX_TRUCK_OPTIONS } from '$lib/revamp/truckOptions.js';
 	import type { Customer, Warehouse, Wizard } from './wizardTypes';
 
 	let {
@@ -24,19 +22,6 @@
 
 	let customerOptions = $derived(customers.map((c) => ({ value: c.name, label: c.name })));
 
-	/* Truck Options — the matrix is collapsed behind a button; the chips
-	   above it are the compact summary. */
-	let truckMatrixOpen = $state<Record<number, boolean>>({});
-	function toggleTruckMatrix(i: number) {
-		truckMatrixOpen = { ...truckMatrixOpen, [i]: !truckMatrixOpen[i] };
-	}
-	function removeTruckOption(i: number, key: string) {
-		const sp = wizard.shipments[i];
-		sp.truckOptions = (sp.truckOptions ?? []).filter((k) => k !== key);
-	}
-	function onTruckOptionLimit() {
-		toast(`Maksimal ${MAX_TRUCK_OPTIONS} Truck Options per order`);
-	}
 
 	/* Changing the customer invalidates any agreement already picked for a
 	   different customer. */
@@ -68,11 +53,10 @@
 		const d = a.detail ?? {};
 		sp.agreementId = a.id;
 		sp.agreementLabel = `${a.agreementNumber} — ${d.kotaAsal} - ${d.kotaTujuan}`;
-		// Truck Options come from the agreement: what was agreed is what the
-		// planner may assign. Pre-fill (up to the cap) and restrict the matrix
-		// to those types; an agreement without a matrix leaves the choice open.
-		const agreed: string[] = Array.isArray(d.truckTypeMatrix) ? d.truckTypeMatrix : [];
-		sp.agreementTruckTypes = agreed;
+		// Truck Options are the agreement's: the customer and transporter chose
+		// them there, so the order just carries them for the planner.
+		const agreed: string[] = Array.isArray(d.truckOptions) ? d.truckOptions : [];
+		sp.agreementTruckTypes = Array.isArray(d.truckTypeMatrix) ? d.truckTypeMatrix : [];
 		sp.truckOptions = agreed.slice(0, MAX_TRUCK_OPTIONS);
 	}
 
@@ -248,37 +232,6 @@
 						onclick={() => addUnloadingPoint(i)}>+ Tambah Titik Bongkar</button
 					>
 				</div>
-			</div>
-
-			<div class="field">
-				<label for="truck-options-{i}">Truck Options <span class="hint" style="font-weight:400;">(maks. {MAX_TRUCK_OPTIONS})</span></label>
-				<div class="hint" style="margin-bottom:8px;">
-					{#if sp.agreementTruckTypes?.length}
-						Diambil dari agreement ({sp.agreementTruckTypes.length} jenis truck disepakati) — pilih hingga {MAX_TRUCK_OPTIONS} yang bisa dipakai untuk order ini; jadi acuan planner saat menugaskan truck.
-					{:else if sp.agreementId}
-						Agreement ini belum punya daftar jenis truck — pilih hingga {MAX_TRUCK_OPTIONS} jenis truck untuk order ini.
-					{:else}
-						Pilih agreement dulu; jenis truck yang disepakati di agreement akan terisi otomatis.
-					{/if}
-				</div>
-				{#if sp.truckOptions?.length}
-					<div class="review-chip-group" style="margin-bottom:10px;">
-						{#each sp.truckOptions as key (key)}
-							<span class="review-chip" style="display:inline-flex; align-items:center; gap:6px;">
-								{describeTruckOption(key).label}
-								<button type="button" title="Hapus" style="border:none; background:none; cursor:pointer; padding:0; line-height:1; color:var(--on-surface-variant);" onclick={() => removeTruckOption(i, key)}>×</button>
-							</span>
-						{/each}
-					</div>
-				{/if}
-				<button id="truck-options-{i}" type="button" class="btn btn-outline btn-sm" onclick={() => toggleTruckMatrix(i)}>
-					{truckMatrixOpen[i] ? 'Tutup Pilihan Truck' : '+ Pilih Jenis Truck'} ({sp.truckOptions?.length ?? 0}/{MAX_TRUCK_OPTIONS})
-				</button>
-				{#if truckMatrixOpen[i]}
-					<div style="margin-top:10px;">
-						<TruckTypeMatrixRevamp bind:value={sp.truckOptions} max={MAX_TRUCK_OPTIONS} allowedKeys={sp.agreementTruckTypes?.length ? sp.agreementTruckTypes : null} onLimitExceeded={onTruckOptionLimit} />
-					</div>
-				{/if}
 			</div>
 
 			<div class="field" style="margin-bottom:0;">
