@@ -23,6 +23,8 @@
 		FileText
 	} from 'lucide-svelte';
 	import { api } from '$lib/utils/api';
+	import { uploadFile, downloadUrl } from '$lib/utils/upload';
+	import { Upload } from 'lucide-svelte';
 	import TestModeStrip from '$lib/components/revamp/TestModeStrip.svelte';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { toast } from '$lib/stores/ui';
@@ -350,8 +352,8 @@
 		{ key: 'pendukung', label: 'Foto Pendukung' }
 	];
 	const POD_PHOTO_MAX = 2;
-	let canShowPodPhotosMuat = $derived(atOrPassed(order?.status, 'verifikasi_pod_muat'));
-	let canShowPodPhotosBongkar = $derived(atOrPassed(order?.status, 'verifikasi_pod_bongkar'));
+	let canShowPodPhotosMuat = $derived(api.testMode() || atOrPassed(order?.status, 'verifikasi_pod_muat'));
+	let canShowPodPhotosBongkar = $derived(api.testMode() || atOrPassed(order?.status, 'verifikasi_pod_bongkar'));
 	function podPhotoSlots(phaseKey: string, typeKey: string): (string | null)[] {
 		const canShow = phaseKey === 'muat' ? canShowPodPhotosMuat : canShowPodPhotosBongkar;
 		const uploaded = canShow ? detail.podPhotos?.[phaseKey]?.[typeKey] || [] : [];
@@ -526,6 +528,55 @@
 		const nextUnverified = newStops.findIndex((s) => !s.verified);
 		if (nextUnverified !== -1) openVerifyModal(phaseKey, nextUnverified);
 	}
+	// ------------------------------------------------------------------------
+	// POD photos. The driver app uploads them; in Mode Uji the planner can
+	// upload them here so the verification flow can be tested end to end.
+	// A stored value is either a URL (legacy / driver app) or a private
+	// storage key, which is resolved to a signed URL when shown.
+	// ------------------------------------------------------------------------
+	let resolvedPodSrc = $state<Record<string, string>>({});
+	function podSrc(src: string | null | undefined): string {
+		if (!src) return '';
+		if (/^(https?:|data:|blob:)/.test(src)) return src;
+		if (resolvedPodSrc[src]) return resolvedPodSrc[src];
+		if (!(src in resolvedPodSrc)) {
+			resolvedPodSrc = { ...resolvedPodSrc, [src]: '' };
+			downloadUrl(src)
+				.then((u) => (resolvedPodSrc = { ...resolvedPodSrc, [src]: u }))
+				.catch(() => {});
+		}
+		return '';
+	}
+	let podUploading = $state('');
+	async function uploadPodPhoto(phaseKey: string, typeKey: string, slotIndex: number, file: File) {
+		const tag = `${phaseKey}-${typeKey}-${slotIndex}`;
+		podUploading = tag;
+		try {
+			const up = await uploadFile(file, 'orderPod');
+			const phase = { ...((detail.podPhotos || {})[phaseKey] || {}) };
+			const list: (string | null)[] = [...((phase[typeKey] as string[]) || [])];
+			while (list.length <= slotIndex) list.push(null);
+			list[slotIndex] = up.key;
+			phase[typeKey] = list;
+			await patchDetail({ podPhotos: { ...(detail.podPhotos || {}), [phaseKey]: phase } });
+			toast('Foto POD diunggah');
+		} catch (e: any) {
+			toast(e?.response?.data?.message ?? e?.message ?? 'Gagal mengunggah foto');
+		} finally {
+			podUploading = '';
+		}
+	}
+	function pickPodPhoto(phaseKey: string, typeKey: string, slotIndex: number) {
+		const input = document.createElement('input');
+		input.type = 'file';
+		input.accept = 'image/*';
+		input.onchange = () => {
+			const f = input.files?.[0];
+			if (f) void uploadPodPhoto(phaseKey, typeKey, slotIndex, f);
+		};
+		input.click();
+	}
+
 	function rejectVerification() {
 		toast(`Verifikasi ${verifyPhaseLabel} dibatalkan`);
 		closeVerifyModal();
@@ -1025,26 +1076,39 @@
 	</div>
 {/snippet}
 
-{#snippet podSlots(slots: (string | null)[], title: string)}
+{#snippet podSlots(slots: (string | null)[], title: string, target: { phase: string; type: string; base: number } | null = null)}
 	<div class="pod-photo-cell">
 		{#each slots as src, i (i)}
-			<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-			<div class="pod-photo-slot" class:filled={!!src} onclick={() => openPhotoModal(title, src)}>
-				{#if src}
-					<img {src} alt="" />
+			{#if src}
+				<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+				<div class="pod-photo-slot filled" onclick={() => openPhotoModal(title, podSrc(src))}>
+					{#if podSrc(src)}<img src={podSrc(src)} alt="" />{/if}
 					<button
 						type="button"
 						class="pod-photo-eye"
 						title="Lihat foto"
 						onclick={(e) => {
 							e.stopPropagation();
-							openPhotoModal(title, src);
+							openPhotoModal(title, podSrc(src));
 						}}
 					>
 						<span class="icon-wrap"><Eye size={16} /></span>
 					</button>
-				{/if}
-			</div>
+				</div>
+			{:else if target && api.testMode()}
+				<button
+					type="button"
+					class="pod-photo-slot pod-photo-upload"
+					title="Mode Uji: unggah foto {title}"
+					disabled={podUploading === `${target.phase}-${target.type}-${target.base + i}`}
+					onclick={() => pickPodPhoto(target.phase, target.type, target.base + i)}
+				>
+					<span class="icon-wrap"><Upload size={16} /></span>
+					<span>{podUploading === `${target.phase}-${target.type}-${target.base + i}` ? 'Mengunggah…' : 'Unggah'}</span>
+				</button>
+			{:else}
+				<div class="pod-photo-slot"></div>
+			{/if}
 		{/each}
 	</div>
 {/snippet}
@@ -1275,7 +1339,8 @@
 										{#each POD_PHOTO_TYPES as type (`muat-${si}-${type.key}`)}
 											{@render podSlots(
 												podPhotoSlotsForStop('muat', type.key, si),
-												`${type.label} — Muat ${si + 1}`
+												`${type.label} — Muat ${si + 1}`,
+												{ phase: 'muat', type: type.key, base: si * POD_PHOTO_MAX }
 											)}
 										{/each}
 									</div>
@@ -1284,7 +1349,7 @@
 								<div class="pod-photo-grid-row">
 									<span class="pod-photo-grid-label">Muat</span>
 									{#each POD_PHOTO_TYPES as type (`muat-${type.key}`)}
-										{@render podSlots(podPhotoSlots('muat', type.key), `${type.label} — Muat`)}
+										{@render podSlots(podPhotoSlots('muat', type.key), `${type.label} — Muat`, { phase: 'muat', type: type.key, base: 0 })}
 									{/each}
 								</div>
 							{/if}
@@ -1295,7 +1360,8 @@
 										{#each POD_PHOTO_TYPES as type (`bongkar-${si}-${type.key}`)}
 											{@render podSlots(
 												podPhotoSlotsForStop('bongkar', type.key, si),
-												`${type.label} — Bongkar ${si + 1}`
+												`${type.label} — Bongkar ${si + 1}`,
+												{ phase: 'bongkar', type: type.key, base: si * POD_PHOTO_MAX }
 											)}
 										{/each}
 									</div>
@@ -1304,7 +1370,7 @@
 								<div class="pod-photo-grid-row">
 									<span class="pod-photo-grid-label">Bongkar</span>
 									{#each POD_PHOTO_TYPES as type (`bongkar-${type.key}`)}
-										{@render podSlots(podPhotoSlots('bongkar', type.key), `${type.label} — Bongkar`)}
+										{@render podSlots(podPhotoSlots('bongkar', type.key), `${type.label} — Bongkar`, { phase: 'bongkar', type: type.key, base: 0 })}
 									{/each}
 								</div>
 							{/if}
@@ -2183,9 +2249,9 @@
 										<div
 											class="epod-verify-photo-frame"
 											onclick={() =>
-												openPhotoModal(`Foto Surat Jalan — ${verifyPhaseLabel}`, verifyFirstSuratJalanPhoto)}
+												openPhotoModal(`Foto Surat Jalan — ${verifyPhaseLabel}`, podSrc(verifyFirstSuratJalanPhoto))}
 										>
-											<img src={verifyFirstSuratJalanPhoto} alt="" />
+											<img src={podSrc(verifyFirstSuratJalanPhoto)} alt="" />
 										</div>
 									{:else}
 										<div class="epod-verify-photo-empty">Belum ada foto surat jalan</div>
@@ -2254,9 +2320,9 @@
 										<div class="epod-photo-item">
 											<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
 											<img
-												{src}
+												src={podSrc(src)}
 												alt=""
-												onclick={() => openPhotoModal(`${type.label} — ${verifyPhaseLabel}`, src)}
+												onclick={() => openPhotoModal(`${type.label} — ${verifyPhaseLabel}`, podSrc(src))}
 											/>
 											<div class="epod-photo-caption">{type.label.replace('Foto ', '')} {i + 1}</div>
 											<div class="epod-photo-timestamp">Diunggah {formatTimestampLabel(order.createdAt)}</div>
@@ -2376,7 +2442,7 @@
 											{#each podPhotosPresent('muat', type.key) as src, i (i)}
 												<div class="epod-photo-doc-item">
 													<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
-													<img {src} alt="" onclick={() => openPhotoModal(`${type.label} — Muat`, src)} />
+													<img src={podSrc(src)} alt="" onclick={() => openPhotoModal(`${type.label} — Muat`, podSrc(src))} />
 													<div class="epod-photo-caption">{type.label.replace('Foto ', '')} Muat {i + 1}</div>
 												</div>
 											{/each}
@@ -2389,7 +2455,7 @@
 											{#each podPhotosPresent('bongkar', type.key) as src, i (i)}
 												<div class="epod-photo-doc-item">
 													<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
-													<img {src} alt="" onclick={() => openPhotoModal(`${type.label} — Bongkar`, src)} />
+													<img src={podSrc(src)} alt="" onclick={() => openPhotoModal(`${type.label} — Bongkar`, podSrc(src))} />
 													<div class="epod-photo-caption">
 														{type.label.replace('Foto ', '')} Bongkar {i + 1}
 													</div>

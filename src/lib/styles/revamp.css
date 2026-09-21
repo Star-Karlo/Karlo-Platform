@@ -3435,3 +3435,7 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 
 .truck-matrix-cell.not-allowed{background:var(--surface-alt); opacity:.45;}
 .truck-matrix-cell.not-allowed input{cursor:not-allowed;}
+
+/* Mode Uji: an empty POD slot becomes an upload button. */
+.pod-photo-upload{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; border:1.5px dashed var(--primary); background:var(--primary-container); color:var(--primary); font-size:11px; font-weight:600; cursor:pointer;}
+.pod-photo-upload:disabled{opacity:.6; cursor:progress;}
