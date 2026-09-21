@@ -36,7 +36,6 @@
 	import { authStore } from '$lib/stores/auth';
 	import { actingFor } from '$lib/stores/actingFor';
 	import { formatNumber, formatCurrency } from '$lib/utils/format';
-	import { TRUCK_MARKER } from '$lib/constants/assets';
 	import {
 		fetchLiveFleet, fetchLiveVehicle, fetchFuelEstimate, fetchSnappedTrip, fetchAlerts,
 		truckIcon, plateKey, addressLine, curatedSensors, hasFix,
@@ -286,8 +285,6 @@
 		selectedOrderId = '';
 	}
 	let activeCategoryOrders = $derived(activeCategory ? categorized[activeCategory] : []);
-	/** What the map draws: the open tab's orders (unfiltered, as in the prototype). */
-	let categoryOrders = $derived(activeCategoryOrders.map((s) => s.raw));
 
 	// --- Advance Search (Filter) — narrows the open tab only ---------------
 	let orderFilterOpen = $state(false);
