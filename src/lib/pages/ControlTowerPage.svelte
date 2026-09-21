@@ -1300,7 +1300,6 @@
 									<td>
 										<div class="action-cell">
 											<button class="mini-icon-btn" title="Lihat detail" onclick={(e) => { e.stopPropagation(); openOrderDetail(f); }}><Search size={14} /></button>
-											<button class="mini-icon-btn" title="Lihat di peta" onclick={(e) => { e.stopPropagation(); selectOrderRow(f.raw); }}><ZoomIn size={14} /></button>
 											<button class="mini-icon-btn" title="Salin ID order" onclick={(e) => { e.stopPropagation(); copyOrderCode(f); }}><Copy size={14} /></button>
 										</div>
 									</td>
@@ -1328,7 +1327,6 @@
 									<td>
 										<div class="action-cell">
 											<button class="mini-icon-btn" title="Lihat detail" onclick={(e) => { e.stopPropagation(); openOrderDetail(s); }}><Search size={14} /></button>
-											<button class="mini-icon-btn" title="Lihat di peta" onclick={(e) => { e.stopPropagation(); selectOrderRow(s.raw); }}><ZoomIn size={14} /></button>
 											<button class="mini-icon-btn" title="Salin ID order" onclick={(e) => { e.stopPropagation(); copyOrderCode(s); }}><Copy size={14} /></button>
 										</div>
 									</td>
