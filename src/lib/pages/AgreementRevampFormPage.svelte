@@ -65,8 +65,12 @@
 		{ value: 'yearly', label: 'Tahunan' }
 	];
 
+	/** The catalog returns an item's parent under attributes.cargoTypeId. */
+	function parentIdOf(it: CargoItem) {
+		return it.cargoTypeId || it.parentId || (it as any).attributes?.cargoTypeId || '';
+	}
 	function specificNama(it: CargoItem) {
-		const parent = cargoTypes.find((t) => t.id === (it.cargoTypeId || it.parentId));
+		const parent = cargoTypes.find((t) => t.id === parentIdOf(it));
 		return parent?.name || '';
 	}
 	let cargoSpecificOptions = $derived(cargoTypes.map((s) => ({ value: s.name, label: s.name })));

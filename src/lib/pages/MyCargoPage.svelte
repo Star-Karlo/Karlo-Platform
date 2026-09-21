@@ -59,7 +59,7 @@
 			const all = await api.get(ENDPOINTS.catalog.list('item'), { pageSize: 500 });
 			const c: Record<string, number> = {};
 			for (const it of all.data?.data ?? []) {
-				const k = it.cargoTypeId ?? '';
+				const k = it.cargoTypeId ?? it.attributes?.cargoTypeId ?? '';
 				c[k] = (c[k] ?? 0) + 1;
 			}
 			counts = c;
