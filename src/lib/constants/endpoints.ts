@@ -100,6 +100,8 @@ export const ENDPOINTS = {
 		/** Which transitions this caller may make right now, for rendering buttons. */
 		transitions: (id: string) => `/orders/${id}/transitions`,
 		shipment: (id: string) => `/orders/${id}/shipment`,
+		/** The customer's public tracking link: POST issues (or returns) the token, DELETE revokes. */
+		trackingLink: (id: string) => `/orders/${id}/tracking-link`,
 		summary: '/orders/summary',
 
 		/** Trucks the planner could assign, nearest to the loading point first. */

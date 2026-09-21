@@ -3418,3 +3418,10 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
   .insight-doc-charts{grid-template-columns:minmax(0,1fr); gap:20px;}
   .insight-doc-table-head,.insight-doc-row{grid-template-columns:minmax(110px,1fr) minmax(0,1.4fr) minmax(0,1.4fr) 48px; gap:10px;}
 }
+
+/* Control Tower panels: resizable detail panel, collapsible to a strip; draggable order-list height. */
+.ct2-panel{position:relative;}
+.ct2-panel--min{padding:12px 8px; align-items:center; gap:12px; overflow:hidden;}
+.ct2-panel-min-label{writing-mode:vertical-rl; transform:rotate(180deg); font-size:12px; font-weight:700; letter-spacing:.04em;}
+.ct-oc-height-handle{position:absolute; top:-3px; left:0; right:0; height:6px; cursor:row-resize; z-index:2; border-radius:3px;}
+.ct-oc-height-handle:hover, .ct-oc-height-handle:active{background:var(--primary-container);}

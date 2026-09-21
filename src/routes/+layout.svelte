@@ -12,7 +12,7 @@
 	// Pages a person reaches before they have an account: login, and the
 	// claim link a transporter sends a new client.
 	let isAuthPage = $derived(
-		$page.url.pathname.startsWith('/auth') || $page.url.pathname.startsWith('/claim/')
+		$page.url.pathname.startsWith('/auth') || $page.url.pathname.startsWith('/claim/') || $page.url.pathname.startsWith('/track/')
 	);
 
 	onMount(() => authStore.init());

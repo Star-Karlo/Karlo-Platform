@@ -394,6 +394,33 @@
 	let selectedTruckId = $state<string | null>(null);
 	let viewedTruckId = $state<string | null>(null);
 	let sidePanelMinimized = $state(false);
+	// Detail panel: drag its left edge to resize; the width is remembered.
+	const SIDE_PANEL_MIN = 240;
+	const SIDE_PANEL_MAX = 640;
+	let sidePanelWidth = $state(340);
+	let sidePanelEl = $state<HTMLDivElement | null>(null);
+	onMount(() => {
+		try {
+			const w = Number(localStorage.getItem('planner-side-width'));
+			if (w >= SIDE_PANEL_MIN && w <= SIDE_PANEL_MAX) sidePanelWidth = w;
+		} catch { /* ignore */ }
+	});
+	function startSideResize(e: MouseEvent) {
+		e.preventDefault();
+		const right = sidePanelEl?.getBoundingClientRect().right ?? e.clientX + sidePanelWidth;
+		const move = (ev: MouseEvent) => {
+			sidePanelWidth = Math.min(SIDE_PANEL_MAX, Math.max(SIDE_PANEL_MIN, right - ev.clientX));
+		};
+		const stop = () => {
+			window.removeEventListener('mousemove', move);
+			window.removeEventListener('mouseup', stop);
+			document.body.style.userSelect = '';
+			try { localStorage.setItem('planner-side-width', String(sidePanelWidth)); } catch { /* ignore */ }
+		};
+		document.body.style.userSelect = 'none';
+		window.addEventListener('mousemove', move);
+		window.addEventListener('mouseup', stop);
+	}
 	let stopsAccordionOpen = $state(true);
 	let truckStatusFilter = $state<'all' | TruckStatus>('all');
 
@@ -1029,7 +1056,11 @@
 
 	<div class="planner-shell">
 	{#if selectedOrder || viewedTruck || ltlPanelActive}
-		<div class="card planner-side-panel" class:planner-side-panel-minimized={sidePanelMinimized} style="width:{sidePanelMinimized ? 56 : 340}px">
+		<div bind:this={sidePanelEl} class="card planner-side-panel" class:planner-side-panel-minimized={sidePanelMinimized} style="width:{sidePanelMinimized ? 56 : sidePanelWidth}px">
+			{#if !sidePanelMinimized}
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div class="planner-side-resize-handle" title="Geser untuk mengubah lebar" onmousedown={startSideResize}></div>
+			{/if}
 			<button type="button" class="planner-side-minimize" title={sidePanelMinimized ? 'Perbesar' : 'Perkecil'} onclick={() => (sidePanelMinimized = !sidePanelMinimized)}>
 				<ChevronDown size={16} />
 			</button>

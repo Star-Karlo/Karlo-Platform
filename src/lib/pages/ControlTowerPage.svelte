@@ -17,7 +17,7 @@
 	 */
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { Search, Truck, MapPin, X, Fuel, Gauge, Radio, Mountain, Battery, Activity, Bell, ZoomIn, Clock, ChevronDown, Filter, Download, FileText, Copy, AlertCircle, Scale, Settings, GripVertical, Plus, Check, CircleDot } from 'lucide-svelte';
+	import { Search, Truck, MapPin, X, Fuel, Gauge, Radio, Mountain, Battery, Activity, Bell, ZoomIn, Clock, ChevronDown, ChevronUp, Filter, Download, FileText, Copy, AlertCircle, Scale, Settings, GripVertical, Plus, Check, CircleDot } from 'lucide-svelte';
 	import { toast } from '$lib/stores/ui';
 	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
 	import { kontrakStatus } from '$lib/revamp/kontrakStatus';
@@ -512,9 +512,16 @@
 		window.addEventListener('afterprint', done);
 		setTimeout(() => window.print(), 50);
 	}
-	async function copyOrderCode(s: Shipment) {
-		await copyText(s.orderId);
-		toast(`ID Order ${s.orderId} disalin`);
+	/** Copies the customer's public tracking link (issued on first use). */
+	async function copyTrackingLink(s: Shipment) {
+		try {
+			const token = (await api.post(ENDPOINTS.orders.trackingLink(s.raw.id))).data?.data?.token;
+			if (!token) throw new Error('no token');
+			await copyText(`${window.location.origin}/track/${token}`);
+			toast('Link live tracking untuk customer disalin');
+		} catch (e: any) {
+			toast(e?.response?.data?.message ?? 'Gagal menyalin link — coba lagi');
+		}
 	}
 	/** True when the order's truck is not reporting to FMS at all. */
 	function noGps(s: Shipment): boolean {
@@ -816,6 +823,53 @@
 	});
 
 	// ------------------------------------------------------------------------
+	// Panel sizes: the detail panel's width (drag its left edge) and the order
+	// list's height (drag its top edge); both remembered, and the detail panel
+	// can collapse to its header.
+	// ------------------------------------------------------------------------
+	const DETAIL_MIN = 280;
+	const DETAIL_MAX = 640;
+	let detailPanelWidth = $state(340);
+	let detailPanelMinimized = $state(false);
+	let detailPanelEl = $state<HTMLElement | null>(null);
+	const OC_MIN = 180;
+	const OC_MAX = 700;
+	let ocHeight = $state(320);
+	onMount(() => {
+		try {
+			const w = Number(localStorage.getItem('ct-detail-width'));
+			if (w >= DETAIL_MIN && w <= DETAIL_MAX) detailPanelWidth = w;
+			const h = Number(localStorage.getItem('ct-oc-height'));
+			if (h >= OC_MIN && h <= OC_MAX) ocHeight = h;
+		} catch { /* ignore */ }
+	});
+	function drag(e: MouseEvent, onMove: (ev: MouseEvent) => void, onStop: () => void) {
+		e.preventDefault();
+		const stop = () => {
+			window.removeEventListener('mousemove', onMove);
+			window.removeEventListener('mouseup', stop);
+			document.body.style.userSelect = '';
+			onStop();
+		};
+		document.body.style.userSelect = 'none';
+		window.addEventListener('mousemove', onMove);
+		window.addEventListener('mouseup', stop);
+	}
+	function startDetailResize(e: MouseEvent) {
+		const right = detailPanelEl?.getBoundingClientRect().right ?? e.clientX + detailPanelWidth;
+		drag(e, (ev) => { detailPanelWidth = Math.min(DETAIL_MAX, Math.max(DETAIL_MIN, right - ev.clientX)); }, () => {
+			try { localStorage.setItem('ct-detail-width', String(detailPanelWidth)); } catch { /* ignore */ }
+		});
+	}
+	function startOcResize(e: MouseEvent) {
+		const startY = e.clientY;
+		const startH = ocHeight;
+		drag(e, (ev) => { ocHeight = Math.min(OC_MAX, Math.max(OC_MIN, startH - (ev.clientY - startY))); }, () => {
+			try { localStorage.setItem('ct-oc-height', String(ocHeight)); } catch { /* ignore */ }
+		});
+	}
+
+	// ------------------------------------------------------------------------
 	// Widgets: which cards the panel shows and in what order. Adjust mode
 	// adds/removes/reorders; the layout can be saved as this browser's default.
 	// ------------------------------------------------------------------------
@@ -1057,7 +1111,16 @@
 			{@const v = detail ?? selectedVehicle}
 			{@const o = selectedOrder}
 			{@const pos = v.position}
-			<aside class="ct2-panel">
+			<aside bind:this={detailPanelEl} class="ct2-panel" class:ct2-panel--min={detailPanelMinimized} style="width:{detailPanelMinimized ? 56 : detailPanelWidth}px">
+				{#if !detailPanelMinimized}
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div class="planner-side-resize-handle" title="Geser untuk mengubah lebar" onmousedown={startDetailResize}></div>
+				{/if}
+				{#if detailPanelMinimized}
+					<button type="button" class="mini-icon-btn" title="Perbesar panel" onclick={() => (detailPanelMinimized = false)}><ChevronDown size={14} style="transform:rotate(90deg)" /></button>
+					<span class="ct2-panel-min-label">{v.license_plate}</span>
+					<button type="button" class="mini-icon-btn" title="Tutup" onclick={clearSelection}><X size={14} /></button>
+				{:else}
 				<div class="ct2-panel-head">
 					<div>
 						<h3>{o ? `${o.orderNumber} · ${klien(o)}` : v.license_plate}</h3>
@@ -1066,6 +1129,7 @@
 					<div class="ct2-panel-actions">
 						<button type="button" class="mini-icon-btn ct-widget-toggle" class:mini-icon-btn--active={widgetAdjustMode} title={widgetAdjustMode ? 'Selesai mengatur widget' : 'Tambah, hapus, atau atur ulang urutan widget'} onclick={() => { widgetAdjustMode = !widgetAdjustMode; addWidgetMenuOpen = false; }}><Settings size={14} /></button>
 						{#if o}<button type="button" class="mini-icon-btn" title="Detail order" onclick={() => goto(`${basePath.replace('/control-tower', '')}/order/${o.id}`)}><ZoomIn size={14} /></button>{/if}
+						<button type="button" class="mini-icon-btn" title="Perkecil panel" onclick={() => (detailPanelMinimized = true)}><ChevronDown size={14} style="transform:rotate(-90deg)" /></button>
 						<button type="button" class="mini-icon-btn" title="Tutup" onclick={clearSelection}><X size={14} /></button>
 					</div>
 				</div>
@@ -1226,12 +1290,15 @@
 						{/if}
 					</section>
 				{/if}
+				{/if}
 			</aside>
 		{/if}
 	</div>
 
 	<!-- Order Control -->
-	<div class="ct2-orders ct-oc-panel">
+	<div class="ct2-orders ct-oc-panel" style="position:relative;">
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="ct-oc-height-handle" title="Geser untuk mengubah tinggi" onmousedown={startOcResize}></div>
 		<div class="ct-oc-head">
 			<div class="ct-oc-tabs-row">
 				<div bind:this={ocTabsEl} class="method-tabs ct-oc-tabs">
@@ -1260,7 +1327,7 @@
 				</div>
 			</div>
 		</div>
-		<div class="ct-oc-scroll">
+		<div class="ct-oc-scroll" style="max-height:{ocHeight}px">
 			{#if needsClient}
 				<div class="ct-oc-empty">Pilih klien untuk melihat order mereka.</div>
 			{:else if !activeCategory}
@@ -1300,7 +1367,7 @@
 									<td>
 										<div class="action-cell">
 											<button class="mini-icon-btn" title="Lihat detail" onclick={(e) => { e.stopPropagation(); openOrderDetail(f); }}><Search size={14} /></button>
-											<button class="mini-icon-btn" title="Salin ID order" onclick={(e) => { e.stopPropagation(); copyOrderCode(f); }}><Copy size={14} /></button>
+											<button class="mini-icon-btn" title="Salin link live tracking untuk customer" onclick={(e) => { e.stopPropagation(); copyTrackingLink(f); }}><Copy size={14} /></button>
 										</div>
 									</td>
 								</tr>
@@ -1327,7 +1394,7 @@
 									<td>
 										<div class="action-cell">
 											<button class="mini-icon-btn" title="Lihat detail" onclick={(e) => { e.stopPropagation(); openOrderDetail(s); }}><Search size={14} /></button>
-											<button class="mini-icon-btn" title="Salin ID order" onclick={(e) => { e.stopPropagation(); copyOrderCode(s); }}><Copy size={14} /></button>
+											<button class="mini-icon-btn" title="Salin link live tracking untuk customer" onclick={(e) => { e.stopPropagation(); copyTrackingLink(s); }}><Copy size={14} /></button>
 										</div>
 									</td>
 								</tr>
