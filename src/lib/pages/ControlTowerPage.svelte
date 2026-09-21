@@ -17,7 +17,7 @@
 	 */
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { Search, Truck, MapPin, X, Fuel, Gauge, Radio, Mountain, Battery, Activity, Bell, ZoomIn, Clock, ChevronDown, Filter, Download, FileText, Copy, AlertCircle, Scale } from 'lucide-svelte';
+	import { Search, Truck, MapPin, X, Fuel, Gauge, Radio, Mountain, Battery, Activity, Bell, ZoomIn, Clock, ChevronDown, Filter, Download, FileText, Copy, AlertCircle, Scale, Settings, GripVertical, Plus, Check, CircleDot } from 'lucide-svelte';
 	import { toast } from '$lib/stores/ui';
 	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
 	import { kontrakStatus } from '$lib/revamp/kontrakStatus';
@@ -27,6 +27,7 @@
 	import { loadTripAllowance, tripAllowanceDefaults, type TripAllowanceSettings } from '$lib/revamp/tripAllowanceSettings';
 	import { copyText } from '$lib/revamp/clipboard.js';
 	import { formatTimestampLabel } from '$lib/revamp/date.js';
+	import { haversineKm } from '$lib/revamp/geo.js';
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { orderStore, orderActions } from '$lib/stores/orders';
@@ -37,10 +38,10 @@
 	import { actingFor } from '$lib/stores/actingFor';
 	import { formatNumber, formatCurrency } from '$lib/utils/format';
 	import {
-		fetchLiveFleet, fetchLiveVehicle, fetchFuelEstimate, fetchSnappedTrip, fetchAlerts,
+		fetchLiveFleet, fetchLiveVehicle, fetchFuelEstimate, fetchSnappedTrip, fetchTrip, fetchAlerts,
 		truckIcon, plateKey, addressLine, curatedSensors, hasFix,
 		STATE_LABEL, STATE_COLOUR, SEVERITY_COLOUR, LIVE_POLL_MS,
-		type LiveVehicle, type SensorReading, type DriveState, type FuelEstimate, type SnappedTrip, type Alert
+		type LiveVehicle, type SensorReading, type DriveState, type FuelEstimate, type SnappedTrip, type TripPoint, type Alert
 	} from '$lib/fms/live';
 
 	let { basePath }: { basePath: string } = $props();
@@ -646,6 +647,189 @@
 		fetchSnappedTrip(v.vehicle_id, w.from, w.to).then((t) => { if (selectedVehicleId === v.vehicle_id) trip = t; }).catch(() => {});
 	});
 
+	// Raw fixes for the same window: speed/idle per point are what the
+	// Pantau Armada layers read (overspeed colouring, stop and idle dots).
+	let tripPoints = $state<TripPoint[]>([]);
+	$effect(() => {
+		const v = selectedVehicle;
+		const w = tripWindow;
+		tripPoints = [];
+		if (!v || !w) return;
+		fetchTrip(v.vehicle_id, w.from, w.to).then((pts) => { if (selectedVehicleId === v.vehicle_id) tripPoints = pts; }).catch(() => {});
+	});
+	// The planned haul from the business service (MAPID geometry), so the
+	// plan on the map is a road, not a straight line, and the actual trace
+	// can be scored against it.
+	let plannedRoute = $state<{ geometry: [number, number][]; distanceKm: number | null; durationMin: number | null } | null>(null);
+	$effect(() => {
+		const o = selectedOrder;
+		plannedRoute = null;
+		if (!o?.id) return;
+		api.get(ENDPOINTS.orders.routes(o.id)).then((r) => {
+			if (selectedOrder?.id !== o.id) return;
+			const haul = (r.data?.data ?? []).find((l: any) => l.leg === 'haul');
+			const src = haul?.route ?? haul;
+			if (!src) return;
+			plannedRoute = {
+				geometry: Array.isArray(src.geometry) ? src.geometry : [],
+				distanceKm: src.distanceMeters != null ? Math.round(src.distanceMeters / 100) / 10 : null,
+				durationMin: src.durationSeconds != null ? Math.round(src.durationSeconds / 60) : null
+			};
+		}).catch(() => {});
+	});
+	/** Share of actual fixes within 500 m of the planned line — "Kepatuhan Rute". */
+	let routeCompliance = $derived.by<number | null>(() => {
+		const plan = plannedRoute?.geometry;
+		const actual = trip?.points;
+		if (!plan || plan.length < 2 || !actual || actual.length < 2) return null;
+		// Sample the plan every ~1 km to keep the nearest-point search cheap.
+		const sampled: [number, number][] = [];
+		let acc = 0;
+		for (let i = 0; i < plan.length; i++) {
+			if (i === 0) { sampled.push(plan[i]); continue; }
+			acc += haversineKm({ lat: plan[i - 1][1], lng: plan[i - 1][0] }, { lat: plan[i][1], lng: plan[i][0] });
+			if (acc >= 1) { sampled.push(plan[i]); acc = 0; }
+		}
+		const step = Math.max(1, Math.floor(actual.length / 300));
+		let within = 0, total = 0;
+		for (let i = 0; i < actual.length; i += step) {
+			const a = { lat: actual[i][1], lng: actual[i][0] };
+			let best = Infinity;
+			for (const p of sampled) {
+				const d = haversineKm(a, { lat: p[1], lng: p[0] });
+				if (d < best) best = d;
+				if (best < 0.5) break;
+			}
+			total++;
+			if (best < 0.75) within++;
+		}
+		return total ? Math.round((within / total) * 100) : null;
+	});
+
+	// ------------------------------------------------------------------------
+	// Pantau Armada — layers drawn from the selected truck's FMS trace and
+	// alerts. Thresholds and the layer set can be saved as this browser's
+	// default view.
+	// ------------------------------------------------------------------------
+	type MonitorLayer = 'overspeed' | 'stopDots' | 'harshDriving' | 'refuelSpots' | 'idleSpots';
+	const MONITOR_LAYER_META: Record<MonitorLayer, { label: string; color: string; bg: string; icon?: string }> = {
+		overspeed: { label: 'Overspeed Colors', color: '#C2410C', bg: '#FDECD1' },
+		stopDots: { label: 'Stop Dots', color: '#DC2626', bg: '#FCE2E2' },
+		harshDriving: { label: 'Harsh Driving', color: '#EA580C', bg: '#FFEDD5' },
+		refuelSpots: { label: 'Refuel Spots', color: '#0B57D0', bg: '#E3ECFC', icon: '⛽' },
+		idleSpots: { label: 'Idle Spots', color: '#A16207', bg: '#FEF3C7' }
+	};
+	const MONITOR_STORAGE_KEY = 'ct-monitor-view';
+	let monitorPanelOpen = $state(false);
+	let monitorAddLayerOpen = $state(false);
+	let activeMonitorLayers = $state<MonitorLayer[]>(['overspeed', 'stopDots']);
+	let monitorConfig = $state({ speedLimitKmh: 60, stopToleranceHours: 2, idleToleranceMinutes: 15 });
+	let monitorSaved = $state(false);
+	onMount(() => {
+		try {
+			const raw = localStorage.getItem(MONITOR_STORAGE_KEY);
+			if (raw) {
+				const v = JSON.parse(raw);
+				if (Array.isArray(v.layers)) activeMonitorLayers = v.layers;
+				if (v.config) monitorConfig = { ...monitorConfig, ...v.config };
+			}
+		} catch { /* ignore */ }
+	});
+	let availableLayersToAdd = $derived((Object.keys(MONITOR_LAYER_META) as MonitorLayer[]).filter((k) => !activeMonitorLayers.includes(k)));
+	function addMonitorLayer(k: MonitorLayer) { activeMonitorLayers = [...activeMonitorLayers, k]; monitorAddLayerOpen = false; }
+	function removeMonitorLayer(k: MonitorLayer) { activeMonitorLayers = activeMonitorLayers.filter((x) => x !== k); }
+	function saveMonitorDefaultView() {
+		try { localStorage.setItem(MONITOR_STORAGE_KEY, JSON.stringify({ layers: activeMonitorLayers, config: monitorConfig })); monitorSaved = true; setTimeout(() => (monitorSaved = false), 1500); toast('Tampilan Pantau Armada disimpan sebagai default'); } catch { toast('Gagal menyimpan'); }
+	}
+	const layerOn = (k: MonitorLayer) => activeMonitorLayers.includes(k);
+	/** Dwell events off the raw trace: a fix with idle_min ≥ threshold, ignition off = stop, on = idle. */
+	let stopEvents = $derived(tripPoints.filter((p) => (p.idle_min ?? 0) >= monitorConfig.stopToleranceHours * 60 && p.ignition === false));
+	let idleEvents = $derived(tripPoints.filter((p) => (p.idle_min ?? 0) >= monitorConfig.idleToleranceMinutes && p.ignition !== false));
+	let harshEvents = $derived(alerts.filter((a) => /harsh|kasar|mendadak|brak|accel|corner/i.test(`${a.alert_code} ${a.alert_name}`) && a.lat != null && a.lon != null));
+	let refuelEvents = $derived(alerts.filter((a) => /refuel|fuel|bbm|bahan bakar/i.test(`${a.alert_code} ${a.alert_name}`) && a.lat != null && a.lon != null));
+	let overspeedCount = $derived(tripPoints.filter((p) => (p.speed ?? 0) > monitorConfig.speedLimitKmh).length);
+	const fmtMin = (m: number) => (m < 60 ? `${Math.round(m)} menit` : `${Math.floor(m / 60)} jam ${Math.round(m % 60)} menit`);
+
+	// ------------------------------------------------------------------------
+	// Progress + tasklist for the selected order, off the shipment machine.
+	// ------------------------------------------------------------------------
+	const PROGRESS_STEPS = [
+		{ key: 'assigned', label: 'Ditugaskan', statuses: ['assigned'] },
+		{ key: 'toLoading', label: 'Menuju Muat', statuses: ['toLoading', 'atLoading', 'loadingApproved', 'loading'] },
+		{ key: 'loaded', label: 'Selesai Muat', statuses: ['loaded'] },
+		{ key: 'toUnloading', label: 'Menuju Bongkar', statuses: ['toUnloading', 'atUnloading', 'unloadingApproved', 'unloading'] },
+		{ key: 'unloaded', label: 'Selesai Bongkar', statuses: ['unloaded'] },
+		{ key: 'finished', label: 'Selesai', statuses: ['finished'] }
+	];
+	let deliveryProgress = $derived.by(() => {
+		const o = selectedOrder;
+		if (!o) return null;
+		const sc = shipment?.statusCode ?? o.shipmentStatusCode ?? (o.statusCode === 'completed' || o.statusCode === 'delivered' ? 'finished' : 'assigned');
+		let idx = PROGRESS_STEPS.findIndex((st) => st.statuses.includes(sc));
+		if (idx < 0) idx = 0;
+		const steps = PROGRESS_STEPS.map((st, i) => ({ key: st.key, label: st.label, done: i <= idx }));
+		return { percent: Math.round(((idx + 1) / PROGRESS_STEPS.length) * 100), steps };
+	});
+	let deliveryDurationLabel = $derived.by(() => {
+		const o = selectedOrder;
+		if (!o?.pickupAt) return '—';
+		const start = new Date(o.pickupAt).getTime();
+		const end = o.statusCode === 'completed' || o.statusCode === 'delivered' ? new Date(o.updatedAt ?? nowMs).getTime() : nowMs;
+		const m = Math.max(0, (end - start) / 60_000);
+		return m < 60 ? `${Math.round(m)} menit` : m < 1440 ? `${Math.floor(m / 60)} jam ${Math.round(m % 60)} menit` : `${Math.floor(m / 1440)} hari ${Math.floor((m % 1440) / 60)} jam`;
+	});
+	type TaskState = 'done' | 'pending' | 'upcoming';
+	const TASK_STATE_LABEL: Record<TaskState, string> = { done: 'Selesai', pending: 'Perlu tindakan', upcoming: 'Belum waktunya' };
+	let transporterTasks = $derived.by(() => {
+		const o = selectedOrder;
+		if (!o) return null;
+		const status = kontrakStatus(o);
+		const d = o.detail ?? {};
+		const idx = (k: string) => ['penugasan_pengemudi','pengemudi_ditugaskan','pengemudi_menerima_order','menuju_lokasi_muat','tiba_lokasi_muat','proses_muat_barang','verifikasi_pod_muat','pod_muat_terverifikasi','menuju_lokasi_bongkar','tiba_lokasi_bongkar','proses_bongkar_muatan','verifikasi_pod_bongkar','pod_bongkar_terverifikasi','menunggu_konfirmasi_pengiriman','pengiriman_terkonfirmasi'].indexOf(k);
+		const cur = idx(status);
+		const items: { key: string; label: string; state: TaskState }[] = [
+			{ key: 'podMuat', label: 'Verifikasi POD Muat', state: cur > idx('verifikasi_pod_muat') ? 'done' : status === 'verifikasi_pod_muat' ? 'pending' : 'upcoming' },
+			{ key: 'podBongkar', label: 'Verifikasi POD Bongkar', state: cur > idx('verifikasi_pod_bongkar') ? 'done' : status === 'verifikasi_pod_bongkar' ? 'pending' : 'upcoming' },
+			{ key: 'sangu', label: 'Finalisasi Uang Sangu', state: d.uangSanguFinalized ? 'done' : 'pending' },
+			{ key: 'confirm', label: 'Konfirmasi Pengiriman', state: cur > idx('menunggu_konfirmasi_pengiriman') ? 'done' : status === 'menunggu_konfirmasi_pengiriman' ? 'pending' : 'upcoming' }
+		];
+		return { items, pendingCount: items.filter((t) => t.state === 'pending').length };
+	});
+
+	// ------------------------------------------------------------------------
+	// Widgets: which cards the panel shows and in what order. Adjust mode
+	// adds/removes/reorders; the layout can be saved as this browser's default.
+	// ------------------------------------------------------------------------
+	type WidgetKey = 'cargo' | 'route' | 'progress' | 'tasklist' | 'telemetry' | 'fuel';
+	const WIDGET_LABEL: Record<WidgetKey, string> = { cargo: 'Detail Muatan', route: 'Rute Perjalanan', progress: 'Progress Pengiriman', tasklist: 'Tasklist', telemetry: 'Sensors & Telemetry', fuel: 'Fuel Consumption' };
+	const DEFAULT_WIDGET_LAYOUT: WidgetKey[] = ['cargo', 'route', 'progress', 'tasklist', 'telemetry', 'fuel'];
+	const WIDGET_STORAGE_KEY = 'ct-widget-layout';
+	let widgetLayout = $state<WidgetKey[]>([...DEFAULT_WIDGET_LAYOUT]);
+	let widgetAdjustMode = $state(false);
+	let addWidgetMenuOpen = $state(false);
+	let widgetLayoutSaved = $state(false);
+	onMount(() => {
+		try {
+			const raw = localStorage.getItem(WIDGET_STORAGE_KEY);
+			if (raw) { const v = JSON.parse(raw); if (Array.isArray(v) && v.every((k) => k in WIDGET_LABEL)) widgetLayout = v; }
+		} catch { /* ignore */ }
+	});
+	let availableWidgetsToAdd = $derived(DEFAULT_WIDGET_LAYOUT.filter((k) => !widgetLayout.includes(k)));
+	function addWidget(k: WidgetKey) { widgetLayout = [...widgetLayout, k]; addWidgetMenuOpen = false; }
+	function removeWidget(k: WidgetKey) { widgetLayout = widgetLayout.filter((x) => x !== k); }
+	let draggedWidgetKey = $state<WidgetKey | null>(null);
+	function onWidgetDrop(target: WidgetKey) {
+		const from = draggedWidgetKey;
+		draggedWidgetKey = null;
+		if (!from || from === target) return;
+		const arr = widgetLayout.filter((k) => k !== from);
+		arr.splice(arr.indexOf(target), 0, from);
+		widgetLayout = arr;
+	}
+	function saveWidgetLayout() {
+		try { localStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify(widgetLayout)); widgetLayoutSaved = true; setTimeout(() => (widgetLayoutSaved = false), 1500); toast('Susunan widget disimpan sebagai default'); } catch { toast('Gagal menyimpan'); }
+	}
+
 	function sensorValue(label: string): string | undefined {
 		return sensors.find((s) => s.label === label)?.value;
 	}
@@ -698,20 +882,41 @@
 		// A truck with no GPS fix is not guessed onto the map (it used to be
 		// drawn at the warehouse, which reads as a position). It is flagged in
 		// the order table instead — see noGps().
+		// Pantau Armada dots, for the selected truck's window.
+		if (selectedVehicleId) {
+			if (layerOn('stopDots')) stopEvents.forEach((p, i) => out.push({ id: `stop-${i}`, lng: p.lon, lat: p.lat, color: MONITOR_LAYER_META.stopDots.color, title: `Berhenti ${fmtMin(p.idle_min ?? 0)}`, subtitle: `${new Date(p.time).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}${p.address ? ` · ${p.address}` : ''}` }));
+			if (layerOn('idleSpots')) idleEvents.forEach((p, i) => out.push({ id: `idle-${i}`, lng: p.lon, lat: p.lat, color: MONITOR_LAYER_META.idleSpots.color, title: `Idle ${fmtMin(p.idle_min ?? 0)} (mesin hidup)`, subtitle: `${new Date(p.time).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}${p.address ? ` · ${p.address}` : ''}` }));
+			if (layerOn('harshDriving')) harshEvents.forEach((a) => out.push({ id: `harsh-${a.id}`, lng: a.lon as number, lat: a.lat as number, color: MONITOR_LAYER_META.harshDriving.color, title: a.alert_name, subtitle: `${new Date(a.occurred_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}${a.address ? ` · ${a.address}` : ''}` }));
+			if (layerOn('refuelSpots')) refuelEvents.forEach((a) => out.push({ id: `refuel-${a.id}`, lng: a.lon as number, lat: a.lat as number, color: MONITOR_LAYER_META.refuelSpots.color, label: '⛽', title: a.alert_name, subtitle: `${new Date(a.occurred_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}${a.address ? ` · ${a.address}` : ''}` }));
+		}
 		return out;
 	});
 
-	/** The selected order's lane, straight — the planned geometry needs the routes endpoint. */
+	/** The selected order's planned haul (MAPID geometry, dashed) and the actual trace; overspeed stretches in red when that layer is on. */
 	let lines = $derived.by(() => {
 		const out: { id: string; coordinates: [number, number][]; dashed?: boolean; color?: string; width?: number }[] = [];
 		const o = selectedOrder;
 		if (o) {
-			const a = coordsOf(o.originWarehouseId);
-			const b = coordsOf(o.destinationWarehouseId);
-			if (a && b) out.push({ id: `plan-${o.id}`, coordinates: [a, b], dashed: true, color: '#0B57D0' });
+			if (plannedRoute?.geometry.length) out.push({ id: `plan-${o.id}`, coordinates: plannedRoute.geometry, dashed: true, color: '#0B57D0' });
+			else {
+				const a = coordsOf(o.originWarehouseId);
+				const b = coordsOf(o.destinationWarehouseId);
+				if (a && b) out.push({ id: `plan-${o.id}`, coordinates: [a, b], dashed: true, color: '#0B57D0' });
+			}
 		}
 		if (trip && trip.points.length > 1) {
-			out.push({ id: `actual-${selectedVehicleId}`, coordinates: trip.points, color: '#dc2626', width: 3 });
+			out.push({ id: `actual-${selectedVehicleId}`, coordinates: trip.points, color: layerOn('overspeed') ? '#16a34a' : '#dc2626', width: 3 });
+		}
+		if (layerOn('overspeed') && tripPoints.length > 1) {
+			// Consecutive fixes above the limit form one red stretch each.
+			let seg: [number, number][] = [];
+			let n = 0;
+			const flush = () => { if (seg.length > 1) out.push({ id: `over-${n++}`, coordinates: seg, color: MONITOR_LAYER_META.overspeed.color, width: 4 }); seg = []; };
+			for (const p of tripPoints) {
+				if ((p.speed ?? 0) > monitorConfig.speedLimitKmh) seg.push([p.lon, p.lat]);
+				else flush();
+			}
+			flush();
 		}
 		return out;
 	});
@@ -782,6 +987,50 @@
 		<!-- Map -->
 		<div class="ct2-map">
 			<MapView {markers} {lines} {flyTo} fitToMarkers={!selectedVehicleId && markers.length > 0} class="ct-map-canvas" />
+			<div class="planner-map-legends" style="right:56px;">
+				{#if !monitorPanelOpen}
+					<button type="button" class="planner-truck-legend-toggle" title="Pantau Armada" onclick={() => (monitorPanelOpen = true)}><Radio size={16} /></button>
+				{:else}
+					<div class="ct-monitor-panel">
+						<div class="ct-monitor-panel-head">
+							<span>Pantau Armada</span>
+							<button type="button" class="mini-icon-btn" title="Tutup" onclick={() => { monitorPanelOpen = false; monitorAddLayerOpen = false; }}><X size={14} /></button>
+						</div>
+						<div class="ct-monitor-chips">
+							{#each activeMonitorLayers as key (key)}
+								<span class="ct-monitor-chip" style="background:{MONITOR_LAYER_META[key].bg}; color:{MONITOR_LAYER_META[key].color}">
+									{#if MONITOR_LAYER_META[key].icon}<span class="ct-monitor-chip-icon">{MONITOR_LAYER_META[key].icon}</span>{:else}<span class="ct-monitor-chip-dot" style="background:{MONITOR_LAYER_META[key].color}"></span>{/if}
+									{MONITOR_LAYER_META[key].label}
+									<button type="button" class="ct-monitor-chip-remove" title="Hapus layer" onclick={() => removeMonitorLayer(key)}>×</button>
+								</span>
+							{/each}
+							<span class="ct-monitor-add-wrap">
+								<button type="button" class="ct-monitor-chip ct-monitor-chip--add" onclick={() => (monitorAddLayerOpen = !monitorAddLayerOpen)}><Plus size={11} /> Add layer</button>
+								{#if monitorAddLayerOpen}
+									<div class="ct-monitor-add-menu">
+										{#if !availableLayersToAdd.length}<div class="ct-monitor-add-menu-empty">Semua layer sudah aktif</div>{/if}
+										{#each availableLayersToAdd as k (k)}
+											<button type="button" class="ct-monitor-add-menu-item" onclick={() => addMonitorLayer(k)}>
+												{#if MONITOR_LAYER_META[k].icon}<span class="ct-monitor-chip-icon">{MONITOR_LAYER_META[k].icon}</span>{:else}<span class="ct-monitor-chip-dot" style="background:{MONITOR_LAYER_META[k].color}"></span>{/if}
+												{MONITOR_LAYER_META[k].label}
+											</button>
+										{/each}
+									</div>
+								{/if}
+							</span>
+						</div>
+						<div class="ct-monitor-config-row"><span class="ct-monitor-config-label">Red above</span><input type="number" class="ct-monitor-config-input" bind:value={monitorConfig.speedLimitKmh} min="0" /><span class="ct-monitor-config-unit">km/h</span></div>
+						<div class="ct-monitor-config-row"><span class="ct-monitor-config-label">Stop dots if stopped over</span><input type="number" class="ct-monitor-config-input" bind:value={monitorConfig.stopToleranceHours} min="0" /><span class="ct-monitor-config-unit">hours</span></div>
+						<div class="ct-monitor-config-row"><span class="ct-monitor-config-label">Idle dots if idle over</span><input type="number" class="ct-monitor-config-input" bind:value={monitorConfig.idleToleranceMinutes} min="0" /><span class="ct-monitor-config-unit">menit</span></div>
+						<button type="button" class="ct-monitor-save-btn" onclick={saveMonitorDefaultView}>{monitorSaved ? '✓ Tersimpan' : 'Save as default view'}</button>
+						{#if selectedVehicle}
+							<div class="hint" style="margin-top:10px;">{tripPoints.length} titik GPS · {overspeedCount} di atas {monitorConfig.speedLimitKmh} km/h · {stopEvents.length} berhenti · {idleEvents.length} idle · {harshEvents.length} harsh · {refuelEvents.length} refuel</div>
+						{:else}
+							<div class="hint" style="margin-top:10px;">Pilih truck untuk melihat layer pada jejaknya.</div>
+						{/if}
+					</div>
+				{/if}
+			</div>
 		</div>
 
 		<!-- Right panel: the selected vehicle -->
@@ -796,6 +1045,7 @@
 						<div class="ct2-panel-sub"><Truck size={14} /> <b>{v.license_plate}</b> <span>{v.driver?.name ?? 'Pengemudi belum ditetapkan'}</span></div>
 					</div>
 					<div class="ct2-panel-actions">
+						<button type="button" class="mini-icon-btn ct-widget-toggle" class:mini-icon-btn--active={widgetAdjustMode} title={widgetAdjustMode ? 'Selesai mengatur widget' : 'Tambah, hapus, atau atur ulang urutan widget'} onclick={() => { widgetAdjustMode = !widgetAdjustMode; addWidgetMenuOpen = false; }}><Settings size={14} /></button>
 						{#if o}<button type="button" class="mini-icon-btn" title="Detail order" onclick={() => goto(`${basePath.replace('/control-tower', '')}/order/${o.id}`)}><ZoomIn size={14} /></button>{/if}
 						<button type="button" class="mini-icon-btn" title="Tutup" onclick={clearSelection}><X size={14} /></button>
 					</div>
@@ -806,8 +1056,17 @@
 				</div>
 
 				{#if tab === 'monitoring'}
-					<!-- Detail Muatan: TMS order (plan) and its shipment (actual) -->
-					<section class="ct2-card">
+					{#each widgetLayout as key (key)}
+						<div class="ct-widget-card" class:ct-widget-card--editing={widgetAdjustMode} class:ct-widget-card--dragging={draggedWidgetKey === key} draggable={widgetAdjustMode} role="listitem" ondragstart={() => (draggedWidgetKey = key)} ondragover={(e) => e.preventDefault()} ondrop={() => onWidgetDrop(key)}>
+							{#if widgetAdjustMode}
+								<div class="ct-widget-edit-bar">
+									<GripVertical size={14} class="ct-widget-drag-handle" />
+									<span class="ct-widget-edit-label">{WIDGET_LABEL[key]}</span>
+									<button type="button" class="ct-widget-remove" title="Hapus widget ini" onclick={() => removeWidget(key)}><X size={10} /></button>
+								</div>
+							{/if}
+							{#if key === 'cargo'}
+<section class="ct2-card">
 						<header><span>Detail Muatan</span><small>{o?.detail?.itemName ?? o?.detail?.commodity ?? (o ? kindLabel(o) : 'Tidak ada order aktif')}</small></header>
 						{#if o}
 							<table class="ct2-table">
@@ -822,16 +1081,15 @@
 							<div class="ct2-card-empty">Truk ini tidak sedang membawa order TMS.</div>
 						{/if}
 					</section>
-
-					<!-- Rute Perjalanan: plan from TMS; actual from FMS trip history when available -->
-					<section class="ct2-card">
-						<header><span>Rute Perjalanan</span>{#if o}<small>{routeLabel(o)}</small>{/if}</header>
+						{:else if key === 'route'}
+<section class="ct2-card">
+						<header><span>Rute Perjalanan</span>{#if routeCompliance != null}<span class="ct-route-compliance"><span class="ct-route-compliance-label">Kepatuhan Rute</span><span class="ct-route-compliance-ring {routeCompliance >= 90 ? 'good' : routeCompliance >= 70 ? 'ok' : 'bad'}">{routeCompliance}%</span></span>{:else if o}<small>{routeLabel(o)}</small>{/if}</header>
 						{#if o}
 							<table class="ct2-table">
 								<thead><tr><th></th><th>Plan</th><th>Aktual</th></tr></thead>
 								<tbody>
-									<tr><td>Jarak</td><td>{o.detail?.distanceKm ? `${formatNumber(num(o.detail.distanceKm))} km` : '—'}</td><td>{trip?.distance_km != null ? `${formatNumber(Math.round(trip.distance_km * 10) / 10)} km` : '—'}</td></tr>
-									<tr><td>ETA</td><td>{o.deliveryAt ? new Date(o.deliveryAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</td><td>{o.statusCode === 'delivered' || o.statusCode === 'completed' ? new Date(o.updatedAt ?? '').toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : 'dalam perjalanan'}</td></tr>
+									<tr><td>Jarak</td><td>{plannedRoute?.distanceKm != null ? `${plannedRoute.distanceKm} km` : o.detail?.distanceKm ? `${formatNumber(num(o.detail.distanceKm))} km` : '—'}</td><td>{trip?.distance_km != null ? `${formatNumber(Math.round(trip.distance_km * 10) / 10)} km` : '—'}</td></tr>
+									<tr><td>ETA</td><td>{plannedRoute?.durationMin != null ? `${Math.floor(plannedRoute.durationMin / 60)} jam ${plannedRoute.durationMin % 60} menit` : o.deliveryAt ? new Date(o.deliveryAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</td><td>{o.statusCode === 'delivered' || o.statusCode === 'completed' ? new Date(o.updatedAt ?? '').toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : 'dalam perjalanan'}</td></tr>
 								</tbody>
 							</table>
 							{#if trip}
@@ -843,9 +1101,39 @@
 							<div class="ct2-card-empty">{addressLine(pos) || 'Posisi belum diketahui.'}</div>
 						{/if}
 					</section>
-
-					<!-- Sensors & Telemetry: FMS -->
-					<section class="ct2-card">
+						{:else if key === 'progress'}
+<section class="ct2-card">
+						<header><span>Progress Pengiriman</span>{#if deliveryProgress}<span class="ct-progress-percent">{deliveryProgress.percent}%</span>{/if}</header>
+						{#if deliveryProgress}
+							<div class="ct-progress-track"><div class="ct-progress-track-fill" style="width:{deliveryProgress.percent}%"></div></div>
+							<div class="ct-progress-checkpoints">
+								{#each deliveryProgress.steps as st (st.key)}<span class="ct-progress-checkpoint" class:ct-progress-checkpoint--done={st.done}>{st.label}</span>{/each}
+							</div>
+							<div class="ct-progress-duration"><span class="ct-progress-duration-label">Durasi Pengiriman</span><span class="ct-progress-duration-value">{deliveryDurationLabel}</span></div>
+						{:else}
+							<div class="ct2-card-empty">Truk ini tidak sedang membawa order TMS.</div>
+						{/if}
+					</section>
+						{:else if key === 'tasklist'}
+<section class="ct2-card">
+						<header><span>Tasklist</span>{#if transporterTasks}<span class="ct-tasklist-count" class:ct-tasklist-count--clear={!transporterTasks.pendingCount}>{transporterTasks.pendingCount ? `${transporterTasks.pendingCount} perlu tindakan` : 'Semua selesai'}</span>{/if}</header>
+						{#if transporterTasks && o}
+							<div class="ct-tasklist">
+								{#each transporterTasks.items as task (task.key)}
+									<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+									<div class="ct-tasklist-item ct-tasklist-item--{task.state}" class:ct-tasklist-item--clickable={task.state === 'pending'} onclick={() => task.state === 'pending' && goto(`${basePath.replace('/control-tower', '')}/order/${o.id}`)}>
+										<span class="ct-tasklist-icon">{#if task.state === 'done'}<Check size={12} />{:else if task.state === 'pending'}<AlertCircle size={12} />{:else}<Clock size={12} />{/if}</span>
+										<span class="ct-tasklist-label">{task.label}</span>
+										<span class="ct-tasklist-state">{TASK_STATE_LABEL[task.state]}</span>
+									</div>
+								{/each}
+							</div>
+						{:else}
+							<div class="ct2-card-empty">Truk ini tidak sedang membawa order TMS.</div>
+						{/if}
+					</section>
+						{:else if key === 'telemetry'}
+<section class="ct2-card">
 						<header><span>Sensors &amp; Telemetry</span><small>{pos?.time ? new Date(pos.time).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : ''}</small></header>
 						<div class="ct-telemetry-grid">
 							<div class="ct-telemetry-tile {v.online ? 'good' : 'warn'}"><Battery size={14} /><span class="ct-telemetry-value">{v.battery_v != null ? `${v.battery_v.toFixed(1)} V` : sensorValue('Tegangan Eksternal') ?? '—'}</span><small>Battery</small></div>
@@ -864,9 +1152,8 @@
 						{/if}
 						{#if addressLine(pos)}<div class="ct2-address"><MapPin size={12} /> {addressLine(pos)}</div>{/if}
 					</section>
-
-					<!-- Fuel Consumption: FMS, when its endpoint is wired -->
-					<section class="ct2-card">
+						{:else if key === 'fuel'}
+<section class="ct2-card">
 						<header><span>Fuel Consumption</span><small>estimasi FMS · {fuel?.days ?? 30} hari</small></header>
 						{#if fuel && fuel.litres != null}
 							<div class="ct2-fuel">
@@ -884,6 +1171,20 @@
 							<div class="ct2-card-empty">Memuat…</div>
 						{/if}
 					</section>
+							{/if}
+						</div>
+					{/each}
+					{#if widgetAdjustMode}
+						<div class="ct-widget-add">
+							<button type="button" class="ct-widget-add-btn" disabled={!availableWidgetsToAdd.length} onclick={() => (addWidgetMenuOpen = !addWidgetMenuOpen)}><Plus size={13} /> Tambah widget</button>
+							{#if addWidgetMenuOpen}
+								<div class="ct-widget-add-menu">
+									{#each availableWidgetsToAdd as k (k)}<button type="button" class="ct-widget-add-menu-item" onclick={() => addWidget(k)}>{WIDGET_LABEL[k]}</button>{/each}
+								</div>
+							{/if}
+						</div>
+						<button type="button" class="ct-widget-save-default-btn" class:ct-widget-save-default-btn--saved={widgetLayoutSaved} onclick={saveWidgetLayout}><Check size={14} /> {widgetLayoutSaved ? 'Tersimpan' : 'Save as default layout'}</button>
+					{/if}
 				{:else}
 					<section class="ct2-card">
 						<header><span><Bell size={13} /> Notifikasi</span><small>{alerts.length} peringatan{tripWindow ? ` · ${tripWindow.from.toLocaleDateString('id-ID')} – ${tripWindow.to.toLocaleDateString('id-ID')}` : ''}</small></header>
