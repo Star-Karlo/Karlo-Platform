@@ -79,7 +79,7 @@
 			next = { kind: 'done', label: 'Tidak ada langkah berikutnya' };
 		}
 	}
-	async function step(): Promise<boolean> {
+	async function step(reloadAfter = true): Promise<boolean> {
 		const n = next;
 		if (!n?.status) return false;
 		stepping = true;
@@ -113,6 +113,9 @@
 			}
 			await compute();
 			onchanged?.();
+			// The detail page opens its verification / next-action dialogs on
+			// load, so a full reload after a step brings them up right away.
+			if (reloadAfter) setTimeout(() => window.location.reload(), 300);
 			return true;
 		} catch (e: any) {
 			toast(e?.response?.data?.message ?? 'Langkah gagal');
@@ -124,9 +127,10 @@
 	async function runToEnd() {
 		for (let i = 0; i < 20; i++) {
 			if (!next?.status) break;
-			if (!(await step())) break;
+			if (!(await step(false))) break;
 		}
 		toast(`Berhenti di: ${order?.statusAlias ?? order?.statusCode}${shipment ? ` / shipment ${shipment.statusCode}` : ''}`);
+		setTimeout(() => window.location.reload(), 800);
 	}
 </script>
 

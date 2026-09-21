@@ -816,8 +816,7 @@
 		const items: { key: string; label: string; state: TaskState }[] = [
 			{ key: 'podMuat', label: 'Verifikasi POD Muat', state: cur > idx('verifikasi_pod_muat') ? 'done' : status === 'verifikasi_pod_muat' ? 'pending' : 'upcoming' },
 			{ key: 'podBongkar', label: 'Verifikasi POD Bongkar', state: cur > idx('verifikasi_pod_bongkar') ? 'done' : status === 'verifikasi_pod_bongkar' ? 'pending' : 'upcoming' },
-			{ key: 'sangu', label: 'Finalisasi Uang Sangu', state: d.uangSanguFinalized ? 'done' : 'pending' },
-			{ key: 'confirm', label: 'Konfirmasi Pengiriman', state: cur > idx('menunggu_konfirmasi_pengiriman') ? 'done' : status === 'menunggu_konfirmasi_pengiriman' ? 'pending' : 'upcoming' }
+			{ key: 'sangu', label: 'Finalisasi Uang Sangu', state: d.uangSanguFinalized ? 'done' : 'pending' }
 		];
 		return { items, pendingCount: items.filter((t) => t.state === 'pending').length };
 	});

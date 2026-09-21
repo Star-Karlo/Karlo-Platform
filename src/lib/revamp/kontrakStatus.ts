@@ -28,9 +28,10 @@ export function kontrakStatus(o: OrderLike): string {
 		case 'expired':
 			return 'kadaluarsa';
 		case 'completed':
-			return 'pengiriman_terkonfirmasi';
 		case 'delivered':
-			return 'menunggu_konfirmasi_pengiriman';
+			// Delivered is a legacy state: a finished shipment now completes the
+			// order, and "menunggu konfirmasi" is no longer a step.
+			return 'pengiriman_terkonfirmasi';
 	}
 	// Assigned: the shipment says how far the truck has got.
 	if (o.statusCode === 'assigned' || o.shipmentStatusCode) {
@@ -54,7 +55,7 @@ export function kontrakStatus(o: OrderLike): string {
 			case 'unloaded':
 				return podPhaseVerified({ detail: d }, 'bongkar') ? 'pod_bongkar_terverifikasi' : 'verifikasi_pod_bongkar';
 			case 'finished':
-				return 'menunggu_konfirmasi_pengiriman';
+				return 'pengiriman_terkonfirmasi';
 			case 'cancelled':
 				return 'dibatalkan';
 		}

@@ -18,9 +18,10 @@ export const SPOT_ORDER_STATUSES = {
   proses_bongkar_muatan: { label: 'Proses Bongkar Muatan', badge: 'badge-planner' },
   verifikasi_pod_bongkar: { label: 'Verifikasi POD Bongkar', badge: 'badge-wait' },
   pod_bongkar_terverifikasi: { label: 'POD dan Bongkaran Terverifikasi', badge: 'badge-active' },
-  menunggu_konfirmasi_pengiriman: { label: 'Menunggu Konfirmasi Pengiriman', badge: 'badge-active' },
+  // Legacy key, no longer produced: a finished shipment completes the order.
+  menunggu_konfirmasi_pengiriman: { label: 'Order Selesai', badge: 'badge-active' },
   dibatalkan: { label: 'Order Dibatalkan', badge: 'badge-fail' },
-  pengiriman_terkonfirmasi: { label: 'Order Terkonfirmasi', badge: 'badge-active' },
+  pengiriman_terkonfirmasi: { label: 'Order Selesai', badge: 'badge-active' },
   kadaluarsa: { label: 'Order Kadaluarsa', badge: 'badge-fail' },
   pencairan_proses: { label: 'Pencairan Dalam Proses', badge: 'badge-wait' },
   // Handed off to an outside vendor transporter (MyTransporter — Planner
@@ -48,7 +49,6 @@ export const SPOT_ORDER_TABS = [
   'proses_bongkar_muatan',
   'verifikasi_pod_bongkar',
   'pod_bongkar_terverifikasi',
-  'menunggu_konfirmasi_pengiriman',
   'dibatalkan',
   'pengiriman_terkonfirmasi',
   'kadaluarsa',
@@ -90,7 +90,6 @@ export const STATUS_SEQUENCE = [
   'proses_bongkar_muatan',
   'verifikasi_pod_bongkar',
   'pod_bongkar_terverifikasi',
-  'menunggu_konfirmasi_pengiriman',
   'pengiriman_terkonfirmasi',
 ]
 export function hasPassed(status, milestone) {

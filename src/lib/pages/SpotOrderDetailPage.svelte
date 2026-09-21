@@ -485,8 +485,7 @@
 			{ time: t, title: 'Submit POD & Selesai Bongkar #1', actor: driverName, role: 'Driver' },
 			{ time: t, title: 'Pengecekan POD Bongkar #1', actor: driverName, role: 'Driver' },
 			{ time: t, title: 'POD Bongkar Terverifikasi #1', actor: companyName, role: 'Manager' },
-			{ time: t, title: 'Order Selesai', actor: companyName, role: 'Manager' },
-			{ time: t, title: 'Menunggu Konfirmasi Pengiriman' }
+			{ time: t, title: 'Order Selesai', actor: companyName, role: 'Manager' }
 		];
 	}
 
