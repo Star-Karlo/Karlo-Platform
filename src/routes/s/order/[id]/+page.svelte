@@ -1,5 +1,8 @@
 <script lang="ts">
-	import OrderDetailPage from '$lib/pages/OrderDetailPage.svelte';
+	import { page } from '$app/stores';
+	import OrderDetailDispatchPage from '$lib/pages/OrderDetailDispatchPage.svelte';
 </script>
 
-<OrderDetailPage basePath="/s/order" />
+{#key $page.params.id}
+	<OrderDetailDispatchPage id={$page.params.id ?? ''} basePath="/s" />
+{/key}

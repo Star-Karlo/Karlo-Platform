@@ -23,6 +23,7 @@
 		FileText
 	} from 'lucide-svelte';
 	import { api } from '$lib/utils/api';
+	import TestModeStrip from '$lib/components/revamp/TestModeStrip.svelte';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { toast } from '$lib/stores/ui';
 	import ConfirmModal from '$lib/components/revamp/ConfirmModal.svelte';
@@ -1085,6 +1086,8 @@
 {/snippet}
 
 <div class="spot-detail-page">
+	<!-- TEMPORARY: Mode Uji (end-to-end testing) -->
+	<TestModeStrip orderId={id} {basePath} onchanged={() => loadOrder()} />
 	{#if !order}
 		{#if loaded}
 			<div class="card card-pad">

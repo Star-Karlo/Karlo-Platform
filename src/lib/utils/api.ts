@@ -146,7 +146,35 @@ instance.interceptors.response.use(
  */
 const ACTING_FOR_HEADER = 'X-Acting-For';
 
+/**
+ * TEMPORARY — Mode Uji. While the order page's test switch is on, every
+ * request carries X-Status-Bypass so the business service lets a company
+ * Administrator (or Karlo staff) walk an order through the driver's and
+ * warehouse's status steps. The server ignores the header for other roles.
+ * Remove together with the strip on OrderDetailPage.
+ */
+const STATUS_BYPASS_HEADER = 'X-Status-Bypass';
+export const TEST_MODE_KEY = 'karlo-test-mode';
+
 export const api = {
+	/** Mode Uji on/off — persisted per browser; see STATUS_BYPASS_HEADER. */
+	setTestMode(on: boolean) {
+		if (on) instance.defaults.headers.common[STATUS_BYPASS_HEADER] = '1';
+		else delete instance.defaults.headers.common[STATUS_BYPASS_HEADER];
+		try {
+			if (typeof localStorage !== 'undefined') localStorage.setItem(TEST_MODE_KEY, on ? '1' : '0');
+		} catch {
+			/* private mode */
+		}
+	},
+	testMode(): boolean {
+		try {
+			return typeof localStorage !== 'undefined' && localStorage.getItem(TEST_MODE_KEY) === '1';
+		} catch {
+			return false;
+		}
+	},
+
 	/** Act for a client company, or pass '' to act as yourself again. */
 	setActingFor(companyId: string) {
 		if (companyId) {
@@ -175,3 +203,6 @@ export const api = {
 	upload: (url: string, formData: FormData) =>
 		instance.post(url, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
 };
+
+// Mode Uji survives a reload: re-arm the header from what the browser kept.
+if (api.testMode()) api.setTestMode(true);
