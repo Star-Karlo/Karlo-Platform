@@ -54,6 +54,8 @@ export interface LiveVehicle {
 	online: boolean;
 	drive_state: DriveState;
 	stale_minutes: number;
+	/** When the current drive_state began. Optional until FMS publishes it. */
+	state_since?: string | null;
 	battery_v?: number | null;
 	gsm_signal?: number | null;
 }

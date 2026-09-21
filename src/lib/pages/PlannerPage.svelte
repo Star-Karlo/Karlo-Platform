@@ -22,8 +22,12 @@
 	import { goto } from '$app/navigation';
 	import {
 		ChevronDown,
+		ChevronUp,
 		Clock,
 		Copy,
+		GripVertical,
+		LocateFixed,
+		Plus,
 		MapPin,
 		Phone,
 		Search,
@@ -95,7 +99,13 @@
 		coords: [number, number] | null;
 		shipmentLabel?: string;
 	};
-	type RouteSummary = { distanceKm: number | null; durationMin: number | null; geometry: [number, number][] };
+	type RouteSummary = {
+		distanceKm: number | null;
+		durationMin: number | null;
+		geometry: [number, number][];
+		/** Tolled stretches of the geometry, as MAPID reports them. */
+		tollKm?: number | null;
+	};
 
 	const TRUCK_STATUS_LIST = [
 		{ key: 'available', label: 'Available', color: '#146C2E', icon: 'active' },
@@ -493,10 +503,25 @@
 
 	function summarise(r: any): RouteSummary {
 		const src = r?.route ?? r ?? {};
+		const geometry: [number, number][] = Array.isArray(src.geometry) ? src.geometry : [];
+		// Toll segments are index ranges over the geometry; their length is
+		// summed here so the panel can say how much of the route is tolled.
+		let tollKm: number | null = null;
+		if (Array.isArray(src.tollSegments) && geometry.length > 1) {
+			let m = 0;
+			for (const seg of src.tollSegments) {
+				if (seg?.status && seg.status !== 'toll' && seg.status !== 'tolled') continue;
+				for (let i = Math.max(0, seg.from ?? 0); i < Math.min(geometry.length - 1, seg.to ?? 0); i++) {
+					m += haversineKm({ lat: geometry[i][1], lng: geometry[i][0] }, { lat: geometry[i + 1][1], lng: geometry[i + 1][0] });
+				}
+			}
+			tollKm = Math.round(m * 10) / 10;
+		}
 		return {
 			distanceKm: src.distanceMeters != null ? Math.round(src.distanceMeters / 100) / 10 : null,
 			durationMin: src.durationSeconds != null ? Math.round(src.durationSeconds / 60) : null,
-			geometry: Array.isArray(src.geometry) ? src.geometry : []
+			geometry,
+			tollKm
 		};
 	}
 	async function planRoute(points: [number, number][]): Promise<RouteSummary> {
@@ -508,18 +533,146 @@
 	const routePoints = $derived(routeStops.map((s) => s.coords).filter(Boolean) as [number, number][]);
 	const firstLoadingPoint = $derived(routeStops.find((s) => s.type === 'muat')?.coords ?? null);
 
+	// ---------------------------------------------------------------------
+	// Custom Rute — via-points the planner places to bend the routed line
+	// through a preferred road. A preview only, like the prototype: the
+	// waypoints go to POST /routing/route (cached like any other request) and
+	// nothing is written to the order; a persisted re-plan is /orders/:id/reroute.
+	// Cleared whenever the selected order or the LTL selection changes.
+	// ---------------------------------------------------------------------
+	type ViaPoint = { lng: number; lat: number };
+	let customRouteMode = $state(false);
+	let customViaPoints = $state<ViaPoint[]>([]);
+	/** LTL only: a hand-ordered muat/bongkar sequence; null = the system's order. */
+	let ltlStopOrderOverride = $state<Stop[] | null>(null);
+	$effect(() => {
+		void selectedOrderKey, ltlSelectedKeys;
+		customRouteMode = false;
+		customViaPoints = [];
+		ltlStopOrderOverride = null;
+	});
+	const ltlActiveStops = $derived(ltlStopOrderOverride ?? ltlCombinedStops);
+	const baseRouteStops = $derived(ltlPanelActive ? ltlActiveStops : stops);
+	/** Waypoints in travel order: first stop, the via-points, then the rest. */
+	const routeWaypoints = $derived.by<[number, number][]>(() => {
+		const pts = baseRouteStops.map((s) => s.coords).filter(Boolean) as [number, number][];
+		if (pts.length < 2 || !customViaPoints.length) return pts;
+		return [pts[0], ...customViaPoints.map((v) => [v.lng, v.lat] as [number, number]), ...pts.slice(1)];
+	});
+	type CustomStopRow = {
+		kind: 'muat' | 'bongkar' | 'via';
+		label: string;
+		coords: [number, number] | null;
+		viaIndex?: number;
+		stopIndex?: number;
+		shipmentLabel?: string;
+	};
+	/** The numbered list in Custom Rute mode: first stop, via-points, the rest. */
+	const customStopsList = $derived.by<CustomStopRow[]>(() => {
+		const points = baseRouteStops;
+		if (!points.length) return [];
+		const isLtl = ltlShipments.length > 0;
+		const fixed = (p: Stop, i: number): CustomStopRow => ({
+			kind: p.type,
+			label: p.label,
+			coords: p.coords,
+			shipmentLabel: p.shipmentLabel,
+			stopIndex: isLtl ? i : undefined
+		});
+		const vias = customViaPoints.map((v, i): CustomStopRow => ({
+			kind: 'via',
+			label: `Titik ${i + 1} · ${v.lat.toFixed(4)}, ${v.lng.toFixed(4)}`,
+			coords: [v.lng, v.lat],
+			viaIndex: i
+		}));
+		return [fixed(points[0], 0), ...vias, ...points.slice(1).map((p, i) => fixed(p, i + 1))];
+	});
+	function toggleCustomRoute() {
+		customRouteMode = !customRouteMode;
+		if (customRouteMode) toast('Klik di map untuk menambah titik rute, geser titik untuk menyesuaikan, klik kanan untuk menghapus');
+	}
+	function resetCustomRoute() {
+		customViaPoints = [];
+		ltlStopOrderOverride = null;
+	}
+	function addViaPointAt([lng, lat]: [number, number]) {
+		if (!customRouteMode || baseRouteStops.length < 2) return;
+		customViaPoints = [...customViaPoints, { lng, lat }];
+	}
+	function moveViaPoint(index: number, dir: -1 | 1) {
+		const target = index + dir;
+		if (target < 0 || target >= customViaPoints.length) return;
+		const arr = [...customViaPoints];
+		[arr[index], arr[target]] = [arr[target], arr[index]];
+		customViaPoints = arr;
+	}
+	function removeViaPointAt(index: number) {
+		customViaPoints = customViaPoints.filter((_, i) => i !== index);
+	}
+	function moveViaPointTo(index: number, [lng, lat]: [number, number]) {
+		customViaPoints = customViaPoints.map((v, i) => (i === index ? { lng, lat } : v));
+	}
+	/** "+" on a row: a new via-point just beside that stop, right after it in the sequence. */
+	function addViaPointNear(row: CustomStopRow) {
+		if (!row.coords) return;
+		const insertAt = row.kind === 'muat' && row.stopIndex === undefined ? 0 : row.kind === 'via' ? row.viaIndex! + 1 : customViaPoints.length;
+		const arr = [...customViaPoints];
+		arr.splice(insertAt, 0, { lng: row.coords[0] + 0.01, lat: row.coords[1] + 0.01 });
+		customViaPoints = arr;
+	}
+	// Drag-and-drop reordering — via-points among themselves, and (LTL only)
+	// the combined muat/bongkar sequence.
+	let draggingViaIndex = $state<number | null>(null);
+	let draggingLtlStopIndex = $state<number | null>(null);
+	function onRowDragStart(row: CustomStopRow, e: DragEvent) {
+		if (row.kind === 'via') draggingViaIndex = row.viaIndex!;
+		else if (row.stopIndex != null) draggingLtlStopIndex = row.stopIndex;
+		if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+	}
+	function onRowDrop(target: CustomStopRow, e: DragEvent) {
+		e.preventDefault();
+		if (draggingViaIndex != null) {
+			const from = draggingViaIndex;
+			draggingViaIndex = null;
+			if (target.kind === 'via' && target.viaIndex !== from) {
+				const arr = [...customViaPoints];
+				const [moved] = arr.splice(from, 1);
+				const to = target.viaIndex! > from ? target.viaIndex! - 1 : target.viaIndex!;
+				arr.splice(to, 0, moved);
+				customViaPoints = arr;
+			}
+		}
+		if (draggingLtlStopIndex != null) {
+			const from = draggingLtlStopIndex;
+			draggingLtlStopIndex = null;
+			if (target.stopIndex != null && target.stopIndex !== from) {
+				const arr = [...ltlActiveStops];
+				const [moved] = arr.splice(from, 1);
+				const to = target.stopIndex > from ? target.stopIndex - 1 : target.stopIndex;
+				arr.splice(to, 0, moved);
+				ltlStopOrderOverride = arr;
+			}
+		}
+	}
+	function onRowDragEnd() {
+		draggingViaIndex = null;
+		draggingLtlStopIndex = null;
+	}
+
 	let haulToken = 0;
 	$effect(() => {
 		const order = selectedOrder;
-		const pts = routePoints;
+		const pts = routeWaypoints;
+		const customised = customViaPoints.length > 0 || ltlStopOrderOverride !== null;
 		const token = ++haulToken;
 		haulRoute = { distanceKm: null, durationMin: null, geometry: [] };
 		if (!pts.length) return;
 		(async () => {
 			try {
 				// A single order already has its haul planned at creation; ask for
-				// that first, and only plan afresh for a combined LTL route.
-				if (order && !ltlPanelActive) {
+				// that first, and only plan afresh for a combined LTL route or a
+				// customised one.
+				if (order && !ltlPanelActive && !customised) {
 					const legs = (await api.get(ENDPOINTS.orders.routes(order.raw.id))).data?.data ?? [];
 					const haul = legs.find((l: any) => l.leg === 'haul');
 					if (haul && token === haulToken) {
@@ -720,7 +873,19 @@
 				}
 			});
 		}
-		routeStops.forEach((s, i) => {
+		customViaPoints.forEach((v, i) => {
+			out.push({
+				id: `via-${i}`,
+				lat: v.lat,
+				lng: v.lng,
+				color: '#fff',
+				style: 'width:16px; height:16px; border:3px solid #0B57D0; box-shadow:0 0 0 2px #fff, 0 1px 4px rgba(0,0,0,.35); cursor:' + (customRouteMode ? 'grab' : 'default'),
+				draggable: customRouteMode,
+				onDragEnd: (c) => moveViaPointTo(i, c),
+				onContextMenu: () => customRouteMode && removeViaPointAt(i)
+			});
+		});
+		baseRouteStops.forEach((s, i) => {
 			if (!s.coords) return;
 			out.push({
 				id: `stop-${i}`,
@@ -851,9 +1016,10 @@
 						<div class="planner-muatan-item"><div class="planner-muatan-label">Qty</div><div class="planner-muatan-value">{ltlCombinedTotals.qty}</div></div>
 						<div class="planner-muatan-item"><div class="planner-muatan-label">Volume</div><div class="planner-muatan-value">{ltlCombinedTotals.volume}</div></div>
 					</div>
+					{#if !customRouteMode}
 					<div class="planner-stops-label">Susunan Rute Gabungan</div>
 					<div class="planner-custom-stops">
-						{#each ltlCombinedStops as s, i (i)}
+						{#each ltlActiveStops as s, i (i)}
 							<div class="planner-custom-stop">
 								<div class="planner-custom-stop-num planner-custom-stop-num--{s.type}">{i + 1}</div>
 								<div class="planner-custom-stop-pill" title={s.label}>
@@ -862,8 +1028,9 @@
 								</div>
 							</div>
 						{/each}
-						{#if !ltlCombinedStops.length}<div class="hint">Titik rute belum tersedia.</div>{/if}
+						{#if !ltlActiveStops.length}<div class="hint">Titik rute belum tersedia.</div>{/if}
 					</div>
+					{/if}
 				{:else if selectedOrder}
 					<div class="planner-order-header">
 						<div class="planner-order-title-row"><div class="planner-order-company">{selectedOrder.shipperName}</div></div>
@@ -890,6 +1057,7 @@
 						{/each}
 						{#if !selectedTruckOptions.length}<div class="planner-truck-options-empty">Belum ada pilihan truck pada order ini.</div>{/if}
 					</div>
+					{#if !customRouteMode}
 					<button type="button" class="planner-stops-label planner-stops-toggle" onclick={() => (stopsAccordionOpen = !stopsAccordionOpen)}>
 						Stops <span style="display:inline-flex; transform:{stopsAccordionOpen ? 'rotate(180deg)' : 'none'}"><ChevronDown size={14} /></span>
 					</button>
@@ -915,6 +1083,50 @@
 						{/each}
 						{#if !stops.length}<div class="hint">Alamat belum tersedia.</div>{/if}
 					</div>
+					{/if}
+				{/if}
+
+				{#if customRouteMode}
+					<div class="planner-stops-label">Stops</div>
+					<div class="planner-custom-stops">
+						{#each customStopsList as row, i (row.kind + (row.viaIndex ?? row.stopIndex ?? i))}
+							{@const draggable = row.kind === 'via' || row.stopIndex != null}
+							<div
+								class="planner-custom-stop"
+								class:planner-custom-stop--dragging={(row.kind === 'via' && draggingViaIndex === row.viaIndex) || (row.stopIndex != null && draggingLtlStopIndex === row.stopIndex)}
+								role="listitem"
+								ondragover={(e) => e.preventDefault()}
+								ondrop={(e) => onRowDrop(row, e)}
+							>
+								<span
+									class="planner-custom-stop-drag"
+									class:planner-custom-stop-drag--hidden={!draggable}
+									{draggable}
+									title="Geser untuk mengurutkan"
+									role="button"
+									tabindex="-1"
+									ondragstart={(e) => onRowDragStart(row, e)}
+									ondragend={onRowDragEnd}
+								>{#if draggable}<GripVertical size={14} />{/if}</span>
+								<div class="planner-custom-stop-num planner-custom-stop-num--{row.kind}">{i + 1}</div>
+								<div class="planner-custom-stop-pill" title={row.label}>
+									{#if row.shipmentLabel}<span class="planner-ltl-stop-tag">{row.shipmentLabel}</span>{/if}
+									{row.kind === 'via' ? '' : row.kind === 'muat' ? 'Muat · ' : 'Bongkar · '}{row.label}
+								</div>
+								<div class="planner-custom-stop-btns">
+									{#if row.kind === 'via'}
+										<button type="button" class="planner-custom-stop-btn" title="Naikkan urutan" disabled={row.viaIndex === 0} onclick={() => moveViaPoint(row.viaIndex!, -1)}><ChevronUp size={12} /></button>
+										<button type="button" class="planner-custom-stop-btn" title="Turunkan urutan" disabled={row.viaIndex === customViaPoints.length - 1} onclick={() => moveViaPoint(row.viaIndex!, 1)}><ChevronDown size={12} /></button>
+									{/if}
+									<button type="button" class="planner-custom-stop-btn planner-custom-stop-btn-add" title="Tambah titik di sini" disabled={!row.coords} onclick={() => addViaPointNear(row)}><Plus size={12} /></button>
+									{#if row.kind === 'via'}
+										<button type="button" class="planner-custom-stop-btn planner-custom-stop-btn-remove" title="Hapus titik" onclick={() => removeViaPointAt(row.viaIndex!)}><X size={12} /></button>
+									{/if}
+								</div>
+							</div>
+						{/each}
+						{#if !customStopsList.length}<div class="hint">Alamat belum tersedia.</div>{/if}
+					</div>
 				{/if}
 
 				<div class="planner-route-strip-label">Rute Menuju Lokasi Muat</div>
@@ -931,7 +1143,7 @@
 				<div class="planner-muatan-strip">
 					<div class="planner-muatan-item"><div class="planner-muatan-label">Jarak</div><div class="planner-muatan-value">{haulRoute.distanceKm != null ? `${haulRoute.distanceKm} Km` : '-'}</div></div>
 					<div class="planner-muatan-item"><div class="planner-muatan-label">ETA</div><div class="planner-muatan-value">{formatDurationMin(haulRoute.durationMin)}</div></div>
-					<div class="planner-muatan-item"><div class="planner-muatan-label">Titik</div><div class="planner-muatan-value">{routeStops.length}</div></div>
+					<div class="planner-muatan-item"><div class="planner-muatan-label">Ruas Tol</div><div class="planner-muatan-value">{haulRoute.tollKm == null ? '-' : haulRoute.tollKm ? `${haulRoute.tollKm} Km` : 'Tidak ada'}</div></div>
 				</div>
 
 				{#if findTransporterOpen}
@@ -972,10 +1184,29 @@
 				{/if}
 
 				<div style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">
-					<button type="button" class="btn btn-outline" style="width:100%; justify-content:center;" onclick={() => (findTransporterOpen ? (findTransporterOpen = false) : openFindTransporter())}>
-						<Search size={14} /> {findTransporterOpen ? 'Tutup Find Truck' : 'Find Truck'}
-					</button>
+					{#if !findTransporterOpen}
+						<button
+							type="button"
+							class="btn {customRouteMode ? 'btn-primary' : 'btn-outline'}"
+							style="width:100%; justify-content:center;"
+							title="Klik di mana saja pada map untuk menambah titik rute, lalu geser titik itu untuk menyesuaikan rute"
+							onclick={toggleCustomRoute}
+						>
+							<LocateFixed size={14} /> {customRouteMode ? 'Selesai Custom' : 'Custom Rute'}
+						</button>
+					{/if}
+					{#if !customRouteMode}
+						<button type="button" class="btn btn-outline" style="width:100%; justify-content:center;" onclick={() => (findTransporterOpen ? (findTransporterOpen = false) : openFindTransporter())}>
+							<Search size={14} /> {findTransporterOpen ? 'Tutup Find Truck' : 'Find Truck'}
+						</button>
+					{/if}
 				</div>
+				{#if customRouteMode}
+					<div class="planner-custom-route-hint">
+						<span>Klik di map untuk menambah titik rute yang ingin dilewati, geser untuk menyesuaikan, klik kanan untuk menghapus.</span>
+						{#if customViaPoints.length || ltlStopOrderOverride}<button type="button" class="planner-custom-route-reset" onclick={resetCustomRoute}>Reset Rute</button>{/if}
+					</div>
+				{/if}
 
 				{#if selectedTruck && !findTransporterOpen}
 					<div class="planner-ft-result planner-selected-truck-card">
@@ -996,7 +1227,7 @@
 	{/if}
 
 	<div class="card planner-map-panel">
-		<MapView {markers} {lines} {fitKey} {flyTo} class="planner-map-canvas" />
+		<MapView {markers} {lines} {fitKey} {flyTo} onPick={addViaPointAt} pickMode={customRouteMode} class="planner-map-canvas" />
 		<div class="planner-map-legends">
 			<div class="planner-map-legend">
 				<span><span class="planner-legend-icon planner-legend-icon--pickup"><MapPin size={16} /></span> Muat</span>

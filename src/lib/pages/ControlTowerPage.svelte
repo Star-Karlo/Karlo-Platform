@@ -93,9 +93,42 @@
 		return `${pad2(d.getHours())}.${pad2(d.getMinutes())}.${pad2(d.getSeconds())}`;
 	});
 
+	/**
+	 * How long each truck has been in its current state. FMS's `state_since`
+	 * when present; for offline, the staleness FMS already reports; otherwise
+	 * the moment this page first saw the state — honest, if short, rather
+	 * than a guess.
+	 */
+	const stateSeen = new Map<number, { state: DriveState; since: number }>();
+	function noteStates(list: LiveVehicle[]) {
+		const now = Date.now();
+		for (const v of list) {
+			const prev = stateSeen.get(v.vehicle_id);
+			if (!prev || prev.state !== v.drive_state) stateSeen.set(v.vehicle_id, { state: v.drive_state, since: now });
+		}
+	}
+	function stateDuration(v: LiveVehicle): string {
+		let minutes: number | null = null;
+		let approx = false;
+		if (v.state_since) minutes = (nowMs - new Date(v.state_since).getTime()) / 60_000;
+		else if (v.drive_state === 'offline' && v.stale_minutes != null) minutes = v.stale_minutes;
+		else {
+			const seen = stateSeen.get(v.vehicle_id);
+			if (seen) {
+				minutes = (nowMs - seen.since) / 60_000;
+				approx = true;
+			}
+		}
+		if (minutes == null || minutes < 0) return '—';
+		const m = Math.round(minutes);
+		const label = m < 60 ? `${m} mnt` : m < 1440 ? `${Math.floor(m / 60)} j ${m % 60} mnt` : `${Math.floor(m / 1440)} h ${Math.floor((m % 1440) / 60)} j`;
+		return approx ? `≥ ${label}` : label;
+	}
+
 	async function refreshLive() {
 		try {
 			live = await fetchLiveFleet();
+			noteStates(live);
 			liveAt = new Date();
 			liveError = '';
 		} catch (e: any) {
@@ -411,9 +444,9 @@
 							<small>{v.driver?.name ?? '—'} · {where(v)}</small>
 							{#if o}<small class="ct2-vehicle-order">{o.orderNumber} · {klien(o)}</small>{/if}
 						</span>
-						<span class="ct2-vehicle-speed">
-							{#if !v.online}<span class="ct2-alert" title="Tidak ada sinyal {Math.round(v.stale_minutes)} menit">!</span>{/if}
-							{Math.round(v.position?.speed ?? 0)} km/j
+						<span class="ct-truck-sidebar-movement" style="color:{STATE_COLOUR[v.drive_state]}" title="{Math.round(v.position?.speed ?? 0)} km/j">
+							<b>{STATE_LABEL[v.drive_state]}</b>
+							<span>{stateDuration(v)}</span>
 						</span>
 					</button>
 				{/each}

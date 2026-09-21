@@ -24,6 +24,13 @@
 		selected?: boolean;
 		/** Clicking the marker. Set, the marker gets no popup — the page owns the click. */
 		onClick?: () => void;
+		/** A marker the viewer may drag; `onDragEnd` gets the new [longitude, latitude]. */
+		draggable?: boolean;
+		onDragEnd?: (coordinates: [number, number]) => void;
+		/** Right-click (the prototype's "remove via-point"). */
+		onContextMenu?: () => void;
+		/** Inline CSS for a plain (icon-less) marker, e.g. the small via-point pin. */
+		style?: string;
 	}
 
 	/** A route drawn on the map. Coordinates are [longitude, latitude] pairs. */
@@ -81,6 +88,12 @@
 		 * routing failure rather than a visibly wrong pin.
 		 */
 		onPick,
+		/**
+		 * Whether clicks currently mean "pick a point". `onPick` is wired once
+		 * at mount; this flag gates it and switches the cursor, so a page can
+		 * turn picking on and off (Custom Rute) without remounting the map.
+		 */
+		pickMode = true,
 		class: className = ''
 	}: {
 		/** [longitude, latitude] — GeoJSON order, matching the routing API. */
@@ -95,6 +108,7 @@
 		flyZoom?: number;
 		height?: string;
 		onPick?: (coordinates: [number, number]) => void;
+		pickMode?: boolean;
 		class?: string;
 	} = $props();
 
@@ -200,8 +214,10 @@
 			});
 
 			if (onPick) {
-				map.on('click', (event: any) => onPick([event.lngLat.lng, event.lngLat.lat]));
-				map.getCanvas().style.cursor = 'crosshair';
+				map.on('click', (event: any) => {
+					if (pickMode) onPick([event.lngLat.lng, event.lngLat.lat]);
+				});
+				map.getCanvas().style.cursor = pickMode ? 'crosshair' : '';
 			}
 
 			resizeObserver = new ResizeObserver(() => map?.resize());
@@ -276,6 +292,7 @@
 				element = document.createElement('div');
 				element.className = 'h-4 w-4 rounded-full border-2 border-white shadow-md';
 				element.style.backgroundColor = marker.color ?? '#0B57D0';
+				if (marker.style) element.style.cssText += ';' + marker.style;
 			}
 
 			// A label or a click needs a wrapper: the image itself is the icon,
@@ -305,17 +322,32 @@
 				}
 				element = wrap;
 			}
+			if (marker.onContextMenu) {
+				element.addEventListener('contextmenu', (ev) => {
+					ev.preventDefault();
+					ev.stopPropagation();
+					marker.onContextMenu?.();
+				});
+			}
 
 			const instance = new gl.Marker({
 				element,
 				// The chip hangs under the icon; push the whole thing down by
 				// half its height so the icon still sits on the coordinate.
 				offset: marker.label ? [0, 10] : [0, 0],
+				draggable: !!marker.draggable,
 				// Rotates with the compass, not with the screen, so a heading
 				// still reads correctly if the map itself is ever rotated.
 				rotation: marker.heading ?? 0,
 				rotationAlignment: marker.heading === undefined ? 'viewport' : 'map'
 			}).setLngLat([marker.lng, marker.lat]);
+
+			if (marker.draggable && marker.onDragEnd) {
+				instance.on('dragend', () => {
+					const p = instance.getLngLat();
+					marker.onDragEnd?.([p.lng, p.lat]);
+				});
+			}
 
 			if (marker.title && !marker.onClick) {
 				// Built as DOM nodes, not an HTML string, so a police number
@@ -365,6 +397,10 @@
 
 	$effect(() => {
 		if (ready && !fitToMarkers) map.setCenter(center);
+	});
+
+	$effect(() => {
+		if (ready && onPick) map.getCanvas().style.cursor = pickMode ? 'crosshair' : '';
 	});
 
 	// A caller that wants to fly somewhere — a vehicle just picked from a
