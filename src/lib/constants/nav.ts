@@ -314,7 +314,8 @@ export const navItems: Record<string, NavItem[]> = {
 			icon: Truck,
 			children: [
 				{ name: 'Insight Truk', url: '/t/fleet/insight' },
-				{ name: 'Data Armada', url: '/t/fleet/truck-list' }
+				{ name: 'Data Armada', url: '/t/fleet/truck-list' },
+				{ name: 'Trackers', url: '/t/trackers' }
 			]
 		},
 		{

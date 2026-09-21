@@ -1166,7 +1166,11 @@
 					</section>
 						{:else if key === 'route'}
 <section class="ct2-card">
-						<header><span>Rute Perjalanan</span>{#if routeCompliance != null}<span class="ct-route-compliance"><span class="ct-route-compliance-label">Kepatuhan Rute</span><span class="ct-route-compliance-ring {routeCompliance >= 90 ? 'good' : routeCompliance >= 70 ? 'ok' : 'bad'}">{routeCompliance}%</span></span>{:else if o}<small>{routeLabel(o)}</small>{/if}</header>
+						<header>
+							<span style="white-space:nowrap;">Rute Perjalanan</span>
+							{#if routeCompliance != null}<span class="ct-route-compliance"><span class="ct-route-compliance-label">Kepatuhan Rute</span><span class="ct-route-compliance-ring {routeCompliance >= 90 ? 'good' : routeCompliance >= 70 ? 'ok' : 'bad'}">{routeCompliance}%</span></span>{/if}
+						</header>
+						{#if o}<div class="ct2-route-line" title={routeLabel(o)}>{routeLabel(o)}</div>{/if}
 						{#if o}
 							<table class="ct2-table">
 								<thead><tr><th></th><th>Plan</th><th>Aktual</th></tr></thead>
