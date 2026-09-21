@@ -2286,13 +2286,15 @@
 							<button class="btn btn-outline" onclick={rejectVerification}>Tolak</button>
 							<button
 								class="btn btn-primary"
-								disabled={!phaseHasAnyPhoto(
-									verifyModalPhase,
-									verifyStopCount > 1 ? verifyModalStopIndex : null
-								) || !verifyDraftValid}
+								disabled={(!api.testMode() &&
+									!phaseHasAnyPhoto(verifyModalPhase, verifyStopCount > 1 ? verifyModalStopIndex : null)) ||
+									!verifyDraftValid}
+								title={api.testMode() && !phaseHasAnyPhoto(verifyModalPhase, verifyStopCount > 1 ? verifyModalStopIndex : null)
+									? 'Mode Uji: verifikasi tanpa foto POD'
+									: ''}
 								onclick={confirmVerification}
 							>
-								Setuju
+								Setuju{#if api.testMode() && !phaseHasAnyPhoto(verifyModalPhase, verifyStopCount > 1 ? verifyModalStopIndex : null)} (Mode Uji){/if}
 							</button>
 						{:else}
 							<button class="btn btn-primary" onclick={closeVerifyModal}>Tutup</button>
