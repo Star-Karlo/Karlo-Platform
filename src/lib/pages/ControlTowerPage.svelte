@@ -518,6 +518,11 @@
 		await copyText(s.orderId);
 		toast(`ID Order ${s.orderId} disalin`);
 	}
+	/** True when the order's truck is not reporting to FMS at all. */
+	function noGps(s: Shipment): boolean {
+		const v = liveFor(s.raw);
+		return !v || !hasFix(v.position);
+	}
 	function openOrderDetail(s: Shipment) {
 		goto(`${basePath.replace(/\/control-tower$/, '')}/order/${s.raw.id}`);
 	}
@@ -576,10 +581,7 @@
 		const v = liveFor(o);
 		selectedVehicleId = v?.vehicle_id ?? null;
 		if (v && hasFix(v.position)) flyTo = [v.position.lon, v.position.lat];
-		else {
-			const c = coordsOf(o.originWarehouseId);
-			if (c) flyTo = c;
-		}
+		else toast('Truck ini tidak mengirim posisi GPS — tidak ada yang bisa ditampilkan di peta');
 	}
 	function clearSelection() {
 		selectedVehicleId = null;
@@ -696,19 +698,9 @@
 				subtitle: `${STATE_LABEL[v.drive_state]}${v.position.speed != null ? ` · ${Math.round(v.position.speed)} km/j` : ''}${v.driver?.name ? ` · ${v.driver.name}` : ''}`
 			});
 		}
-		for (const o of categoryOrders) {
-			if (liveFor(o)) continue;
-			const atOrigin = ['assigned', 'approved', 'readyToPlan'].includes(o.statusCode ?? '');
-			const c = coordsOf(atOrigin ? o.originWarehouseId : o.destinationWarehouseId) ?? coordsOf(o.originWarehouseId);
-			if (!c) continue;
-			out.push({
-				id: `o-${o.id}`, lng: c[0], lat: c[1],
-				icon: TRUCK_MARKER[o.statusCode === 'inTransit' ? 'onDuty' : 'waitingDepartureOrder'],
-				iconWidth: 30, iconHeight: 30,
-				title: o.truckPoliceNumber || o.orderNumber,
-				subtitle: `${klien(o)} · ${o.status ?? o.statusCode} · posisi gudang`
-			});
-		}
+		// A truck with no GPS fix is not guessed onto the map (it used to be
+		// drawn at the warehouse, which reads as a position). It is flagged in
+		// the order table instead — see noGps().
 		return out;
 	});
 
@@ -986,7 +978,7 @@
 									</td>
 									<td>{f.shipperName}</td>
 									<td>{f.muatKota} → {f.bongkarKota}</td>
-									<td><span class="plate mono">{f.plate}</span> · {f.driver}</td>
+									<td><span class="plate mono">{f.plate}</span> · {f.driver}{#if noGps(f)}<div class="ct-oc-extra ct-oc-extra--warn" title="Truck tidak mengirim posisi GPS ke FMS"><AlertCircle size={10} />Tanpa sinyal GPS</div>{/if}</td>
 									<td><span class="badge {f.statusBadgeClass}">{f.statusLabel}</span></td>
 									<td>
 										<div class="action-cell">
@@ -1010,7 +1002,7 @@
 									<td><b class="mono">{s.orderId}</b></td>
 									<td>{s.shipperName}</td>
 									<td>{s.muatKota} → {s.bongkarKota}</td>
-									<td><span class="plate mono">{s.plate}</span> · {s.driver}</td>
+									<td><span class="plate mono">{s.plate}</span> · {s.driver}{#if noGps(s)}<div class="ct-oc-extra ct-oc-extra--warn" title="Truck tidak mengirim posisi GPS ke FMS"><AlertCircle size={10} />Tanpa sinyal GPS</div>{/if}</td>
 									<td>
 										<span class="badge {s.statusBadgeClass}">{s.statusLabel}</span>
 										{#if activeCategory === 'sangu'}<div class="ct-oc-extra"><AlertCircle size={10} />Belum Finalisasi</div>{/if}

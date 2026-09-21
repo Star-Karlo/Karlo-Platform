@@ -3273,3 +3273,5 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
   .ct-export-print th, .ct-export-print td{border:1px solid #d5d8de; padding:6px 8px; text-align:left; vertical-align:top;}
   .ct-export-print th{background:#f1f4f9; font-weight:700;}
 }
+
+.ct-oc-extra--warn{color:var(--warning, #B45309);}
