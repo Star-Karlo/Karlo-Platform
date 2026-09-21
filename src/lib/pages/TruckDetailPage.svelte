@@ -22,12 +22,14 @@
 		Paintbrush,
 		Box,
 		Weight,
-		Container
+		Container,
+		User
 	} from 'lucide-svelte';
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { toast } from '$lib/stores/ui';
 	import { truckIllustrationSVG } from '$lib/revamp/truckIllustration.js';
+	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
 
 	let {
 		basePath = '/t',
@@ -64,6 +66,15 @@
 		Object.fromEntries(FIELDS.map((f) => [f, ''])) as Record<Field, string>
 	);
 	let brandNames = $state<Record<string, string>>({});
+	// Driver pairing, editable here as well as on My Fleet. Same field FMS shows.
+	let drivers = $state<{ id: string; fullName: string; status?: string }[]>([]);
+	let currentDriverId = $state('');
+	let savedDriverId = $state('');
+	let driverOptions = $derived([
+		{ value: '', label: '— Tanpa driver —' },
+		...drivers.map((d) => ({ value: d.id, label: d.fullName + (d.status && d.status !== 'active' ? ` (${d.status})` : '') }))
+	]);
+	let driverName = $derived(drivers.find((d) => d.id === savedDriverId)?.fullName ?? '');
 
 	function fromVehicle(v: any): Record<Field, string> {
 		const a = v.attributes ?? {};
@@ -93,17 +104,22 @@
 
 	async function load() {
 		try {
-			const [v, brands] = await Promise.allSettled([
+			const [v, brands, ds] = await Promise.allSettled([
 				api.get(ENDPOINTS.vehicles.one(id)),
-				api.get('/catalog/brand', { pageSize: 200 })
+				api.get('/catalog/brand', { pageSize: 200 }),
+				api.get(ENDPOINTS.drivers.list, { pageSize: 500 })
 			]);
+			if (ds.status === 'fulfilled') drivers = ds.value.data?.data ?? [];
 			if (brands.status === 'fulfilled') {
 				const rows: any[] = brands.value.data?.data?.items ?? brands.value.data?.data ?? [];
 				brandNames = Object.fromEntries(rows.map((b: any) => [b.id, b.name]));
 			}
 			if (v.status === 'fulfilled') {
-				truck = fromVehicle(v.value.data?.data ?? {});
+				const raw = v.value.data?.data ?? {};
+				truck = fromVehicle(raw);
 				form = { ...truck };
+				savedDriverId = raw.currentDriverId ?? '';
+				currentDriverId = savedDriverId;
 			}
 		} catch (e: any) {
 			toast(e?.response?.data?.message ?? 'Gagal memuat data truck');
@@ -134,6 +150,7 @@
 			await api.put(ENDPOINTS.vehicles.update(id), {
 				licensePlate: form.plate.trim(),
 				color: form.color.trim(),
+				currentDriverId: currentDriverId || null,
 				attributes
 			});
 			toast('Data truck ' + form.plate + ' berhasil diperbarui');
@@ -242,6 +259,27 @@
 										bind:value={form.cargoType}></textarea>
 								{:else}
 									{#each cargoChips() as c, i (i)}<span class="cargo-chip">{c}</span>{/each}
+								{/if}
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Driver -->
+			<div class="card detail-card">
+				<div class="detail-header header-blue">Driver</div>
+				<div class="card-pad">
+					<div class="dfield-row">
+						<div class="dfield">
+							<div class="dfield-icon icon-blue"><User size={16} /></div>
+							<div class="dfield-body">
+								<div class="dfield-label">Driver Terpasang</div>
+								{#if editMode}
+									<FieldSelect bind:value={currentDriverId} options={driverOptions} searchable placeholder="Pilih driver" />
+									<div class="hint" style="margin-top:6px;">Satu driver per truck. Pairing yang sama tampil di FMS.</div>
+								{:else}
+									<div class="detail-value">{driverName || '-'}</div>
 								{/if}
 							</div>
 						</div>

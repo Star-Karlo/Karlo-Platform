@@ -4,9 +4,10 @@
 	import { Truck as TruckIcon, ArrowLeft } from 'lucide-svelte';
 	import { truckActions } from '$lib/stores/trucks';
 	import { api } from '$lib/utils/api';
+	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { asOptions, catalog, loadCatalogs } from '$lib/stores/catalog';
-	import { Button, Card, FileField, Input, PageHeader, Select, Spinner, Toggle } from '$lib/components/ui';
+	import { Button, Card, FileField, Input, PageHeader, Spinner, Toggle } from '$lib/components/ui';
 	import type { UploadedFile } from '$lib/utils/upload';
 
 	/**
@@ -189,19 +190,19 @@
 						</div>
 						<div>
 							<label for="truckTypeId" class="form-label">Truck Type</label>
-							<Select id="truckTypeId" bind:value={form.truckTypeId} options={asOptions($catalog.truckType)} placeholder="Pilih tipe truk" />
+							<FieldSelect bind:value={form.truckTypeId} options={asOptions($catalog.truckType)} placeholder="Pilih tipe truk" />
 						</div>
 						<div>
 							<label for="truckHeadId" class="form-label">Truck Head</label>
-							<Select id="truckHeadId" bind:value={form.truckHeadId} options={asOptions($catalog.truckHead)} placeholder="Pilih truck head" />
+							<FieldSelect bind:value={form.truckHeadId} options={asOptions($catalog.truckHead)} placeholder="Pilih truck head" />
 						</div>
 						<div>
 							<label for="truckBodyId" class="form-label">Truck Body</label>
-							<Select id="truckBodyId" bind:value={form.truckBodyId} options={asOptions($catalog.truckBody)} placeholder="Pilih body" />
+							<FieldSelect bind:value={form.truckBodyId} options={asOptions($catalog.truckBody)} placeholder="Pilih body" />
 						</div>
 						<div>
 							<label for="brandId" class="form-label">Brand</label>
-							<Select id="brandId" bind:value={form.brandId} options={asOptions($catalog.brand)} placeholder="Masukkan nama brand" />
+							<FieldSelect bind:value={form.brandId} options={asOptions($catalog.brand)} searchable placeholder="Pilih brand" />
 						</div>
 					</div>
 				</Card>
@@ -222,8 +223,7 @@
 						</div>
 						<div>
 							<label for="status" class="form-label">Status</label>
-							<Select
-								id="status"
+							<FieldSelect
 								bind:value={form.status}
 								placeholder="Pilih status"
 								options={[
@@ -251,7 +251,7 @@
 					<div class="grid grid-cols-1 gap-5 md:grid-cols-2">
 						<div>
 							<label for="currentDriverId" class="form-label">Assigned Driver</label>
-							<Select id="currentDriverId" bind:value={form.currentDriverId} options={drivers} placeholder="— No driver —" />
+							<FieldSelect bind:value={form.currentDriverId} options={[{ value: '', label: '— Tanpa driver —' }, ...drivers]} searchable placeholder="— Tanpa driver —" />
 							<p class="mt-1 text-xs text-muted">One driver per truck. The same assignment shows in FMS.</p>
 						</div>
 					</div>
