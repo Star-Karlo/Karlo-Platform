@@ -22,6 +22,8 @@ export type WizardShipment = {
 	fleetDescription: string;
 	/** "Body|Size" keys, at most MAX_TRUCK_OPTIONS — the truck types a planner may assign. */
 	truckOptions: string[];
+	/** The picked agreement's truck-type matrix — what truckOptions may be chosen from. */
+	agreementTruckTypes: string[];
 	expanded: boolean;
 	items: WizardItem[];
 	totalTonnage: NumInput;
@@ -61,6 +63,7 @@ export function newShipment(): WizardShipment {
 		unloadingPoints: [''],
 		fleetDescription: '',
 		truckOptions: [],
+		agreementTruckTypes: [],
 		expanded: true,
 		items: [newItem()],
 		totalTonnage: '',

@@ -44,6 +44,8 @@
 		const sp = wizard.shipments[i];
 		sp.agreementId = '';
 		sp.agreementLabel = '';
+		sp.agreementTruckTypes = [];
+		sp.truckOptions = [];
 	}
 
 	/* ---------- Select Agreement (picker modal) ---------- */
@@ -66,6 +68,12 @@
 		const d = a.detail ?? {};
 		sp.agreementId = a.id;
 		sp.agreementLabel = `${a.agreementNumber} — ${d.kotaAsal} - ${d.kotaTujuan}`;
+		// Truck Options come from the agreement: what was agreed is what the
+		// planner may assign. Pre-fill (up to the cap) and restrict the matrix
+		// to those types; an agreement without a matrix leaves the choice open.
+		const agreed: string[] = Array.isArray(d.truckTypeMatrix) ? d.truckTypeMatrix : [];
+		sp.agreementTruckTypes = agreed;
+		sp.truckOptions = agreed.slice(0, MAX_TRUCK_OPTIONS);
 	}
 
 	/* ---------- Create warehouse inline ---------- */
@@ -244,7 +252,15 @@
 
 			<div class="field">
 				<label for="truck-options-{i}">Truck Options <span class="hint" style="font-weight:400;">(maks. {MAX_TRUCK_OPTIONS})</span></label>
-				<div class="hint" style="margin-bottom:8px;">Pilih hingga {MAX_TRUCK_OPTIONS} jenis truck yang bisa dipakai untuk order ini — jadi acuan planner saat menugaskan truck.</div>
+				<div class="hint" style="margin-bottom:8px;">
+					{#if sp.agreementTruckTypes?.length}
+						Diambil dari agreement ({sp.agreementTruckTypes.length} jenis truck disepakati) — pilih hingga {MAX_TRUCK_OPTIONS} yang bisa dipakai untuk order ini; jadi acuan planner saat menugaskan truck.
+					{:else if sp.agreementId}
+						Agreement ini belum punya daftar jenis truck — pilih hingga {MAX_TRUCK_OPTIONS} jenis truck untuk order ini.
+					{:else}
+						Pilih agreement dulu; jenis truck yang disepakati di agreement akan terisi otomatis.
+					{/if}
+				</div>
 				{#if sp.truckOptions?.length}
 					<div class="review-chip-group" style="margin-bottom:10px;">
 						{#each sp.truckOptions as key (key)}
@@ -260,7 +276,7 @@
 				</button>
 				{#if truckMatrixOpen[i]}
 					<div style="margin-top:10px;">
-						<TruckTypeMatrixRevamp bind:value={sp.truckOptions} max={MAX_TRUCK_OPTIONS} onLimitExceeded={onTruckOptionLimit} />
+						<TruckTypeMatrixRevamp bind:value={sp.truckOptions} max={MAX_TRUCK_OPTIONS} allowedKeys={sp.agreementTruckTypes?.length ? sp.agreementTruckTypes : null} onLimitExceeded={onTruckOptionLimit} />
 					</div>
 				{/if}
 			</div>

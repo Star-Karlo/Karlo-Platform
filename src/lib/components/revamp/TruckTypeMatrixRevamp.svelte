@@ -17,6 +17,7 @@
 		value = $bindable<string[]>([]),
 		readonly = false,
 		recommendedKeys = null,
+		allowedKeys = null,
 		max = null,
 		onchange,
 		onLimitExceeded
@@ -25,6 +26,8 @@
 		readonly?: boolean;
 		/** Visual highlight only, doesn't restrict selection. */
 		recommendedKeys?: string[] | null;
+		/** When set, only these keys can be ticked; the rest are greyed out (an agreement's own truck types). */
+		allowedKeys?: string[] | null;
 		/** null = no limit. */
 		max?: number | null;
 		onchange?: (value: string[]) => void;
@@ -37,8 +40,11 @@
 	function isRecommended(body: string, size: string) {
 		return !!recommendedKeys && recommendedKeys.includes(key(body, size));
 	}
+	function isAllowed(body: string, size: string) {
+		return !allowedKeys || allowedKeys.includes(key(body, size));
+	}
 	function toggle(body: string, size: string) {
-		if (readonly) return;
+		if (readonly || !isAllowed(body, size)) return;
 		const k = key(body, size);
 		const current = value || [];
 		const already = current.includes(k);
@@ -67,9 +73,9 @@
 				<tr>
 					<td class="truck-matrix-row-label">{body}</td>
 					{#each SIZES as size (size)}
-						<td class="truck-matrix-cell" class:recommended={isRecommended(body, size)}>
+						<td class="truck-matrix-cell" class:recommended={isRecommended(body, size)} class:not-allowed={!isAllowed(body, size)}>
 							{#if !readonly}
-								<input type="checkbox" checked={isChecked(body, size)} onchange={() => toggle(body, size)} />
+								<input type="checkbox" checked={isChecked(body, size)} disabled={!isAllowed(body, size)} title={!isAllowed(body, size) ? 'Tidak ada di agreement' : ''} onchange={() => toggle(body, size)} />
 							{:else}
 								<!-- A disabled native checkbox renders greyed-out regardless of
 								     accent-color, which reads as "might not actually be

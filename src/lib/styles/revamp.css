@@ -3432,3 +3432,6 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .ct-oc-scroll{padding:0 20px 0 16px;}
 .ct-oc-table th:last-child, .ct-oc-table td:last-child{padding-right:16px;}
 .ct-oc-table .action-cell{justify-content:flex-start; gap:6px;}
+
+.truck-matrix-cell.not-allowed{background:var(--surface-alt); opacity:.45;}
+.truck-matrix-cell.not-allowed input{cursor:not-allowed;}
