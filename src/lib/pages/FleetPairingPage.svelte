@@ -644,10 +644,23 @@
 	.fleet-table .empty {
 		padding: 22px 8px;
 	}
+	/* Two pills on one row, as the prototype's FilterDropdown. */
+	.filter-row :global(.field-select) {
+		width: auto;
+		flex: 1 1 0;
+		min-width: 0;
+	}
 	.action-cell {
 		display: flex;
-		gap: 6px;
-		flex-wrap: wrap;
+		gap: 4px;
+		flex-wrap: nowrap;
+	}
+	.action-cell :global(.mini-icon-btn),
+	.action-cell :global(.mini-icon-btn-dark),
+	.action-cell :global(.mini-icon-btn-del),
+	.action-cell :global(.status-toggle-btn) {
+		width: 28px;
+		height: 28px;
 	}
 	.action-cell a {
 		text-decoration: none;
