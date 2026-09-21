@@ -198,8 +198,19 @@ export const navItems: Record<string, NavItem[]> = {
 				{ name: 'Child Account', url: '/a/users' },
 				{ name: 'Roles', url: '/a/roles' },
 				{ name: 'API Keys', url: '/a/api-keys' },
-				{ name: 'Form Configuration', url: '/a/form-config' },
-				{ name: 'Karlo Clients', url: '/a/clients', permission: 'collaboration.inviteMember' }
+				{ name: 'Form Configuration', url: '/a/form-config' }
+			]
+		},
+		// Platform-staff only: the tenants and what each has bought (TMS and
+		// FMS features). A company's own administrator hands out permissions
+		// from inside those features on Roles.
+		{
+			name: 'Karlo',
+			icon: Building2,
+			dividerBefore: true,
+			children: [
+				{ name: 'Karlo Clients', url: '/a/clients', permission: 'collaboration.inviteMember' },
+				{ name: 'Company Access', url: '/a/company-management', permission: 'collaboration.inviteMember' }
 			]
 		},
 		{ name: 'FMS', url: 'https://fms.karlo.id', icon: Truck, external: true, dividerBefore: true }

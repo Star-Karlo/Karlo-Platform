@@ -86,7 +86,7 @@
 
 <div class="space-y-gutter">
 	<PageHeader
-		title="Company Management"
+		title="Company Access"
 		icon={Building2}
 	/>
 
