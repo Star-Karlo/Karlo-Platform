@@ -99,6 +99,7 @@
 	 * the moment this page first saw the state — honest, if short, rather
 	 * than a guess.
 	 */
+	const SHORT_STATE: Record<DriveState, string> = { moving: 'Bergerak', idle: 'Idle', parking: 'Parkir', offline: 'Offline' };
 	const stateSeen = new Map<number, { state: DriveState; since: number }>();
 	function noteStates(list: LiveVehicle[]) {
 		const now = Date.now();
@@ -121,7 +122,7 @@
 		}
 		if (minutes == null || minutes < 0) return '—';
 		const m = Math.round(minutes);
-		const label = m < 60 ? `${m} mnt` : m < 1440 ? `${Math.floor(m / 60)} j ${m % 60} mnt` : `${Math.floor(m / 1440)} h ${Math.floor((m % 1440) / 60)} j`;
+		const label = m < 60 ? `${m} menit` : m < 1440 ? `${Math.floor(m / 60)} jam ${m % 60} menit` : `${Math.floor(m / 1440)} hari ${Math.floor((m % 1440) / 60)} jam`;
 		return approx ? `≥ ${label}` : label;
 	}
 
@@ -445,7 +446,7 @@
 							{#if o}<small class="ct2-vehicle-order">{o.orderNumber} · {klien(o)}</small>{/if}
 						</span>
 						<span class="ct-truck-sidebar-movement" style="color:{STATE_COLOUR[v.drive_state]}" title="{Math.round(v.position?.speed ?? 0)} km/j">
-							<b>{STATE_LABEL[v.drive_state]}</b>
+							<b>{SHORT_STATE[v.drive_state]}</b>
 							<span>{stateDuration(v)}</span>
 						</span>
 					</button>
