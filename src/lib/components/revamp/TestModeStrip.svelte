@@ -148,7 +148,7 @@
 				</span>
 			{/if}
 			{#if next?.status}
-				<button type="button" class="btn btn-primary btn-sm" disabled={stepping} onclick={step}>
+				<button type="button" class="btn btn-primary btn-sm" disabled={stepping} onclick={() => step()}>
 					<ChevronRight size={14} /> {stepping ? 'Memproses…' : `Berikutnya: ${next.label}`}
 				</button>
 				<button type="button" class="btn btn-outline btn-sm" disabled={stepping} onclick={runToEnd}>
