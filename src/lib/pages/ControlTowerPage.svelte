@@ -624,15 +624,32 @@
 	let fuel = $state<FuelEstimate | null>(null);
 	let trip = $state<SnappedTrip | null>(null);
 	let alerts = $state<Alert[]>([]);
+	/**
+	 * The window the actual trail is read for: the shipment's own timestamps
+	 * when it has them (departure → finish), else the order's pickup, capped
+	 * at seven days — FMS caps nothing server-side. Test orders sometimes
+	 * carry a pickup after their last update, so the end is always kept
+	 * after the start.
+	 */
 	let tripWindow = $derived.by<{ from: Date; to: Date } | null>(() => {
 		const o = selectedOrder;
 		const now = new Date();
-		if (o?.pickupAt) {
-			const from = new Date(o.pickupAt);
-			const end = o.statusCode === 'completed' || o.statusCode === 'delivered' ? new Date(o.updatedAt ?? now) : now;
-			// Keep the window to days, not weeks — FMS caps nothing server-side.
-			const to = new Date(Math.min(end.getTime(), from.getTime() + 7 * 86_400_000));
-			return from < to ? { from, to } : null;
+		const DAY = 86_400_000;
+		if (o) {
+			const starts = [shipment?.startedToLoadingAt, shipment?.createdAt, o.pickupAt, o.createdAt]
+				.filter(Boolean)
+				.map((x: any) => new Date(x).getTime())
+				.filter((t) => Number.isFinite(t));
+			if (starts.length) {
+				const from = new Date(Math.min(...starts));
+				const done = o.statusCode === 'completed' || o.statusCode === 'delivered' || shipment?.statusCode === 'finished';
+				let to = done
+					? new Date(Math.max(...[shipment?.finishedAt, o.updatedAt].filter(Boolean).map((x: any) => new Date(x).getTime()), from.getTime() + 60_000))
+					: now;
+				if (to.getTime() - from.getTime() > 7 * DAY) to = new Date(from.getTime() + 7 * DAY);
+				if (to <= from) to = new Date(Math.min(now.getTime(), from.getTime() + 7 * DAY));
+				return { from, to };
+			}
 		}
 		// No order: today's driving.
 		return { from: new Date(now.getTime() - 24 * 3_600_000), to: now };
@@ -652,6 +669,17 @@
 		trip = null;
 		if (!v || !w) return;
 		fetchSnappedTrip(v.vehicle_id, w.from, w.to).then((t) => { if (selectedVehicleId === v.vehicle_id) trip = t; }).catch(() => {});
+	});
+	/** The trail to draw: the road-snapped one, else the raw fixes joined up, with their summed distance. */
+	let actualTrail = $derived.by<{ points: [number, number][]; distanceKm: number | null } | null>(() => {
+		if (trip && trip.points.length > 1) return { points: trip.points, distanceKm: trip.distance_km };
+		if (tripPoints.length > 1) {
+			const pts = tripPoints.map((p) => [p.lon, p.lat] as [number, number]);
+			let km = 0;
+			for (let i = 1; i < pts.length; i++) km += haversineKm({ lat: pts[i - 1][1], lng: pts[i - 1][0] }, { lat: pts[i][1], lng: pts[i][0] });
+			return { points: pts, distanceKm: Math.round(km * 10) / 10 };
+		}
+		return null;
 	});
 
 	// Raw fixes for the same window: speed/idle per point are what the
@@ -676,18 +704,33 @@
 			if (selectedOrder?.id !== o.id) return;
 			const haul = (r.data?.data ?? []).find((l: any) => l.leg === 'haul');
 			const src = haul?.route ?? haul;
-			if (!src) return;
-			plannedRoute = {
-				geometry: Array.isArray(src.geometry) ? src.geometry : [],
-				distanceKm: src.distanceMeters != null ? Math.round(src.distanceMeters / 100) / 10 : null,
-				durationMin: src.durationSeconds != null ? Math.round(src.durationSeconds / 60) : null
-			};
+			if (src?.geometry?.length) {
+				plannedRoute = {
+					geometry: src.geometry,
+					distanceKm: src.distanceMeters != null ? Math.round(src.distanceMeters / 100) / 10 : null,
+					durationMin: src.durationSeconds != null ? Math.round(src.durationSeconds / 60) : null
+				};
+				return;
+			}
+			// Older orders have no stored leg: plan the lane now (cached 90 days).
+			const a = coordsOf(o.originWarehouseId);
+			const b = coordsOf(o.destinationWarehouseId);
+			if (!a || !b) return;
+			return api.post(ENDPOINTS.routing.route, { points: [a, b], profile: 'truck' }).then((rr) => {
+				if (selectedOrder?.id !== o.id) return;
+				const d = rr.data?.data ?? rr.data ?? {};
+				plannedRoute = {
+					geometry: Array.isArray(d.geometry) ? d.geometry : [],
+					distanceKm: d.distanceMeters != null ? Math.round(d.distanceMeters / 100) / 10 : null,
+					durationMin: d.durationSeconds != null ? Math.round(d.durationSeconds / 60) : null
+				};
+			});
 		}).catch(() => {});
 	});
 	/** Share of actual fixes within 500 m of the planned line — "Kepatuhan Rute". */
 	let routeCompliance = $derived.by<number | null>(() => {
 		const plan = plannedRoute?.geometry;
-		const actual = trip?.points;
+		const actual = actualTrail?.points;
 		if (!plan || plan.length < 2 || !actual || actual.length < 2) return null;
 		// Sample the plan every ~1 km to keep the nearest-point search cheap.
 		const sampled: [number, number][] = [];
@@ -976,8 +1019,8 @@
 				if (a && b) out.push({ id: `plan-${o.id}`, coordinates: [a, b], dashed: true, color: '#0B57D0' });
 			}
 		}
-		if (trip && trip.points.length > 1) {
-			out.push({ id: `actual-${selectedVehicleId}`, coordinates: trip.points, color: layerOn('overspeed') ? '#16a34a' : '#dc2626', width: 3 });
+		if (actualTrail) {
+			out.push({ id: `actual-${selectedVehicleId}`, coordinates: actualTrail.points, color: layerOn('overspeed') ? '#16a34a' : '#dc2626', width: 3 });
 		}
 		if (layerOn('overspeed') && tripPoints.length > 1) {
 			// Consecutive fixes above the limit form one red stretch each.
@@ -1176,13 +1219,13 @@
 							<table class="ct2-table">
 								<thead><tr><th></th><th>Plan</th><th>Aktual</th></tr></thead>
 								<tbody>
-									<tr><td>Jarak</td><td>{plannedRoute?.distanceKm != null ? `${plannedRoute.distanceKm} km` : o.detail?.distanceKm ? `${nf(o.detail.distanceKm)} km` : '—'}</td><td>{trip?.distance_km != null ? `${formatNumber(Math.round(trip.distance_km * 10) / 10)} km` : '—'}</td></tr>
+									<tr><td>Jarak</td><td>{plannedRoute?.distanceKm != null ? `${plannedRoute.distanceKm} km` : o.detail?.distanceKm ? `${nf(o.detail.distanceKm)} km` : '—'}</td><td>{actualTrail?.distanceKm != null ? `${formatNumber(Math.round(actualTrail.distanceKm * 10) / 10)} km` : '—'}</td></tr>
 									<tr><td>ETA</td><td>{plannedRoute?.durationMin != null ? `${Math.floor(plannedRoute.durationMin / 60)} jam ${plannedRoute.durationMin % 60} menit` : o.deliveryAt ? new Date(o.deliveryAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</td><td>{o.statusCode === 'delivered' || o.statusCode === 'completed' ? new Date(o.updatedAt ?? '').toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : 'dalam perjalanan'}</td></tr>
 								</tbody>
 							</table>
-							{#if trip}
+							{#if actualTrail}
 								<small class="hint">
-									Jalur aktual (merah) dari GPS FMS, {tripWindow ? `${tripWindow.from.toLocaleDateString('id-ID')} – ${tripWindow.to.toLocaleDateString('id-ID')}` : ''}{#if trip.chunks_total && trip.chunks_matched !== undefined && trip.chunks_matched < trip.chunks_total}; {trip.chunks_total - trip.chunks_matched} bagian tak terpetakan ke jalan{/if}.
+									Jalur aktual (merah{trip && trip.points.length > 1 ? ', mengikuti jalan' : ', titik GPS mentah'}) dari GPS FMS, {tripWindow ? `${tripWindow.from.toLocaleDateString('id-ID')} – ${tripWindow.to.toLocaleDateString('id-ID')}` : ''}{#if trip?.chunks_total && trip.chunks_matched !== undefined && trip.chunks_matched < trip.chunks_total}; {trip.chunks_total - trip.chunks_matched} bagian tak terpetakan ke jalan{/if}.
 								</small>
 							{/if}
 						{:else}
