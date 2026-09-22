@@ -250,6 +250,14 @@
 			</p>
 		{/if}
 
+		<!-- A refused save is answered here, inside the dialog: the page-level
+		     alert sits behind the overlay, so a validation error there read
+		     as "nothing happened". -->
+		{#if showForm && $shipperStore.error}
+			<p class="md:col-span-2 rounded-card bg-danger/10 px-4 py-3 text-xs text-danger" role="alert">
+				{$shipperStore.error}
+			</p>
+		{/if}
 		<div class="md:col-span-2 flex justify-end gap-2">
 			<Button variant="ghost" onclick={() => (showForm = false)}>Batal</Button>
 			<Button onclick={save} loading={$shipperStore.saving} disabled={!form.name.trim()}>Simpan</Button>
