@@ -56,7 +56,7 @@
 	let cargoItems = $state<CargoItem[]>([]);
 	let cargoItemsLoaded = $state(false);
 
-	let customerOptions = $derived(customers.map((c) => ({ value: c.name, label: c.name })));
+	let customerOptions = $derived(customers.map((c) => ({ value: c.id, label: c.name })));
 	// Truck Options: the (max 5) truck types the planner may assign to orders
 	// under this agreement, chosen from the types the cargo item allows.
 	// "Body|Size" keys, the same vocabulary the matrix and Allocate use.
@@ -100,6 +100,10 @@
 
 	const form = $state({
 		customerNama: '',
+		// The customer's company id — the form keys on the id, never the name:
+		// two clients can share a name, and a browser translator rewrites
+		// the text on screen.
+		customerId: '',
 		agreementType: '',
 		initialRoutes: [newRouteEntry()] as AgreementRouteEntry[],
 		destinationRoutes: [newRouteEntry()] as AgreementRouteEntry[],
@@ -175,7 +179,17 @@
 
 	let hargaDisplay = $state('');
 	function onHargaInput(e: Event) {
-		hargaDisplay = formatThousands((e.currentTarget as HTMLInputElement).value);
+		const el = e.currentTarget as HTMLInputElement;
+		hargaDisplay = formatThousands(el.value);
+		// Written back to the element as well: when the typed text was all
+		// letters the formatted value is the same "" as before, Svelte sees no
+		// change, and the letters would stay on screen.
+		el.value = hargaDisplay;
+	}
+
+	/** Number inputs still take e, E, + and -; a load or a price never does. */
+	function numericOnly(e: KeyboardEvent) {
+		if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
 	}
 
 	function onCargoTypeChange(val: string | string[]) {
@@ -193,6 +207,7 @@
 
 	function applyExisting(a: AgreementRow) {
 		form.customerNama = a.customerNama || '';
+		form.customerId = a.shipperCompanyId || '';
 		form.agreementType = a.agreementType || '';
 		// Prefer the initialRoutes/destinationRoutes arrays; fall back to the
 		// flat kotaAsal/kotaTujuan fields for agreements saved without them.
@@ -251,9 +266,12 @@
 					customers = Array.isArray(r.data?.data) ? r.data.data : [];
 					// Opened from a customer's row on MyAgreement: start with them.
 					const pre = new URLSearchParams(window.location.search).get('customer');
-					if (pre && !editing && !form.customerNama) {
+					if (pre && !editing && !form.customerId) {
 						const c = customers.find((x) => x.id === pre);
-						if (c) form.customerNama = c.name;
+						if (c) {
+							form.customerId = c.id;
+							form.customerNama = c.name;
+						}
 					}
 				})
 				.catch(() => (customers = [])),
@@ -334,10 +352,10 @@
 
 	let saving = $state(false);
 
-	let selectedCustomer = $derived(customers.find((c) => c.name === form.customerNama) || null);
+	let selectedCustomer = $derived(customers.find((c) => c.id === form.customerId) || null);
 
 	function validate() {
-		if (!form.customerNama) return 'Customer Name wajib dipilih';
+		if (!form.customerId) return 'Customer Name wajib dipilih';
 		if (!form.agreementType) return 'Type Agreement wajib dipilih';
 		if (form.initialRoutes.some((r) => !r.kota) || form.destinationRoutes.some((r) => !r.kota)) {
 			return 'Initial Route dan Destination Route wajib diisi';
@@ -367,7 +385,7 @@
 		saving = true;
 		try {
 			const payload = {
-				customerNama: form.customerNama,
+				customerNama: selectedCustomer?.name || form.customerNama,
 				agreementType: form.agreementType,
 				initialRoutes: form.initialRoutes.map((r) => ({
 					kota: r.kota,
@@ -469,7 +487,7 @@
 	<div class="two-col">
 		<div class="field">
 			<label>Customer Name <span class="req">*</span></label>
-			<FieldSelect bind:value={form.customerNama} options={customerOptions} placeholder="Pilih customer" />
+			<FieldSelect bind:value={form.customerId} options={customerOptions} placeholder="Pilih customer" />
 		</div>
 		<div class="field">
 			<label>Type Agreement <span class="req">*</span></label>
@@ -693,6 +711,8 @@
 			<input
 				type="number"
 				min="0"
+				step="0.01"
+				onkeydown={numericOnly}
 				value={form.tonaseMin}
 				oninput={(e) => (form.tonaseMin = (e.currentTarget as HTMLInputElement).value)}
 				placeholder="0"
@@ -704,6 +724,8 @@
 			<input
 				type="number"
 				min="0"
+				step="0.01"
+				onkeydown={numericOnly}
 				value={form.tonaseMax}
 				oninput={(e) => (form.tonaseMax = (e.currentTarget as HTMLInputElement).value)}
 				placeholder="0"

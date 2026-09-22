@@ -39,6 +39,7 @@
 		weightKg?: number;
 		volumeM3?: number;
 		unit?: string;
+		cargoTypeId?: string;
 		description?: string;
 	};
 
@@ -49,6 +50,25 @@
 	let loadingTypes = $state(true);
 	let loadingItems = $state(false);
 	let error = $state('');
+
+	/**
+	 * Master data keeps every non-standard field of a catalogue entry under
+	 * `attributes` — so `weightKg`, `volumeM3`, `unit` and the dimensions we
+	 * send come back as `attributes.weightKg` and `attributes.attributes.
+	 * lengthCm`. Lift them back to where the form and the table read them.
+	 */
+	function flatten(it: Entry): Entry {
+		const a = it.attributes ?? {};
+		const inner = (a.attributes as Record<string, any> | undefined) ?? {};
+		return {
+			...it,
+			weightKg: it.weightKg ?? a.weightKg,
+			volumeM3: it.volumeM3 ?? a.volumeM3,
+			unit: it.unit ?? a.unit,
+			cargoTypeId: it.cargoTypeId ?? a.cargoTypeId,
+			attributes: { ...a, ...inner }
+		};
+	}
 
 	async function loadTypes() {
 		loadingTypes = true;
@@ -76,7 +96,7 @@
 		loadingItems = true;
 		try {
 			const res = await api.get(ENDPOINTS.catalog.list('item'), { parentId: t.id, pageSize: 200 });
-			items = res.data?.data ?? [];
+			items = (res.data?.data ?? []).map(flatten);
 		} catch (e: any) {
 			error = e?.response?.data?.message ?? 'Could not load items.';
 		} finally {

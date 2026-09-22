@@ -331,8 +331,11 @@ input.field-select-checkbox{width:15px; height:15px; padding:0; border:none; bor
 .map-picker-canvas{width:100%; height:180px; border-radius:var(--r-md); border:1px solid var(--outline-variant); overflow:hidden;}
 .latlng-display input{font-family:'Google Sans Flex','Roboto Mono',monospace; font-variant-numeric:tabular-nums;}
 
-.two-col{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+.two-col{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px;}
 .two-col > .field, .three-col > .field{min-width:0;}
+/* Date / time inputs have a wide intrinsic size; without this they push a
+   half-width column over its neighbour instead of shrinking. */
+.two-col > input, .three-col > input, .field input[type="date"], .field input[type="time"]{min-width:0; width:100%;}
 .three-col{display:grid; grid-template-columns:1.4fr 1fr .8fr; gap:16px;}
 
 /* ---------- Option cards (A/B choice selector) ---------- */
@@ -527,7 +530,13 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .review-cost-box-row b{font-size:17px; color:var(--on-surface);}
 
 /* ---------- Multi-step wizard (Internal Order) ---------- */
-.wizard-layout{display:grid; grid-template-columns:240px 1fr; gap:24px; align-items:start;}
+.wizard-layout{display:grid; grid-template-columns:240px minmax(0,1fr); gap:24px; align-items:start;}
+/* Below ~1100px (a half-screen window beside the sidebar) the step list
+   goes above the form rather than squeezing it. */
+@media(max-width:1100px){
+  .wizard-layout{grid-template-columns:1fr;}
+  .wizard-sidebar{position:static;}
+}
 .wizard-sidebar{background:var(--surface); border:1px solid var(--outline-variant); border-radius:var(--r-lg); padding:22px 20px; position:sticky; top:126px;}
 .wizard-sidebar-title{font-size:13.5px; font-weight:700; color:var(--on-surface); margin-bottom:18px;}
 .wizard-step-list{display:flex; flex-direction:column;}
