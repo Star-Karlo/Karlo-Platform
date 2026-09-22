@@ -7,7 +7,6 @@
  * verification, vendor handover) — so the label a planner sees is derived
  * here, once, and every screen agrees.
  */
-import { podPhaseVerified } from './podVerification.js';
 
 export interface OrderLike {
 	statusCode?: string;
@@ -16,6 +15,12 @@ export interface OrderLike {
 	driverUserId?: string | null;
 	truckId?: string | null;
 	detail?: Record<string, any> | null;
+	/** Latest POD submission per stage, from the shipment (driver flow). */
+	shipmentPods?: { stage: string; status: string }[] | null;
+}
+
+function podPending(o: OrderLike, stage: string): boolean {
+	return !!o.shipmentPods?.some((p) => p.stage === stage && p.status === 'submitted');
 }
 
 export function kontrakStatus(o: OrderLike): string {
@@ -42,18 +47,20 @@ export function kontrakStatus(o: OrderLike): string {
 				return 'tiba_lokasi_muat';
 			case 'loadingApproved':
 			case 'loading':
-				return 'proses_muat_barang';
+				// The driver flow: a submitted POD waits for review while the
+				// shipment is still "loading"; approval makes it "loaded".
+				return podPending(o, 'loading') ? 'verifikasi_pod_muat' : 'proses_muat_barang';
 			case 'loaded':
-				return podPhaseVerified({ detail: d }, 'muat') ? 'pod_muat_terverifikasi' : 'verifikasi_pod_muat';
+				return 'pod_muat_terverifikasi';
 			case 'toUnloading':
 				return 'menuju_lokasi_bongkar';
 			case 'atUnloading':
 				return 'tiba_lokasi_bongkar';
 			case 'unloadingApproved':
 			case 'unloading':
-				return 'proses_bongkar_muatan';
+				return podPending(o, 'unloading') ? 'verifikasi_pod_bongkar' : 'proses_bongkar_muatan';
 			case 'unloaded':
-				return podPhaseVerified({ detail: d }, 'bongkar') ? 'pod_bongkar_terverifikasi' : 'verifikasi_pod_bongkar';
+				return 'pod_bongkar_terverifikasi';
 			case 'finished':
 				return 'pengiriman_terkonfirmasi';
 			case 'cancelled':

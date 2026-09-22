@@ -211,8 +211,31 @@
 		}
 		loaded = true;
 		if (raw) {
-			await Promise.all([loadWarehouses(raw), loadRoutes(), loadVehicle(raw), loadSiblings(raw)]);
+			await Promise.all([loadWarehouses(raw), loadRoutes(), loadVehicle(raw), loadSiblings(raw), loadShipment()]);
 		}
+	}
+
+	// The driver flow's shipment: cargo checks, handover state and the
+	// latest POD submission per stage (`pods`). The review buttons act on
+	// the submission; approval is what moves the shipment on.
+	let shipment = $state<any>(null);
+	async function loadShipment() {
+		try {
+			const res = await api.get(ENDPOINTS.orders.shipment(id));
+			shipment = res.data?.data ?? null;
+		} catch {
+			shipment = null;
+		}
+	}
+	function driverPod(phaseKey: string): any | null {
+		const stage = phaseKey === 'muat' ? 'loading' : 'unloading';
+		return (shipment?.pods ?? []).find((p: any) => p.stage === stage) ?? null;
+	}
+	/** The driver's photos of one type for a phase, from the latest submission. */
+	function driverPodPhotos(phaseKey: string, typeKey: string): string[] {
+		const pod = driverPod(phaseKey);
+		if (!pod) return [];
+		return (pod.photos ?? []).filter((p: any) => p.docType === typeKey).map((p: any) => p.fileUrl as string);
 	}
 
 	onMount(() => {
@@ -245,7 +268,7 @@
 			id: raw.id,
 			idOrder: raw.orderNumber || raw.id,
 			shipperName: raw.shipperCompanyName || d.shipperName || '',
-			status: kontrakStatus(raw),
+			status: kontrakStatus({ ...raw, shipmentPods: shipment?.pods ?? raw.shipmentPods }),
 			assignedTruckPlate: raw.truckPoliceNumber || '',
 			assignedTruckType: raw.truckTypeName || '',
 			assignedDriverName: raw.driverName || '',
@@ -356,8 +379,9 @@
 	let canShowPodPhotosBongkar = $derived(api.testMode() || atOrPassed(order?.status, 'verifikasi_pod_bongkar'));
 	function podPhotoSlots(phaseKey: string, typeKey: string): (string | null)[] {
 		const canShow = phaseKey === 'muat' ? canShowPodPhotosMuat : canShowPodPhotosBongkar;
-		const uploaded = canShow ? detail.podPhotos?.[phaseKey]?.[typeKey] || [] : [];
-		return Array.from({ length: POD_PHOTO_MAX }, (_, i) => uploaded[i] || null);
+		const fromDriver = canShow ? driverPodPhotos(phaseKey, typeKey) : [];
+		const uploaded = canShow ? [...fromDriver, ...(detail.podPhotos?.[phaseKey]?.[typeKey] || [])] : [];
+		return Array.from({ length: Math.max(POD_PHOTO_MAX, fromDriver.length) }, (_, i) => uploaded[i] || null);
 	}
 	function podPhotoSlotsForStop(phaseKey: string, typeKey: string, stopIndex: number): (string | null)[] {
 		const canShow = phaseKey === 'muat' ? canShowPodPhotosMuat : canShowPodPhotosBongkar;
@@ -523,6 +547,18 @@
 			},
 			podPhotos
 		});
+		// The driver's submission, when there is one: approving it is what
+		// moves the shipment to loaded / unloaded (and finishes it).
+		const pod = driverPod(phaseKey);
+		if (pod && pod.status === 'submitted' && shipment && newStops.every((s) => s.verified)) {
+			try {
+				await api.put(`/shipments/${shipment.id}/pod/${pod.id}/review`, { approved: true });
+				await Promise.all([loadShipment(), loadOrder()]);
+			} catch (e: any) {
+				toast(e?.response?.data?.message || 'Gagal menyetujui POD');
+				return;
+			}
+		}
 		toast(`POD ${label} berhasil diverifikasi`);
 		closeVerifyModal();
 		const nextUnverified = newStops.findIndex((s) => !s.verified);
@@ -577,8 +613,25 @@
 		input.click();
 	}
 
-	function rejectVerification() {
-		toast(`Verifikasi ${verifyPhaseLabel} dibatalkan`);
+	async function rejectVerification() {
+		const pod = driverPod(verifyModalPhase);
+		if (pod && pod.status === 'submitted' && shipment) {
+			const reason = verifyNote.trim();
+			if (!reason) {
+				toast('Tulis alasan penolakan di kolom Pesan agar driver tahu apa yang harus diperbaiki');
+				return;
+			}
+			try {
+				await api.put(`/shipments/${shipment.id}/pod/${pod.id}/review`, { approved: false, reason });
+				await loadShipment();
+				toast(`POD ${verifyPhaseLabel} ditolak — driver diminta upload ulang`);
+			} catch (e: any) {
+				toast(e?.response?.data?.message || 'Gagal menolak POD');
+				return;
+			}
+		} else {
+			toast(`Verifikasi ${verifyPhaseLabel} dibatalkan`);
+		}
 		closeVerifyModal();
 	}
 
