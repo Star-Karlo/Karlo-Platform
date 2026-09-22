@@ -13,6 +13,11 @@ export interface OrderLike {
 	shipmentStatusCode?: string;
 	/** When the driver accepted the job; the shipment stays "assigned" until the truck moves. */
 	shipmentAcceptedAt?: string | null;
+	shipmentLoadingCargoCheckedAt?: string | null;
+	shipmentLoadingCargoMatches?: boolean | null;
+	shipmentUnloadingCargoCheckedAt?: string | null;
+	shipmentUnloadingCargoMatches?: boolean | null;
+	shipmentHandoverVerified?: boolean;
 	driverId?: string | null;
 	driverUserId?: string | null;
 	truckId?: string | null;
@@ -51,7 +56,12 @@ export function kontrakStatus(o: OrderLike): string {
 			case 'loading':
 				// The driver flow: a submitted POD waits for review while the
 				// shipment is still "loading"; approval makes it "loaded".
-				return podPending(o, 'loading') ? 'verifikasi_pod_muat' : 'proses_muat_barang';
+				// Mulai Muat → the driver's cargo check → the POD under review.
+				if (podPending(o, 'loading')) return 'verifikasi_pod_muat';
+				if (o.shipmentLoadingCargoCheckedAt) {
+					return o.shipmentLoadingCargoMatches === false ? 'item_muat_tidak_sesuai' : 'item_muat_terverifikasi';
+				}
+				return 'proses_muat_barang';
 			case 'loaded':
 				return 'pod_muat_terverifikasi';
 			case 'toUnloading':
@@ -60,7 +70,12 @@ export function kontrakStatus(o: OrderLike): string {
 				return 'tiba_lokasi_bongkar';
 			case 'unloadingApproved':
 			case 'unloading':
-				return podPending(o, 'unloading') ? 'verifikasi_pod_bongkar' : 'proses_bongkar_muatan';
+				// OTP confirmed → the PIC's cargo check → the POD under review.
+				if (podPending(o, 'unloading')) return 'verifikasi_pod_bongkar';
+				if (o.shipmentUnloadingCargoCheckedAt) {
+					return o.shipmentUnloadingCargoMatches === false ? 'item_bongkar_tidak_sesuai' : 'item_bongkar_terverifikasi';
+				}
+				return o.shipmentHandoverVerified ? 'otp_bongkar_terverifikasi' : 'proses_bongkar_muatan';
 			case 'unloaded':
 				return 'pod_bongkar_terverifikasi';
 			case 'finished':
