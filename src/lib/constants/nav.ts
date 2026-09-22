@@ -66,7 +66,8 @@ const PERMISSION_BY_PATH: { match: RegExp; permission: string }[] = [
 	{ match: /\/agreement/, permission: 'agreement.read' },
 	{ match: /\/(order|spot-order|empty-order|order-kontrak|internal-order)/, permission: 'order.read' },
 	{ match: /\/invoice|\/finance|\/jurnal|\/laporan|\/coa$/, permission: 'invoice.read' },
-	{ match: /\/(truck-list|fleet)/, permission: 'truck.read' },
+	// Fleet groups are the transporter's own fleet data, so they go with trucks.
+	{ match: /\/(truck-list|fleet|vehicle-group)/, permission: 'truck.read' },
 	{ match: /\/warehouse/, permission: 'warehouse.read' },
 	{ match: /\/(customer-list|my-shipper|shipper-list|transporter-list|client)/, permission: 'customer.read' },
 	{ match: /\/(users|roles|user-management|api-keys)$/, permission: 'collaboration.read' },
@@ -74,7 +75,7 @@ const PERMISSION_BY_PATH: { match: RegExp; permission: string }[] = [
 	// Everything else under Master Data: the catalogues.
 	{
 		match:
-			/\/(cargo-type|item|item-category|item-sub-category|truck-head|truck-body|truck-class|brand|tracker|sensor-type|vehicle-group|my-cargo|form-config)/,
+			/\/(cargo-type|item|item-category|item-sub-category|truck-head|truck-body|truck-class|brand|tracker|sensor-type|my-cargo|form-config)/,
 		permission: 'masterData.read'
 	}
 ];
@@ -176,7 +177,8 @@ export const navItems: Record<string, NavItem[]> = {
 			icon: Truck,
 			children: [
 				{ name: 'Insight Truk', url: '/a/fleet/insight' },
-				{ name: 'Data Armada', url: '/a/fleet/truck-list' }
+				{ name: 'Data Armada', url: '/a/fleet/truck-list' },
+				{ name: 'Grup Armada', url: '/a/vehicle-group' }
 			]
 		},
 		{
@@ -326,6 +328,7 @@ export const navItems: Record<string, NavItem[]> = {
 			children: [
 				{ name: 'Insight Truk', url: '/t/fleet/insight' },
 				{ name: 'Data Armada', url: '/t/fleet/truck-list' },
+				{ name: 'Grup Armada', url: '/t/vehicle-group' },
 				{ name: 'Trackers', url: '/t/trackers' }
 			]
 		},

@@ -18,6 +18,8 @@ export type CatalogKind =
 	| 'truckBody'
 	| 'truckHead'
 	| 'brand'
+	/** The company's own fleet groups (depot, contract, division). */
+	| 'vehicleGroup'
 	| 'cargoType'
 	| 'itemType'
 	| 'itemCharacter'

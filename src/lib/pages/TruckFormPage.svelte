@@ -36,6 +36,7 @@
 		truckHeadId: '',
 		truckBodyId: '',
 		brandId: '',
+		truckGroupId: '',
 		status: 'active' as 'active' | 'maintenance' | 'inactive',
 		isAvailable: true,
 		currentDriverId: '',
@@ -62,7 +63,7 @@
 	let existingDocs: Record<string, string> = { stnk: '', kir: '' };
 
 	onMount(async () => {
-		await loadCatalogs(['truckType', 'truckHead', 'truckBody', 'brand']);
+		await loadCatalogs(['truckType', 'truckHead', 'truckBody', 'brand', 'vehicleGroup']);
 		// Drivers are master data — employees, not logins — so the list comes
 		// from the driver register, and a truck names exactly one.
 		try {
@@ -89,6 +90,7 @@
 					truckHeadId: t.truckHeadId ?? '',
 					truckBodyId: t.truckBodyId ?? '',
 					brandId: t.brandId ?? '',
+					truckGroupId: t.truckGroupId ?? '',
 					status: (t.status ?? 'active') as 'active' | 'maintenance' | 'inactive',
 					isAvailable: t.isAvailable ?? true,
 					currentDriverId: t.currentDriverId ?? '',
@@ -137,6 +139,7 @@
 			truckHeadId: form.truckHeadId || '',
 			truckBodyId: form.truckBodyId || '',
 			brandId: form.brandId || '',
+			truckGroupId: form.truckGroupId || '',
 			status: form.status,
 			isAvailable: form.isAvailable,
 			currentDriverId: form.currentDriverId || '',
@@ -203,6 +206,11 @@
 						<div>
 							<label for="brandId" class="form-label">Brand</label>
 							<FieldSelect bind:value={form.brandId} options={asOptions($catalog.brand)} searchable placeholder="Pilih brand" />
+						</div>
+						<div>
+							<label for="truckGroupId" class="form-label">Grup Armada</label>
+							<!-- One group per truck — the same field FMS's fleet group reads. -->
+							<FieldSelect bind:value={form.truckGroupId} options={[{ value: '', label: '— Tanpa grup —' }, ...asOptions($catalog.vehicleGroup)]} searchable placeholder="— Tanpa grup —" />
 						</div>
 					</div>
 				</Card>

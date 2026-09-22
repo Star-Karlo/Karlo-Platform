@@ -18,6 +18,7 @@
 	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
 	import ConfirmModal from '$lib/components/revamp/ConfirmModal.svelte';
 	import Pagination from '$lib/components/revamp/Pagination.svelte';
+	import { catalog, loadCatalog } from '$lib/stores/catalog';
 
 	let { basePath = '/t' }: { basePath?: string } = $props();
 
@@ -30,6 +31,7 @@
 		driver?: { id: string; fullName: string } | null;
 		truckBody?: { name: string } | null;
 		truckHead?: { name: string } | null;
+		truckGroupId?: string | null;
 		attributes?: Record<string, any>;
 	};
 	type Driver = { id: string; fullName: string; phone?: string; status?: string; userId?: string };
@@ -64,6 +66,7 @@
 	let searchDriver = $state('');
 	let pairingFilter = $state('all');
 	let statusFilter = $state('all');
+	let groupFilter = $state('all');
 	let driverFilter = $state('all');
 	let truckPage = $state(1);
 	let driverPage = $state(1);
@@ -81,6 +84,7 @@
 	async function load() {
 		loading = true;
 		error = '';
+		void loadCatalog('vehicleGroup');
 		try {
 			const [v, d] = await Promise.all([
 				api.get(ENDPOINTS.vehicles.list, { pageSize: 500 }),
@@ -131,6 +135,12 @@
 		return cityOf.get(v.id) || v.attributes?.location || v.attributes?.pool || '—';
 	}
 	const isActive = (v: Vehicle) => (v.status ?? 'active') !== 'inactive';
+	const groupName = (v: Vehicle) => ($catalog.vehicleGroup ?? []).find((g) => g.id === v.truckGroupId)?.name ?? '';
+	const GROUP_OPTIONS = $derived([
+		{ value: 'all', label: 'Semua Grup' },
+		{ value: 'none', label: 'Tanpa Grup' },
+		...($catalog.vehicleGroup ?? []).map((g) => ({ value: g.id, label: g.name }))
+	]);
 
 	const filteredTrucks = $derived.by(() => {
 		const q = searchTruck.trim().toLowerCase();
@@ -139,8 +149,10 @@
 			if (pairingFilter === 'unpaired' && v.currentDriverId) return false;
 			if (statusFilter === 'active' && !isActive(v)) return false;
 			if (statusFilter === 'inactive' && isActive(v)) return false;
+			if (groupFilter === 'none' && v.truckGroupId) return false;
+			if (groupFilter !== 'all' && groupFilter !== 'none' && v.truckGroupId !== groupFilter) return false;
 			if (!q) return true;
-			return [v.licensePlate, typeLabel(v), locationOf(v), v.driver?.fullName ?? '']
+			return [v.licensePlate, typeLabel(v), locationOf(v), groupName(v), v.driver?.fullName ?? '']
 				.join(' ')
 				.toLowerCase()
 				.includes(q);
@@ -176,7 +188,7 @@
 	const driverRows = $derived(filteredDrivers.slice((driverPage - 1) * PAGE_SIZE, driverPage * PAGE_SIZE));
 
 	$effect(() => {
-		void searchTruck, pairingFilter, statusFilter;
+		void searchTruck, pairingFilter, statusFilter, groupFilter;
 		truckPage = 1;
 	});
 	$effect(() => {
@@ -366,6 +378,9 @@
 			<div class="filter-row">
 				<FieldSelect bind:value={pairingFilter} options={PAIRING_OPTIONS} compact />
 				<FieldSelect bind:value={statusFilter} options={STATUS_OPTIONS} compact />
+				{#if ($catalog.vehicleGroup ?? []).length}
+					<FieldSelect bind:value={groupFilter} options={GROUP_OPTIONS} compact />
+				{/if}
 			</div>
 			<div class="table-wrap">
 				<table class="fleet-table">
@@ -390,7 +405,7 @@
 								<td>
 									<div class="mono" style="font-weight:700;">{v.licensePlate}</div>
 									<div style="font-size:12px; color:var(--on-surface-variant); margin-top:2px;">
-										{typeLabel(v) || '—'}
+										{typeLabel(v) || '—'}{#if groupName(v)} · <span class="tag-group">{groupName(v)}</span>{/if}
 									</div>
 								</td>
 								<td>
@@ -609,6 +624,14 @@
 />
 
 <style>
+	.tag-group {
+		display: inline-block;
+		padding: 0 6px;
+		border-radius: 999px;
+		background: var(--surface-container-high, #eef0f4);
+		color: var(--on-surface, #1b1c1e);
+		font-size: 11px;
+	}
 	.detail-header {
 		display: flex;
 		align-items: center;

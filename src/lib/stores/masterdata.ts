@@ -272,8 +272,8 @@ export const CATALOGS: Record<
 		fields: []
 	},
 	vehicleGroup: {
-		label: 'Vehicle Group',
-		blurb: 'How a company groups its own fleet — by depot, contract or division.',
+		label: 'Grup Armada',
+		blurb: 'How a company groups its own fleet — by depot, contract or division. One group per truck; FMS shows the same groups.',
 		fields: [{ key: 'description', label: 'Description', type: 'textarea' }]
 	},
 	trackerModel: {
