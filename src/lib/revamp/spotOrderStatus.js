@@ -1,28 +1,30 @@
 // @ts-nocheck — ported verbatim from Karlo-TMS-Revamp/src/utils; the console's own code types the call sites.
-// Central status taxonomy for Spot Order — label, table-badge class, and the
+// Central status taxonomy for orders. Labels are the old order service's
+// (karlo_order common/constants/status.js), the same words the business
+// service and K-Trip show. — label, table-badge class, and the
 // tab order used to filter the list. Keep in sync with scripts/seedEmulator.js
 // demo data.
 export const SPOT_ORDER_STATUSES = {
   negosiasi: { label: 'Negosiasi', badge: 'badge-wait' },
   menunggu_pembayaran: { label: 'Menunggu Pembayaran', badge: 'badge-wait' },
   penugasan_pengemudi: { label: 'Penugasan Pengemudi', badge: 'badge-wait' },
-  pengemudi_ditugaskan: { label: 'Pengemudi Ditugaskan', badge: 'badge-planner' },
-  pengemudi_menerima_order: { label: 'Menerima Order', badge: 'badge-planner' },
-  menuju_lokasi_muat: { label: 'Menuju Lokasi Muat', badge: 'badge-planner' },
-  tiba_lokasi_muat: { label: 'Tiba di Lokasi Muat', badge: 'badge-planner' },
-  proses_muat_barang: { label: 'Proses Muat Barang', badge: 'badge-planner' },
-  verifikasi_pod_muat: { label: 'Verifikasi POD Muat', badge: 'badge-wait' },
-  pod_muat_terverifikasi: { label: 'POD dan Muatan Terverifikasi', badge: 'badge-active' },
-  menuju_lokasi_bongkar: { label: 'Menuju Lokasi Bongkar', badge: 'badge-planner' },
-  tiba_lokasi_bongkar: { label: 'Tiba di Lokasi Bongkar', badge: 'badge-planner' },
-  proses_bongkar_muatan: { label: 'Proses Bongkar Muatan', badge: 'badge-planner' },
-  verifikasi_pod_bongkar: { label: 'Verifikasi POD Bongkar', badge: 'badge-wait' },
-  pod_bongkar_terverifikasi: { label: 'POD dan Bongkaran Terverifikasi', badge: 'badge-active' },
+  pengemudi_ditugaskan: { label: 'Driver Dipilih', badge: 'badge-planner' },
+  pengemudi_menerima_order: { label: 'Driver Menerima Order', badge: 'badge-planner' },
+  menuju_lokasi_muat: { label: 'Menuju Titik Muat', badge: 'badge-planner' },
+  tiba_lokasi_muat: { label: 'Sampai di Titik Muat', badge: 'badge-planner' },
+  proses_muat_barang: { label: 'Mulai Muat', badge: 'badge-planner' },
+  verifikasi_pod_muat: { label: 'Pengecekan POD Muat', badge: 'badge-wait' },
+  pod_muat_terverifikasi: { label: 'POD Muat Terverifikasi', badge: 'badge-active' },
+  menuju_lokasi_bongkar: { label: 'Menuju Titik Bongkar', badge: 'badge-planner' },
+  tiba_lokasi_bongkar: { label: 'Sampai di Titik Bongkar', badge: 'badge-planner' },
+  proses_bongkar_muatan: { label: 'Mulai Bongkar', badge: 'badge-planner' },
+  verifikasi_pod_bongkar: { label: 'Pengecekan POD Bongkar', badge: 'badge-wait' },
+  pod_bongkar_terverifikasi: { label: 'POD Bongkar Terverifikasi', badge: 'badge-active' },
   // Legacy key, no longer produced: a finished shipment completes the order.
   menunggu_konfirmasi_pengiriman: { label: 'Order Selesai', badge: 'badge-active' },
   dibatalkan: { label: 'Order Dibatalkan', badge: 'badge-fail' },
   pengiriman_terkonfirmasi: { label: 'Order Selesai', badge: 'badge-active' },
-  kadaluarsa: { label: 'Order Kadaluarsa', badge: 'badge-fail' },
+  kadaluarsa: { label: 'Order Sudah Kadaluarsa', badge: 'badge-fail' },
   pencairan_proses: { label: 'Pencairan Dalam Proses', badge: 'badge-wait' },
   // Handed off to an outside vendor transporter (MyTransporter — Planner
   // Allocate's "Transporter Catalog") instead of this transporter's own
