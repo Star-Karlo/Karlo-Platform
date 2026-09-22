@@ -23,8 +23,7 @@
 		FileText
 	} from 'lucide-svelte';
 	import { api } from '$lib/utils/api';
-	import { uploadFile, downloadUrl } from '$lib/utils/upload';
-	import { Upload } from 'lucide-svelte';
+	import { downloadUrl } from '$lib/utils/upload';
 	import TestModeStrip from '$lib/components/revamp/TestModeStrip.svelte';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { toast } from '$lib/stores/ui';
@@ -268,7 +267,7 @@
 			id: raw.id,
 			idOrder: raw.orderNumber || raw.id,
 			shipperName: raw.shipperCompanyName || d.shipperName || '',
-			status: kontrakStatus({ ...raw, shipmentPods: shipment?.pods ?? raw.shipmentPods }),
+			status: kontrakStatus({ ...raw, shipmentPods: shipment?.pods ?? raw.shipmentPods, shipmentAcceptedAt: shipment?.acceptedAt ?? raw.shipmentAcceptedAt }),
 			assignedTruckPlate: raw.truckPoliceNumber || '',
 			assignedTruckType: raw.truckTypeName || '',
 			assignedDriverName: raw.driverName || '',
@@ -565,10 +564,10 @@
 		if (nextUnverified !== -1) openVerifyModal(phaseKey, nextUnverified);
 	}
 	// ------------------------------------------------------------------------
-	// POD photos. The driver app uploads them; in Mode Uji the planner can
-	// upload them here so the verification flow can be tested end to end.
-	// A stored value is either a URL (legacy / driver app) or a private
-	// storage key, which is resolved to a signed URL when shown.
+	// POD photos come from the driver app only. The console shows them and
+	// verifies them; it never uploads, so nobody wonders which side's photo
+	// is the real one. A stored value is either a URL (legacy / driver app)
+	// or a private storage key, which is resolved to a signed URL when shown.
 	// ------------------------------------------------------------------------
 	let resolvedPodSrc = $state<Record<string, string>>({});
 	function podSrc(src: string | null | undefined): string {
@@ -582,35 +581,6 @@
 				.catch(() => {});
 		}
 		return '';
-	}
-	let podUploading = $state('');
-	async function uploadPodPhoto(phaseKey: string, typeKey: string, slotIndex: number, file: File) {
-		const tag = `${phaseKey}-${typeKey}-${slotIndex}`;
-		podUploading = tag;
-		try {
-			const up = await uploadFile(file, 'orderPod');
-			const phase = { ...((detail.podPhotos || {})[phaseKey] || {}) };
-			const list: (string | null)[] = [...((phase[typeKey] as string[]) || [])];
-			while (list.length <= slotIndex) list.push(null);
-			list[slotIndex] = up.key;
-			phase[typeKey] = list;
-			await patchDetail({ podPhotos: { ...(detail.podPhotos || {}), [phaseKey]: phase } });
-			toast('Foto POD diunggah');
-		} catch (e: any) {
-			toast(e?.response?.data?.message ?? e?.message ?? 'Gagal mengunggah foto');
-		} finally {
-			podUploading = '';
-		}
-	}
-	function pickPodPhoto(phaseKey: string, typeKey: string, slotIndex: number) {
-		const input = document.createElement('input');
-		input.type = 'file';
-		input.accept = 'image/*';
-		input.onchange = () => {
-			const f = input.files?.[0];
-			if (f) void uploadPodPhoto(phaseKey, typeKey, slotIndex, f);
-		};
-		input.click();
 	}
 
 	async function rejectVerification() {
@@ -989,8 +959,10 @@
 		for (const milestone of STATUS_SEQUENCE.slice(2)) {
 			if (!atOrPassed(status, milestone)) continue;
 			const isDriverAction = DRIVER_ACTION_STATUSES.has(milestone);
+			// The accept is the one milestone whose time the shipment records.
+			const acceptedAt = milestone === 'pengemudi_menerima_order' ? shipment?.acceptedAt : null;
 			events.push({
-				time: createdLabel,
+				time: acceptedAt ? formatTimestampLabel(acceptedAt) : createdLabel,
 				title: statusLabel(milestone),
 				actor: isDriverAction ? order.assignedDriverName || 'Driver' : TRANSPORTER_NAME,
 				role: isDriverAction ? 'Driver' : 'Planner'
@@ -1129,7 +1101,7 @@
 	</div>
 {/snippet}
 
-{#snippet podSlots(slots: (string | null)[], title: string, target: { phase: string; type: string; base: number } | null = null)}
+{#snippet podSlots(slots: (string | null)[], title: string)}
 	<div class="pod-photo-cell">
 		{#each slots as src, i (i)}
 			{#if src}
@@ -1148,17 +1120,6 @@
 						<span class="icon-wrap"><Eye size={16} /></span>
 					</button>
 				</div>
-			{:else if target && api.testMode()}
-				<button
-					type="button"
-					class="pod-photo-slot pod-photo-upload"
-					title="Mode Uji: unggah foto {title}"
-					disabled={podUploading === `${target.phase}-${target.type}-${target.base + i}`}
-					onclick={() => pickPodPhoto(target.phase, target.type, target.base + i)}
-				>
-					<span class="icon-wrap"><Upload size={16} /></span>
-					<span>{podUploading === `${target.phase}-${target.type}-${target.base + i}` ? 'Mengunggah…' : 'Unggah'}</span>
-				</button>
 			{:else}
 				<div class="pod-photo-slot"></div>
 			{/if}
@@ -1390,11 +1351,7 @@
 									<div class="pod-photo-grid-row">
 										<span class="pod-photo-grid-label">Muat {si + 1}</span>
 										{#each POD_PHOTO_TYPES as type (`muat-${si}-${type.key}`)}
-											{@render podSlots(
-												podPhotoSlotsForStop('muat', type.key, si),
-												`${type.label} — Muat ${si + 1}`,
-												{ phase: 'muat', type: type.key, base: si * POD_PHOTO_MAX }
-											)}
+											{@render podSlots(podPhotoSlotsForStop('muat', type.key, si), `${type.label} — Muat ${si + 1}`)}
 										{/each}
 									</div>
 								{/each}
@@ -1402,7 +1359,7 @@
 								<div class="pod-photo-grid-row">
 									<span class="pod-photo-grid-label">Muat</span>
 									{#each POD_PHOTO_TYPES as type (`muat-${type.key}`)}
-										{@render podSlots(podPhotoSlots('muat', type.key), `${type.label} — Muat`, { phase: 'muat', type: type.key, base: 0 })}
+										{@render podSlots(podPhotoSlots('muat', type.key), `${type.label} — Muat`)}
 									{/each}
 								</div>
 							{/if}
@@ -1411,11 +1368,7 @@
 									<div class="pod-photo-grid-row">
 										<span class="pod-photo-grid-label">Bongkar {si + 1}</span>
 										{#each POD_PHOTO_TYPES as type (`bongkar-${si}-${type.key}`)}
-											{@render podSlots(
-												podPhotoSlotsForStop('bongkar', type.key, si),
-												`${type.label} — Bongkar ${si + 1}`,
-												{ phase: 'bongkar', type: type.key, base: si * POD_PHOTO_MAX }
-											)}
+											{@render podSlots(podPhotoSlotsForStop('bongkar', type.key, si), `${type.label} — Bongkar ${si + 1}`)}
 										{/each}
 									</div>
 								{/each}
@@ -1423,7 +1376,7 @@
 								<div class="pod-photo-grid-row">
 									<span class="pod-photo-grid-label">Bongkar</span>
 									{#each POD_PHOTO_TYPES as type (`bongkar-${type.key}`)}
-										{@render podSlots(podPhotoSlots('bongkar', type.key), `${type.label} — Bongkar`, { phase: 'bongkar', type: type.key, base: 0 })}
+										{@render podSlots(podPhotoSlots('bongkar', type.key), `${type.label} — Bongkar`)}
 									{/each}
 								</div>
 							{/if}

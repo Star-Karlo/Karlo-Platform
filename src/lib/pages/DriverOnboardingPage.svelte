@@ -267,13 +267,17 @@
 				<Field
 					label="Inisial Default Password"
 					id="dp"
-					help="Dipakai untuk setiap driver baru bila kolom password dikosongkan. Minimal 8 karakter."
-					><Input id="dp" bind:value={defaultPassword} placeholder="cth. Karlo2026" /></Field
+					help="Dipakai untuk setiap driver baru bila kolom password dikosongkan. 6 digit angka; bila ini juga kosong, sistem memakai 123456."
+					><Input id="dp" bind:value={defaultPassword} placeholder="123456" inputmode="numeric" /></Field
 				>
 			</FormGrid>
 			<h3 class="text-sm font-semibold">Registrasi Driver</h3>
 			<FormGrid>
-				<Field label="Nama Lengkap Driver" id="fn" required
+				<Field
+					label="Nama Lengkap Driver"
+					id="fn"
+					required
+					help="Username dibuat otomatis: nama depan + inisial perusahaan (cth. budints); bila sudah dipakai, ditambah 01, 02, dst."
 					><Input id="fn" bind:value={form.fullName} placeholder="cth. Nanang" /></Field
 				>
 				<Field label="Nomor WhatsApp" id="ph" required
@@ -282,8 +286,8 @@
 				<Field
 					label="Inisial Password"
 					id="pw"
-					help="Kosongkan untuk memakai default; kosong keduanya, password dibuat otomatis."
-					><Input id="pw" bind:value={form.password} placeholder={defaultPassword || 'otomatis'} /></Field
+					help="6 digit angka. Kosongkan untuk memakai default; kosong keduanya, sistem memakai 123456."
+					><Input id="pw" bind:value={form.password} placeholder={defaultPassword || '123456'} inputmode="numeric" /></Field
 				>
 			</FormGrid>
 			<div class="flex justify-end">

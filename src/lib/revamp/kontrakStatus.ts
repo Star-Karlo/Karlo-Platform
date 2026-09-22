@@ -11,6 +11,8 @@
 export interface OrderLike {
 	statusCode?: string;
 	shipmentStatusCode?: string;
+	/** When the driver accepted the job; the shipment stays "assigned" until the truck moves. */
+	shipmentAcceptedAt?: string | null;
 	driverId?: string | null;
 	driverUserId?: string | null;
 	truckId?: string | null;
@@ -66,6 +68,9 @@ export function kontrakStatus(o: OrderLike): string {
 			case 'cancelled':
 				return 'dibatalkan';
 		}
+		// Accepting does not change the shipment status — only leaving does —
+		// so the accept time is what separates "ditugaskan" from "menerima".
+		if (o.shipmentAcceptedAt) return 'pengemudi_menerima_order';
 		return 'pengemudi_ditugaskan';
 	}
 	if (o.statusCode === 'draft' || o.statusCode === 'submitted') return 'negosiasi';
