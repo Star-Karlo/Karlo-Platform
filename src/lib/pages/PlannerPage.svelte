@@ -45,7 +45,7 @@
 	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
 	import ConfirmModal from '$lib/components/revamp/ConfirmModal.svelte';
 	import Pagination from '$lib/components/revamp/Pagination.svelte';
-	import { formatThousands } from '$lib/revamp/currency.js';
+	import { formatThousands, formatIDR } from '$lib/revamp/currency.js';
 	import { haversineKm } from '$lib/revamp/geo.js';
 	import { copyText } from '$lib/revamp/clipboard.js';
 	import { formatTimestampLabel } from '$lib/revamp/date.js';
@@ -106,6 +106,8 @@
 		geometry: [number, number][];
 		/** Tolled stretches of the geometry, as MAPID reports them. */
 		tollKm?: number | null;
+		/** The fare per golongan and per gate, from MAPID's toll API, when the route crosses a toll road. */
+		toll?: { prices: Record<string, number>; gates: { name: string; gate?: string; prices: Record<string, number> }[] } | null;
 	};
 
 	const TRUCK_STATUS_LIST = [
@@ -634,9 +636,37 @@
 			distanceKm: src.distanceMeters != null ? Math.round(src.distanceMeters / 100) / 10 : null,
 			durationMin: src.durationSeconds != null ? Math.round(src.durationSeconds / 60) : null,
 			geometry,
-			tollKm
+			tollKm,
+			toll: src.toll && src.toll.prices ? src.toll : null
 		};
 	}
+	// Toll fare by golongan — the class the selected truck falls in, else the planner's pick.
+	const GOLONGAN_OPTIONS = [
+		{ value: '1', label: 'Golongan I' },
+		{ value: '2', label: 'Golongan II' },
+		{ value: '3', label: 'Golongan III' },
+		{ value: '4', label: 'Golongan IV' },
+		{ value: '5', label: 'Golongan V' }
+	];
+	let selectedGolongan = $state('2');
+	let tollSummaryOpen = $state(false);
+	/** Indonesian toll classes: I = small trucks/pickups, II = 2-axle trucks, III = 3-axle, IV = 4-axle, V = 5+ axles. */
+	function golonganForTruck(t: Vehicle | null): string | null {
+		if (!t) return null;
+		const type = typeLabel(t).toLowerCase();
+		const axle = Number(t.attributes?.axle);
+		if (Number.isFinite(axle) && axle > 0) return axle >= 5 ? '5' : axle === 4 ? '4' : axle === 3 ? '3' : '2';
+		if (/pickup|van/.test(type)) return '1';
+		if (/trailer.*4[05]|trailer.*40/.test(type)) return '5';
+		if (/trailer/.test(type)) return '4';
+		if (/tronton/.test(type)) return '3';
+		return '2';
+	}
+	$effect(() => {
+		const g = golonganForTruck(selectedTruck);
+		if (g) selectedGolongan = g;
+	});
+	const tollFare = (r: RouteSummary) => (r.toll?.prices ? (r.toll.prices[`golongan_${selectedGolongan}`] ?? null) : null);
 	async function planRoute(points: [number, number][]): Promise<RouteSummary> {
 		if (points.length < 2) return { distanceKm: null, durationMin: null, geometry: [] };
 		const res = await api.post(ENDPOINTS.routing.route, { points, profile: 'truck', includeTolls: true });
@@ -1333,8 +1363,38 @@
 				<div class="planner-muatan-strip">
 					<div class="planner-muatan-item"><div class="planner-muatan-label">Jarak</div><div class="planner-muatan-value">{haulRoute.distanceKm != null ? `${haulRoute.distanceKm} Km` : '-'}</div></div>
 					<div class="planner-muatan-item"><div class="planner-muatan-label">ETA</div><div class="planner-muatan-value">{formatDurationMin(haulRoute.durationMin)}</div></div>
-					<div class="planner-muatan-item"><div class="planner-muatan-label">Ruas Tol</div><div class="planner-muatan-value">{haulRoute.tollKm == null ? '-' : haulRoute.tollKm ? `${haulRoute.tollKm} Km` : 'Tidak ada'}</div></div>
+					<div class="planner-muatan-item"><div class="planner-muatan-label">Biaya Toll</div><div class="planner-muatan-value">{tollFare(haulRoute) != null ? formatIDR(tollFare(haulRoute)) : haulRoute.tollKm === 0 ? 'Tidak ada' : '-'}</div></div>
 				</div>
+				{#if haulRoute.toll?.prices}
+					<div class="planner-toll-fare">
+						<div class="planner-toll-fare-label">Toll Fare Estimate</div>
+						<div class="planner-toll-fare-row">
+							<FieldSelect bind:value={selectedGolongan} options={GOLONGAN_OPTIONS} compact placeholder="Golongan" />
+							<div class="planner-toll-fare-value">{formatIDR(tollFare(haulRoute) ?? 0)}</div>
+						</div>
+						<div class="planner-toll-fare-note">
+							{selectedTruck ? `${GOLONGAN_OPTIONS.find((o) => o.value === selectedGolongan)?.label} mengikuti truck ${selectedTruck.licensePlate}. ` : ''}Tarif dari MAPID untuk {haulRoute.toll.gates.length} gerbang{haulRoute.tollKm ? ` · ${haulRoute.tollKm} km ruas tol` : ''}{approachRoute.toll?.prices && tollFare(approachRoute) ? `; belum termasuk ${formatIDR(tollFare(approachRoute) ?? 0)} menuju lokasi muat` : ''}.
+						</div>
+					</div>
+					{#if haulRoute.toll.gates.length}
+						<div class="planner-toll-summary">
+							<button type="button" class="planner-toll-summary-head" onclick={() => (tollSummaryOpen = !tollSummaryOpen)}>
+								Toll Summary <span style="display:inline-flex; transform:{tollSummaryOpen ? 'rotate(180deg)' : 'none'}"><ChevronDown size={14} /></span>
+							</button>
+							{#if tollSummaryOpen}
+								<div class="planner-toll-summary-body">
+									{#each haulRoute.toll.gates as g, i (i)}
+										<div class="planner-toll-summary-gate">
+											<div class="planner-toll-summary-gate-name">{g.name}</div>
+											{#if g.gate}<div class="planner-toll-summary-gate-row"><span>Gate:</span><span>{g.gate === 'in' ? 'Masuk' : 'Keluar'}</span></div>{/if}
+											<div class="planner-toll-summary-gate-row"><span>Price:</span><span>{formatIDR(g.prices?.[`golongan_${selectedGolongan}`] ?? 0)}</span></div>
+										</div>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					{/if}
+				{/if}
 
 				{#if findTransporterOpen}
 					<div class="planner-find-transporter">
