@@ -118,6 +118,54 @@
 	let editing = $state<Site | null>(null);
 	let saving = $state(false);
 	let picked = $state<[number, number] | null>(null);
+
+	// Address search (fms-geocode via the business service): type a road,
+	// kelurahan or kabupaten, pick a candidate, and the pin lands there with
+	// the address fields filled in. The map click still works for fine-tuning.
+	type Candidate = {
+		kind: string;
+		name: string;
+		label: string;
+		address: { kelurahan?: string; kecamatan?: string; kabupaten?: string; provinsi?: string };
+		lat: number;
+		lon: number;
+	};
+	let geoQuery = $state('');
+	let geoResults = $state<Candidate[]>([]);
+	let geoBusy = $state(false);
+	let geoOpen = $state(false);
+	let geoTimer: ReturnType<typeof setTimeout> | undefined;
+	function geoInput() {
+		clearTimeout(geoTimer);
+		const q = geoQuery.trim();
+		if (q.length < 3) {
+			geoResults = [];
+			return;
+		}
+		geoTimer = setTimeout(async () => {
+			geoBusy = true;
+			try {
+				const res = await api.get(ENDPOINTS.routing.geocode, { q, limit: 8 });
+				geoResults = res.data?.data ?? [];
+				geoOpen = true;
+			} catch {
+				geoResults = [];
+			} finally {
+				geoBusy = false;
+			}
+		}, 350);
+	}
+	function pickCandidate(c: Candidate) {
+		picked = [c.lon, c.lat];
+		geoQuery = c.label;
+		geoOpen = false;
+		if (!form.city.trim() && c.address?.kabupaten) form.city = c.address.kabupaten;
+		if (!form.address.trim()) {
+			form.address = [c.kind === 'road' ? c.name : '', c.address?.kelurahan, c.address?.kecamatan, c.address?.kabupaten, c.address?.provinsi]
+				.filter((s) => s && s.trim())
+				.join(', ');
+		}
+	}
 	let confirming = $state<Site | null>(null);
 	function blank() {
 		return {
@@ -336,8 +384,37 @@
 			><Input id="w-city" bind:value={form.city} placeholder="cth. Kota Jakarta Utara" /></Field
 		>
 		<div class="md:col-span-2">
-			<p class="mb-1 text-xs text-muted">Titik Lokasi di Peta</p>
-			<MapView markers={pickedMarkers} onPick={(c) => (picked = c)} height="260px" />
+			<p class="mb-1 text-xs text-muted">Cari alamat</p>
+			<div class="geo-search">
+				<Search size={14} />
+				<input
+					id="w-geo"
+					type="text"
+					placeholder="cth. Jl. Raya Bekasi Cikarang, atau nama kelurahan / kabupaten"
+					bind:value={geoQuery}
+					oninput={geoInput}
+					onfocus={() => (geoOpen = geoResults.length > 0)}
+					onblur={() => setTimeout(() => (geoOpen = false), 150)}
+					autocomplete="off"
+				/>
+				{#if geoBusy}<span class="geo-busy">…</span>{/if}
+				{#if geoOpen && geoResults.length}
+					<ul class="geo-results" role="listbox">
+						{#each geoResults as c (c.label + c.lat + c.lon)}
+							<li role="option" aria-selected="false" onmousedown={() => pickCandidate(c)}>
+								<MapPin size={12} />
+								<span>
+									<b>{c.name}</b>
+									<small>{c.label}</small>
+								</span>
+								<em>{c.kind}</em>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</div>
+			<p class="mb-1 mt-3 text-xs text-muted">Titik Lokasi di Peta</p>
+			<MapView markers={pickedMarkers} onPick={(c) => (picked = c)} fitKey={picked ? `${picked[0]},${picked[1]}` : ''} height="260px" />
 			<p class="mt-1 text-xs text-muted">
 				Klik peta untuk menentukan titik lokasi. Tanpa titik lokasi, warehouse tetap tersimpan — tetapi rute
 				dan jarak tidak bisa dihitung sampai titiknya diisi.
@@ -487,6 +564,75 @@
 		margin: 2px 0 0;
 		font-size: 12px;
 		color: var(--on-surface-variant, #6b7280);
+	}
+	.geo-search {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 0 12px;
+		height: 40px;
+		border: 1px solid #d5d9e2;
+		border-radius: 10px;
+		background: #fff;
+	}
+	.geo-search input {
+		flex: 1;
+		border: 0;
+		outline: 0;
+		font: inherit;
+		font-size: 13px;
+		background: transparent;
+	}
+	.geo-busy {
+		color: #7a8598;
+		font-size: 12px;
+	}
+	.geo-results {
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 42px;
+		z-index: 30;
+		margin: 0;
+		padding: 4px 0;
+		list-style: none;
+		background: #fff;
+		border: 1px solid #e3e6ec;
+		border-radius: 10px;
+		box-shadow: 0 8px 24px rgba(16, 24, 40, 0.12);
+		max-height: 260px;
+		overflow: auto;
+	}
+	.geo-results li {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 12px;
+		cursor: pointer;
+		font-size: 13px;
+	}
+	.geo-results li:hover {
+		background: #f4f6fa;
+	}
+	.geo-results li span {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-width: 0;
+	}
+	.geo-results li small {
+		color: #5b5f67;
+		font-size: 11.5px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.geo-results li em {
+		font-style: normal;
+		font-size: 10.5px;
+		color: #7a8598;
+		text-transform: uppercase;
 	}
 	.fleet-search-input {
 		display: flex;
