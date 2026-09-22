@@ -28,6 +28,16 @@ export interface Evidence {
 	tollDistanceMeters: number;
 	tollEstimate: string;
 	/**
+	 * "tariff" when every tolled leg carried MAPID's gate-priced fare (the
+	 * estimate is the real tariff for tollGolongan); "rate" when at least one
+	 * leg fell back to the per-km rate.
+	 */
+	tollEstimateSource?: 'tariff' | 'rate';
+	/** Toll class (1–5) the tariff was read for, from the assigned truck's type. */
+	tollGolongan?: number;
+	/** Fare per golongan across the journey, when every tolled leg had a tariff. */
+	tollPrices?: Record<string, number>;
+	/**
 	 * False when part of the route had no toll data. The estimate is then a
 	 * floor rather than a figure, and the UI says so.
 	 */

@@ -1,4 +1,5 @@
 <script lang="ts">
+	const ROMAN: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V' };
 	/**
 	 * Uang sangu — the driver's cash advance.
 	 *
@@ -106,6 +107,11 @@
 			<dd class="text-ink">
 				{formatCurrency(Number(evidence?.tollEstimate ?? 0))}
 				<span class="text-muted">({km(evidence?.tollDistanceMeters)} tolled)</span>
+				{#if evidence?.tollEstimateSource === 'tariff'}
+					<span class="text-muted">· tarif gerbang MAPID, Golongan {ROMAN[evidence.tollGolongan ?? 2]}</span>
+				{:else if evidence?.tollEstimateSource === 'rate'}
+					<span class="text-muted">· perkiraan per km</span>
+				{/if}
 			</dd>
 		</dl>
 
