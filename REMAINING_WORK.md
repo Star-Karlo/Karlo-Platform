@@ -94,10 +94,11 @@ files under `src/routes/` are three-line wrappers:
 | `DashboardPage` (Insight > Overview, the login landing) | `/t`, `/m`, `/a` |
 | `CompanyProfilePage` (Profil Perusahaan, `GET/PUT /companies/me`) | `/t`, `/m`, `/a` |
 | `TruckDetailPage` (`/fleet/truck/[id]`, `?edit=1` for Edit Truck), `DriverDetailPage` (`/fleet/driver/[id]`) | `/t`, `/m`, `/a` |
-| `TripAllowanceConfigurationPage` (company `settings.tripAllowance`), `TripAllowanceDriverAllowancePage`, `TripAllowanceReconciliationPage` | `/t`, `/m`, `/a` |
+| `TripAllowanceConfigurationPage` (company `settings.tripAllowance`), `TripAllowanceDriverAllowancePage`, `TripAllowanceReconciliationPage`; `AllowancePanel` on the order page shows whether the toll figure is MAPID's gate tariff (and for which golongan) or the per-km estimate (`tollEstimateSource`) | `/t`, `/m`, `/a` |
 | `FinanceCoaPage`, `FinanceJurnalPage`, `FinanceLaporanPage` (`/ledger` for what a person types; automatic postings derived by `lib/revamp/jurnal.js`) | `/t`, `/m`, `/a` |
-| `TruckListPage` | `/t`, `/m`, `/a` |
-| `PlannerPage` | `/t`, `/m` |
+| `TruckListPage` (Data Armada; group filter and tag from `GET /vehicles?groupId=`) | `/t`, `/m`, `/a` |
+| `MasterDataPage kind="vehicleGroup"` (Grup Armada under My Fleet, `/vehicle-group`, gated by `truck.read`; the same groups feed the truck form's group select and FMS's fleet groups) | `/t`, `/a` |
+| `PlannerPage` (Allocate; its Toll Fare Estimate card reads `route.toll` per golongan, defaulting to the picked truck's class) | `/t`, `/m` |
 | `SettingsPage` | `/s`, `/t`, `/m` |
 | `MonitoringPage`, `InvestorDashboardPage` | `/a`, `/i` |
 | `NotBuiltPage` | every nav destination without a screen yet |
