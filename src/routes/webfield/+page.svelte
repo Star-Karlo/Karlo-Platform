@@ -381,7 +381,6 @@
 				</div>
 				{#if scanning}
 					<div class="wf-scan">
-						<!-- svelte-ignore a11y_media_has_caption -->
 						<video id="wf-video" playsinline muted></video>
 						<button class="wf-btn wf-btn-ghost" type="button" onclick={() => stopScan()}>Batal</button>
 					</div>
