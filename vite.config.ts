@@ -53,6 +53,8 @@ const SERVICES = {
 	// Finance: chart of accounts and manual journal lines.
 	'/api/v1/ledger': 'http://localhost:5003',
 	'/api/v1/shipments': 'http://localhost:5003',
+	// Web-Field, the receiving PIC's own pages.
+	'/api/v1/field': 'http://localhost:5003',
 	'/api/v1/agreements': 'http://localhost:5003',
 	'/api/v1/invoices': 'http://localhost:5003',
 	// MAPID routing, proxied server-side so the API key never reaches a bundle.

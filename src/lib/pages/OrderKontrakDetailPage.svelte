@@ -671,6 +671,18 @@
 		return matches ? 'sesuai' : 'tidak_sesuai';
 	});
 	/** What the driver or the PIC wrote when they said "tidak sesuai". */
+	/** What the receiving PIC counted, as read back from the shipment. */
+	let picAudit = $derived.by(() => {
+		const rows: string[] = [];
+		const w = shipment?.unloadingAuditWeightKg;
+		const v = shipment?.unloadingAuditVolumeM3;
+		const q = shipment?.unloadingAuditQuantity;
+		if (w != null) rows.push(`${Number(w).toLocaleString('id-ID')} kg`);
+		if (v != null) rows.push(`${Number(v).toLocaleString('id-ID')} m³`);
+		if (q != null) rows.push(`${Number(q).toLocaleString('id-ID')} koli`);
+		return rows;
+	});
+
 	let gateFlagNote = $derived(
 		gatePhase === 'muat' ? (shipment?.loadingCargoNote ?? '') : (shipment?.unloadingCargoNote ?? '')
 	);
@@ -2180,6 +2192,17 @@
 					{#if gateFlag === 'tidak_sesuai' && gateFlagNote}
 						<div class="epod-gate-flag-note">
 							Catatan {gatePhase === 'muat' ? 'driver' : 'PIC'}: “{gateFlagNote}”
+						</div>
+					{/if}
+					{#if gatePhase === 'bongkar' && picAudit.length}
+						<!-- What the PIC counted at the gate on Web-Field, beside the
+						     ordered figures. The reviewer is verifying a POD against
+						     these numbers, so they belong on this banner. -->
+						<div class="epod-gate-flag-note">
+							Audit PIC di Web-Field: {picAudit.join(' · ')}
+							{#if shipment?.manifestFinalizedAt}
+								— manifest difinalisasi {shipment.manifestFinalizedBy ?? ''}
+							{/if}
 						</div>
 					{/if}
 				</div>
