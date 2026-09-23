@@ -1119,6 +1119,38 @@
 		return out;
 	});
 
+	// ------------------------------------------------------------------------
+	// Geofencing switch (company setting finishWithGeofencing).
+	// ------------------------------------------------------------------------
+	let geofencingOn = $state(false);
+	let geofencingSaving = $state(false);
+	async function loadGeofencing() {
+		try {
+			const res = await api.get(ENDPOINTS.companyMe);
+			geofencingOn = res.data?.data?.settings?.finishWithGeofencing === true;
+		} catch {
+			geofencingOn = false;
+		}
+	}
+	async function toggleGeofencing() {
+		if (geofencingSaving) return;
+		const next = !geofencingOn;
+		geofencingSaving = true;
+		try {
+			await api.put(ENDPOINTS.companyMe, { settings: { finishWithGeofencing: next } });
+			geofencingOn = next;
+			toast(next ? 'Geofencing aktif — driver harus di dalam radius gudang saat lapor tiba' : 'Geofencing nonaktif — lokasi tetap dicatat, tapi tidak menolak');
+		} catch (e: any) {
+			toast(e?.response?.data?.message ?? 'Gagal mengubah setelan geofencing');
+		} finally {
+			geofencingSaving = false;
+		}
+	}
+	$effect(() => {
+		void $actingFor.companyId;
+		void loadGeofencing();
+	});
+
 	let needsClient = $derived(isStaff && !$actingFor.companyId);
 	let num = (v: any) => (v === undefined || v === null || v === '' ? undefined : Number(v));
 	/** Numbers in the panel tables; one dash style ("—") for a missing figure. */
@@ -1149,7 +1181,15 @@
 				</button>
 			{/each}
 		</div>
-		<span class="hint" style="margin-left:auto;">
+		<!-- The company's own geofencing switch, as the old console had it:
+		     on, an arrival reported outside the warehouse's fence is
+		     refused; off, it is recorded with the distance and let through. -->
+		<label class="ct-geofence-toggle" style="margin-left:auto;" title="Wajibkan driver berada di dalam radius gudang saat melaporkan tiba">
+			<span>Geofencing {geofencingOn ? 'ON' : 'OFF'}</span>
+			<input type="checkbox" checked={geofencingOn} disabled={geofencingSaving} onchange={toggleGeofencing} />
+			<span class="ct-geofence-track" class:on={geofencingOn}><span class="ct-geofence-knob"></span></span>
+		</label>
+		<span class="hint">
 			{#if liveAt}GPS dari FMS · {liveAt.toLocaleTimeString('id-ID')}{:else if liveError}{liveError}{/if}
 		</span>
 		<span class="ct-topbar-clock"><Clock size={13} /> {clockLabel}</span>

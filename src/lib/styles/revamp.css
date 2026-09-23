@@ -591,6 +591,16 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .picker-modal .table-wrap td{padding:7px 10px;}
 .picker-modal .btn-sm{padding:5px 11px; font-size:11px;}
 
+/* Geofencing switch in the Control Tower top bar. */
+.ct-geofence-toggle{display:inline-flex; align-items:center; gap:8px; font-size:12px; font-weight:700; color:var(--on-surface); cursor:pointer; white-space:nowrap;}
+.ct-geofence-toggle input{position:absolute; opacity:0; width:0; height:0;}
+.ct-geofence-track{position:relative; width:40px; height:22px; border-radius:999px; background:var(--outline); transition:background .15s;}
+.ct-geofence-track.on{background:#16a34a;}
+.ct-geofence-knob{position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:transform .15s;}
+.ct-geofence-track.on .ct-geofence-knob{transform:translateX(18px);}
+.ct-geofence-toggle input:disabled + .ct-geofence-track{opacity:.55; cursor:not-allowed;}
+.ct-geofence-toggle input:focus-visible + .ct-geofence-track{box-shadow:0 0 0 3px rgba(11,87,208,.25);}
+
 .agreement-select-btn{width:100%; justify-content:center; font-size:12px;}
 .agreement-select-btn-label{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .warehouse-search-field{position:relative;}
