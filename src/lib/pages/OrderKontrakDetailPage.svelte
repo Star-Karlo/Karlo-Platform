@@ -677,18 +677,20 @@
 
 	// ---------- Route ----------
 	let routeAllPoints = $derived.by(() => {
-		if (!order) return [] as { warehouse: any; label: string }[];
+		if (!order) return [] as { warehouse: any; label: string; pic?: { name?: string; phone?: string } | null }[];
 		if ((order.loadingPoints?.length || 0) > 0 && (order.unloadingPoints?.length || 0) > 0) {
 			const loading: string[] = order.loadingPoints;
 			const unloading: string[] = order.unloadingPoints;
 			return [
 				...loading.map((wid, i) => ({
 					warehouse: warehouseFor(wid),
-					label: `Alamat Muat${loading.length > 1 ? ` ${i + 1}` : ''}`
+					label: `Alamat Muat${loading.length > 1 ? ` ${i + 1}` : ''}`,
+					pic: order.loadingPics?.[i] ?? (i === 0 ? order.loadingPic : null)
 				})),
 				...unloading.map((wid, i) => ({
 					warehouse: warehouseFor(wid),
-					label: `Alamat Bongkar${unloading.length > 1 ? ` ${i + 1}` : ''}`
+					label: `Alamat Bongkar${unloading.length > 1 ? ` ${i + 1}` : ''}`,
+					pic: order.unloadingPics?.[i] ?? (i === unloading.length - 1 ? order.unloadingPic : null)
 				}))
 			];
 		}
@@ -1135,6 +1137,9 @@
 				<div class="addr-kota">{pt.warehouse?.kota || '-'}</div>
 				<div class="addr-label">{pt.warehouse?.nama || '-'}</div>
 				<div class="addr-detail">{pt.warehouse?.alamat || '-'}</div>
+				{#if pt.pic?.name}
+					<div class="addr-detail">PIC: {pt.pic.name}{pt.pic.phone ? ` · ${pt.pic.phone}` : ''}</div>
+				{/if}
 			</div>
 		{/each}
 		<div class="route-marker" style="grid-row: 1 / {routeAllPoints.length + 1};">

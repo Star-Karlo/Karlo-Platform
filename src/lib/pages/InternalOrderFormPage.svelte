@@ -65,6 +65,9 @@
 	function onWarehouseCreated(w: Warehouse) {
 		warehouses = [...warehouses, w];
 	}
+	function onWarehouseUpdated(w: Warehouse) {
+		warehouses = warehouses.map((x) => (x.id === w.id ? { ...x, ...w } : x));
+	}
 
 	/* ---------- Validation ---------- */
 	function validateStep1() {
@@ -89,6 +92,13 @@
 				return `Loading Point pada Data Shipment (${i + 1}) wajib dipilih`;
 			if (sp.unloadingPoints.some((id) => !id))
 				return `Unloading Point pada Data Shipment (${i + 1}) wajib dipilih`;
+			// A PIC per point: the person the driver's OTP goes to and who
+			// answers for the cargo there. The warehouse's default is proposed
+			// automatically, so this only bites when the warehouse has none.
+			if (sp.loadingPoints.some((_, k) => !sp.loadingPics?.[k]?.name))
+				return `PIC Loading Point pada Data Shipment (${i + 1}) wajib dipilih (atau tambahkan PIC baru)`;
+			if (sp.unloadingPoints.some((_, k) => !sp.unloadingPics?.[k]?.name))
+				return `PIC Unloading Point pada Data Shipment (${i + 1}) wajib dipilih (atau tambahkan PIC baru)`;
 		}
 		return null;
 	}
@@ -185,6 +195,12 @@
 						truckOptions: [...(sp.truckOptions ?? [])],
 						loadingPoints: [...sp.loadingPoints],
 						unloadingPoints: [...sp.unloadingPoints],
+						// Who answers at each point, and the two K-Trip reads: the
+						// loading PIC (first point) and the unloading PIC (last).
+						loadingPics: sp.loadingPoints.map((wid, k) => ({ warehouseId: wid, ...(sp.loadingPics[k] ?? { name: '', phone: '' }) })),
+						unloadingPics: sp.unloadingPoints.map((wid, k) => ({ warehouseId: wid, ...(sp.unloadingPics[k] ?? { name: '', phone: '' }) })),
+						loadingPic: sp.loadingPics[0] ?? null,
+						unloadingPic: sp.unloadingPics[sp.unloadingPics.length - 1] ?? null,
 						items,
 						totalTonnage: sp.totalTonnage,
 						additionalNeeds: [...sp.additionalNeeds],
@@ -216,7 +232,7 @@
 
 	<div>
 		{#if currentStep === 0}
-			<Step1AgreementShipment bind:wizard {customers} {warehouses} {onWarehouseCreated} />
+			<Step1AgreementShipment bind:wizard {customers} {warehouses} {onWarehouseCreated} {onWarehouseUpdated} />
 		{:else if currentStep === 1}
 			<Step2DetailItem bind:wizard {agreements} {warehouses} {transporterName} />
 		{:else}

@@ -36,6 +36,7 @@
 		address?: string;
 		picName?: string;
 		picPhone?: string;
+		pics?: Pic[];
 		latitude?: number;
 		longitude?: number;
 		location?: { coordinates?: [number, number] };
@@ -43,6 +44,7 @@
 		customerCompanyId?: string;
 	};
 
+	type Pic = { id?: string; name: string; phone: string; isDefault: boolean };
 	const OWN = 'own';
 	let customers = $state<Customer[]>([]);
 	let selected = $state<string>(OWN);
@@ -167,17 +169,44 @@
 		}
 	}
 	let confirming = $state<Site | null>(null);
+	function blankPic(isDefault = false): Pic {
+		return { name: '', phone: '', isDefault };
+	}
 	function blank() {
 		return {
 			name: '',
 			city: '',
 			district: '',
 			address: '',
-			picName: '',
-			picPhone: '',
+			pics: [blankPic(true)] as Pic[],
 			geofenceRadiusMeters: ''
 		};
 	}
+	/** The list from the service, or the old single contact as a one-entry list. */
+	function picsOf(s: Site): Pic[] {
+		if (s.pics && s.pics.length) return s.pics.map((p) => ({ id: p.id, name: p.name ?? '', phone: p.phone ?? '', isDefault: !!p.isDefault }));
+		if (s.picName || s.picPhone) return [{ name: s.picName ?? '', phone: s.picPhone ?? '', isDefault: true }];
+		return [blankPic(true)];
+	}
+	function addPic() {
+		form.pics.push(blankPic(form.pics.length === 0));
+	}
+	function removePic(i: number) {
+		const wasDefault = form.pics[i]?.isDefault;
+		form.pics.splice(i, 1);
+		if (wasDefault && form.pics.length) form.pics[0].isDefault = true;
+	}
+	function setDefaultPic(i: number) {
+		form.pics.forEach((p, k) => (p.isDefault = k === i));
+	}
+	const defaultPicLabel = (s: Site) => {
+		const d = s.pics?.find((p) => p.isDefault) ?? s.pics?.[0];
+		const name = d?.name ?? s.picName;
+		const phone = d?.phone ?? s.picPhone;
+		if (!name) return '—';
+		const more = (s.pics?.length ?? 0) > 1 ? ` (+${s.pics!.length - 1})` : '';
+		return `${name}${phone ? ` · ${phone}` : ''}${more}`;
+	};
 	let form = $state(blank());
 	const pickedMarkers = $derived(
 		picked
@@ -207,8 +236,7 @@
 			city: s.city ?? '',
 			district: s.district ?? '',
 			address: s.address ?? '',
-			picName: s.picName ?? '',
-			picPhone: s.picPhone ?? '',
+			pics: picsOf(s),
 			geofenceRadiusMeters: s.geofenceRadiusMeters != null ? String(s.geofenceRadiusMeters) : ''
 		};
 		picked = coords(s);
@@ -228,9 +256,17 @@
 				siteType: 'warehouse',
 				customerCompanyId: selected === OWN ? '' : selected
 			};
-			for (const key of ['city', 'district', 'address', 'picName', 'picPhone'] as const) {
+			for (const key of ['city', 'district', 'address'] as const) {
 				if (form[key].trim()) payload[key] = form[key].trim();
 			}
+			const pics = form.pics.filter((p) => p.name.trim() || p.phone.trim());
+			if (pics.some((p) => !p.name.trim())) {
+				error = 'Setiap PIC harus punya nama';
+				saving = false;
+				return;
+			}
+			if (pics.length && !pics.some((p) => p.isDefault)) pics[0].isDefault = true;
+			payload.pics = pics.map((p) => ({ id: p.id ?? '', name: p.name.trim(), phone: p.phone.trim(), isDefault: p.isDefault }));
 			if (form.geofenceRadiusMeters.trim()) payload.geofenceRadiusMeters = Number(form.geofenceRadiusMeters);
 			if (picked) {
 				payload.longitude = picked[0];
@@ -264,7 +300,7 @@
 		{
 			key: 'pic',
 			label: 'PIC',
-			format: (r) => (r.picName ? `${r.picName}${r.picPhone ? ` · ${r.picPhone}` : ''}` : '—')
+			format: (r) => defaultPicLabel(r)
 		},
 		{ key: 'geo', label: 'Titik', format: (r) => (coords(r) ? 'Ada' : 'Belum') },
 		{ key: 'actions', label: '', align: 'right' }
@@ -443,8 +479,22 @@
 		<Field label="Radius Geofence (m)" id="w-geo" help="Default 200 m bila kosong."
 			><Input id="w-geo" type="number" bind:value={form.geofenceRadiusMeters} /></Field
 		>
-		<Field label="Nama PIC" id="w-pic"><Input id="w-pic" bind:value={form.picName} /></Field>
-		<Field label="Telepon PIC" id="w-picphone"><Input id="w-picphone" bind:value={form.picPhone} /></Field>
+		<Field label="PIC Gudang" id="w-pics" wide help="Bisa lebih dari satu. PIC default adalah yang dihubungi driver untuk kode OTP dan yang dipilih otomatis saat membuat order.">
+			<div class="pic-list">
+				{#each form.pics as pic, i (i)}
+					<div class="pic-row">
+						<Input id="w-pic-name-{i}" bind:value={pic.name} placeholder="Nama PIC" />
+						<Input id="w-pic-phone-{i}" bind:value={pic.phone} placeholder="Nomor WhatsApp" />
+						<label class="pic-default" title="Jadikan PIC default">
+							<input type="radio" name="pic-default" checked={pic.isDefault} onchange={() => setDefaultPic(i)} />
+							<span>Default</span>
+						</label>
+						<button type="button" class="btn btn-outline btn-sm" title="Hapus PIC" onclick={() => removePic(i)}>✕</button>
+					</div>
+				{/each}
+				<button type="button" class="btn btn-outline btn-sm" onclick={addPic}>+ Tambah PIC</button>
+			</div>
+		</Field>
 	</FormGrid>
 	{#if error}<div class="note-banner note-banner-error" role="alert">
 			<span>⛔</span>
@@ -465,6 +515,23 @@
 </Modal>
 
 <style>
+	.pic-list {
+		display: grid;
+		gap: 8px;
+	}
+	.pic-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto auto;
+		gap: 8px;
+		align-items: center;
+	}
+	.pic-default {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 12px;
+		white-space: nowrap;
+	}
 	.cargo-layout {
 		display: grid;
 		grid-template-columns: 260px minmax(0, 1fr);

@@ -6,18 +6,23 @@
 	import AgreementPickerModal from '../AgreementPickerModal.svelte';
 	import WarehouseSearchField from '../WarehouseSearchField.svelte';
 	import { MAX_TRUCK_OPTIONS } from '$lib/revamp/truckOptions.js';
-	import type { Customer, Warehouse, Wizard } from './wizardTypes';
+	import { defaultPicOf, type Customer, type PointPic, type Warehouse, type Wizard } from './wizardTypes';
+	import { Modal, Field, FormGrid, Input, Button } from '$lib/components/ui';
+	import { api } from '$lib/utils/api';
+	import { ENDPOINTS } from '$lib/constants/endpoints';
 
 	let {
 		wizard = $bindable(),
 		customers = [],
 		warehouses = [],
-		onWarehouseCreated
+		onWarehouseCreated,
+		onWarehouseUpdated
 	}: {
 		wizard: Wizard;
 		customers?: Customer[];
 		warehouses?: Warehouse[];
 		onWarehouseCreated?: (w: Warehouse) => void;
+		onWarehouseUpdated?: (w: Warehouse) => void;
 	} = $props();
 
 	let customerOptions = $derived(customers.map((c) => ({ value: c.name, label: c.name })));
@@ -82,19 +87,112 @@
 	/* ---------- Multi pickup / multi drop ---------- */
 	function addLoadingPoint(i: number) {
 		wizard.shipments[i].loadingPoints.push('');
+		wizard.shipments[i].loadingPics.push(null);
 	}
 	function removeLoadingPoint(i: number, pointIndex: number) {
 		const points = wizard.shipments[i].loadingPoints;
 		if (points.length <= 1) return;
 		points.splice(pointIndex, 1);
+		wizard.shipments[i].loadingPics.splice(pointIndex, 1);
 	}
 	function addUnloadingPoint(i: number) {
 		wizard.shipments[i].unloadingPoints.push('');
+		wizard.shipments[i].unloadingPics.push(null);
 	}
 	function removeUnloadingPoint(i: number, pointIndex: number) {
 		const points = wizard.shipments[i].unloadingPoints;
 		if (points.length <= 1) return;
 		points.splice(pointIndex, 1);
+		wizard.shipments[i].unloadingPics.splice(pointIndex, 1);
+	}
+
+	/* ---------- PIC per point ----------
+	   Picking a warehouse proposes its default PIC; the planner may switch to
+	   another of the warehouse's PICs or add a new one, which is also saved to
+	   the warehouse so the next order finds it. */
+	type PicField = 'loadingPics' | 'unloadingPics';
+	const picField = (field: 'loadingPoints' | 'unloadingPoints'): PicField => (field === 'loadingPoints' ? 'loadingPics' : 'unloadingPics');
+	function warehouseOf(id: string): Warehouse | undefined {
+		return warehouses.find((w) => w.id === id);
+	}
+	function onPointChosen(i: number, field: 'loadingPoints' | 'unloadingPoints', pointIndex: number, id: string) {
+		const pics = wizard.shipments[i][picField(field)];
+		while (pics.length <= pointIndex) pics.push(null);
+		pics[pointIndex] = defaultPicOf(warehouseOf(id));
+	}
+	function picOptions(id: string): { value: string; label: string }[] {
+		const w = warehouseOf(id);
+		const list = (w?.pics?.length ? w.pics : w?.picName ? [{ id: 'legacy', name: w.picName, phone: w.picPhone ?? '' }] : []) as { id?: string; name: string; phone?: string }[];
+		return list.map((p, k) => ({ value: p.id ?? `#${k}`, label: `${p.name}${p.phone ? ` · ${p.phone}` : ''}` }));
+	}
+	function picValue(pic: PointPic | null, id: string): string {
+		if (!pic) return '';
+		const w = warehouseOf(id);
+		const k = (w?.pics ?? []).findIndex((p) => (pic.id && p.id === pic.id) || (p.name === pic.name && (p.phone ?? '') === pic.phone));
+		if (k >= 0) return w!.pics![k].id ?? `#${k}`;
+		if (w?.picName === pic.name) return 'legacy';
+		return '';
+	}
+	function onPicSelect(i: number, field: 'loadingPoints' | 'unloadingPoints', pointIndex: number, value: string) {
+		if (value === '__new__') {
+			openNewPic(i, field, pointIndex);
+			return;
+		}
+		const id = wizard.shipments[i][field][pointIndex];
+		const w = warehouseOf(id);
+		const pics = wizard.shipments[i][picField(field)];
+		if (value === 'legacy' && w?.picName) {
+			pics[pointIndex] = { name: w.picName, phone: w.picPhone ?? '' };
+			return;
+		}
+		const k = (w?.pics ?? []).findIndex((p, idx) => (p.id ?? `#${idx}`) === value);
+		pics[pointIndex] = k >= 0 ? { id: w!.pics![k].id, name: w!.pics![k].name, phone: w!.pics![k].phone ?? '' } : null;
+	}
+
+	let showPicModal = $state(false);
+	let picTarget = $state<{ index: number; field: 'loadingPoints' | 'unloadingPoints'; pointIndex: number } | null>(null);
+	let picForm = $state({ name: '', phone: '', saveToWarehouse: true });
+	let picSaving = $state(false);
+	let picError = $state('');
+	function openNewPic(i: number, field: 'loadingPoints' | 'unloadingPoints', pointIndex: number) {
+		picTarget = { index: i, field, pointIndex };
+		picForm = { name: '', phone: '', saveToWarehouse: true };
+		picError = '';
+		showPicModal = true;
+	}
+	async function saveNewPic() {
+		if (!picTarget) return;
+		const name = picForm.name.trim();
+		const phone = picForm.phone.trim();
+		if (!name) {
+			picError = 'Nama PIC wajib diisi';
+			return;
+		}
+		const { index, field, pointIndex } = picTarget;
+		const id = wizard.shipments[index][field][pointIndex];
+		const w = warehouseOf(id);
+		let saved: PointPic = { name, phone };
+		picSaving = true;
+		picError = '';
+		try {
+			if (picForm.saveToWarehouse && w) {
+				const existing = (w.pics ?? []).map((p) => ({ id: p.id ?? '', name: p.name, phone: p.phone ?? '', isDefault: !!p.isDefault }));
+				const pics = [...existing, { id: '', name, phone, isDefault: existing.length === 0 }];
+				const res = await api.put(ENDPOINTS.warehouses.update(w.id), { name: w.name, pics });
+				const updated = res.data?.data;
+				if (updated) {
+					onWarehouseUpdated?.(updated);
+					const mine = (updated.pics ?? []).find((p: any) => p.name === name && (p.phone ?? '') === phone);
+					if (mine) saved = { id: mine.id, name: mine.name, phone: mine.phone ?? '' };
+				}
+			}
+			wizard.shipments[index][picField(field)][pointIndex] = saved;
+			showPicModal = false;
+		} catch (e: any) {
+			picError = e?.response?.data?.message ?? 'PIC tidak bisa disimpan ke warehouse.';
+		} finally {
+			picSaving = false;
+		}
 	}
 	/** Today and now, in the browser's own zone, for the pickers' floors. */
 	const pad = (n: number) => String(n).padStart(2, '0');
@@ -171,6 +269,7 @@
 										{warehouses}
 										placeholder="Cari alamat atau nama warehouse..."
 										disabled={!sp.agreementId}
+										onchange={(id) => onPointChosen(i, 'loadingPoints', li, id)}
 									/>
 								</div>
 								<button
@@ -190,6 +289,22 @@
 									><span class="icon-wrap"><X size={15} /></span></button
 								>
 							</div>
+							{#if sp.loadingPoints[li]}
+								<div class="point-pic-row">
+									<span class="point-pic-label">PIC muat</span>
+									<select
+										class="point-pic-select"
+										value={picValue(sp.loadingPics[li] ?? null, sp.loadingPoints[li])}
+										onchange={(e) => onPicSelect(i, 'loadingPoints', li, (e.currentTarget as HTMLSelectElement).value)}
+									>
+										<option value="">— pilih PIC —</option>
+										{#each picOptions(sp.loadingPoints[li]) as o (o.value)}
+											<option value={o.value}>{o.label}</option>
+										{/each}
+										<option value="__new__">+ PIC baru…</option>
+									</select>
+								</div>
+							{/if}
 						</div>
 					{/each}
 					<button
@@ -211,6 +326,7 @@
 										{warehouses}
 										placeholder="Cari alamat atau nama warehouse..."
 										disabled={!sp.agreementId}
+										onchange={(id) => onPointChosen(i, 'unloadingPoints', ui, id)}
 									/>
 								</div>
 								<button
@@ -230,6 +346,22 @@
 									><span class="icon-wrap"><X size={15} /></span></button
 								>
 							</div>
+							{#if sp.unloadingPoints[ui]}
+								<div class="point-pic-row">
+									<span class="point-pic-label">PIC bongkar</span>
+									<select
+										class="point-pic-select"
+										value={picValue(sp.unloadingPics[ui] ?? null, sp.unloadingPoints[ui])}
+										onchange={(e) => onPicSelect(i, 'unloadingPoints', ui, (e.currentTarget as HTMLSelectElement).value)}
+									>
+										<option value="">— pilih PIC —</option>
+										{#each picOptions(sp.unloadingPoints[ui]) as o (o.value)}
+											<option value={o.value}>{o.label}</option>
+										{/each}
+										<option value="__new__">+ PIC baru…</option>
+									</select>
+								</div>
+							{/if}
 						</div>
 					{/each}
 					<button
@@ -256,3 +388,26 @@
 	onSelected={onAgreementSelected}
 />
 <WarehouseFormModal bind:show={showWarehouseModal} onSaved={onWarehouseSaved} />
+
+<Modal open={showPicModal} size="sm" title="PIC baru" onClose={() => (showPicModal = false)}>
+	<FormGrid>
+		<Field label="Nama PIC" id="np-name" required><Input id="np-name" bind:value={picForm.name} placeholder="cth. Budi" /></Field>
+		<Field label="Nomor WhatsApp" id="np-phone"><Input id="np-phone" bind:value={picForm.phone} placeholder="08xx…" /></Field>
+		<Field label="" id="np-save" wide>
+			<label class="np-check"><input type="checkbox" bind:checked={picForm.saveToWarehouse} /> Simpan ke daftar PIC warehouse ini</label>
+		</Field>
+	</FormGrid>
+	{#if picError}<p class="np-error">{picError}</p>{/if}
+	{#snippet footer()}
+		<button type="button" class="btn btn-outline" onclick={() => (showPicModal = false)}>Batal</button>
+		<Button onclick={saveNewPic} loading={picSaving}>Pakai PIC ini</Button>
+	{/snippet}
+</Modal>
+
+<style>
+	.point-pic-row { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; }
+	.point-pic-label { font-size: 12px; color: var(--on-surface-variant, #6b7280); white-space: nowrap; }
+	.point-pic-select { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--outline-variant, #e5e7eb); border-radius: 8px; font: inherit; background: #fff; }
+	.np-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+	.np-error { color: var(--danger, #b91c1c); font-size: 12px; margin-top: 8px; }
+</style>
