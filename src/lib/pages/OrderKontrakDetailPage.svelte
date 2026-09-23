@@ -570,15 +570,27 @@
 	// or a private storage key, which is resolved to a signed URL when shown.
 	// ------------------------------------------------------------------------
 	let resolvedPodSrc = $state<Record<string, string>>({});
+	/**
+	 * A POD photo is stored as a key; the viewable URL is fetched once and
+	 * kept. The fetch is started AFTER the render pass, not during it:
+	 * writing state while a template is rendering is a hard error in Svelte
+	 * 5 (state_unsafe_mutation), and it aborted the whole E-POD dialog —
+	 * which is why "Selanjutnya" appeared to do nothing. `requestedPodSrc`
+	 * is a plain Set on purpose, so touching it never counts as state.
+	 */
+	const requestedPodSrc = new Set<string>();
 	function podSrc(src: string | null | undefined): string {
 		if (!src) return '';
 		if (/^(https?:|data:|blob:)/.test(src)) return src;
-		if (resolvedPodSrc[src]) return resolvedPodSrc[src];
-		if (!(src in resolvedPodSrc)) {
-			resolvedPodSrc = { ...resolvedPodSrc, [src]: '' };
-			downloadUrl(src)
-				.then((u) => (resolvedPodSrc = { ...resolvedPodSrc, [src]: u }))
-				.catch(() => {});
+		const known = resolvedPodSrc[src];
+		if (known) return known;
+		if (!requestedPodSrc.has(src)) {
+			requestedPodSrc.add(src);
+			queueMicrotask(() => {
+				downloadUrl(src)
+					.then((u) => (resolvedPodSrc = { ...resolvedPodSrc, [src]: u }))
+					.catch(() => requestedPodSrc.delete(src));
+			});
 		}
 		return '';
 	}
