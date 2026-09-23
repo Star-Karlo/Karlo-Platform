@@ -631,9 +631,18 @@
 	 * carry a pickup after their last update, so the end is always kept
 	 * after the start.
 	 */
+	/**
+	 * The window the trace is read over.
+	 *
+	 * "Now" is rounded down to a two-minute bucket on purpose: this
+	 * derivation re-runs whenever the live poll hands back a new shipment
+	 * object, and an exact `new Date()` made every re-run a different window
+	 * — which refetched the history and blanked the trail mid-journey.
+	 */
+	const TRACE_BUCKET_MS = 120_000;
 	let tripWindow = $derived.by<{ from: Date; to: Date } | null>(() => {
 		const o = selectedOrder;
-		const now = new Date();
+		const now = new Date(Math.floor(Date.now() / TRACE_BUCKET_MS) * TRACE_BUCKET_MS);
 		const DAY = 86_400_000;
 		if (o) {
 			const starts = [shipment?.startedToLoadingAt, shipment?.createdAt, o.pickupAt, o.createdAt]
@@ -654,21 +663,44 @@
 		// No order: today's driving.
 		return { from: new Date(now.getTime() - 24 * 3_600_000), to: now };
 	});
+	let alertsKey = $state('');
 	$effect(() => {
 		const v = selectedVehicle;
-		fuel = null;
-		alerts = [];
-		if (!v) return;
-		fetchFuelEstimate(v.vehicle_id).then((f) => { if (selectedVehicleId === v.vehicle_id) fuel = f; }).catch(() => {});
 		const w = tripWindow;
+		if (!v) {
+			fuel = null;
+			alerts = [];
+			alertsKey = '';
+			return;
+		}
+		const key = `${v.vehicle_id}|${w ? +w.from : 0}|${w ? +w.to : 0}`;
+		if (key === alertsKey) return;
+		// Harsh-driving and refuel dots belong to the truck, so they clear
+		// when another truck is picked, not on every poll of the same one.
+		if (!alertsKey.startsWith(`${v.vehicle_id}|`)) {
+			fuel = null;
+			alerts = [];
+		}
+		alertsKey = key;
+		fetchFuelEstimate(v.vehicle_id).then((f) => { if (selectedVehicleId === v.vehicle_id) fuel = f; }).catch(() => {});
 		if (w) fetchAlerts(v.vehicle_id, w.from, w.to).then((a) => { if (selectedVehicleId === v.vehicle_id) alerts = a; }).catch(() => {});
 	});
+	let snappedKey = $state('');
 	$effect(() => {
 		const v = selectedVehicle;
 		const w = tripWindow;
-		trip = null;
-		if (!v || !w) return;
-		fetchSnappedTrip(v.vehicle_id, w.from, w.to).then((t) => { if (selectedVehicleId === v.vehicle_id) trip = t; }).catch(() => {});
+		if (!v || !w) {
+			trip = null;
+			return;
+		}
+		// The previous trace stays on the map while the new one loads, and a
+		// failed read leaves it alone: a refresh must not empty the map.
+		const key = `${v.vehicle_id}|${+w.from}|${+w.to}`;
+		if (key === snappedKey) return;
+		snappedKey = key;
+		fetchSnappedTrip(v.vehicle_id, w.from, w.to)
+			.then((t) => { if (selectedVehicleId === v.vehicle_id) trip = t; })
+			.catch(() => {});
 	});
 	/** The raw fixes joined up, and how far they ran. */
 	let rawTrail = $derived.by<{ points: [number, number][]; distanceKm: number } | null>(() => {
@@ -708,12 +740,24 @@
 	// Raw fixes for the same window: speed/idle per point are what the
 	// Pantau Armada layers read (overspeed colouring, stop and idle dots).
 	let tripPoints = $state<TripPoint[]>([]);
+	let tripKey = $state('');
 	$effect(() => {
 		const v = selectedVehicle;
 		const w = tripWindow;
-		tripPoints = [];
-		if (!v || !w) return;
-		fetchTrip(v.vehicle_id, w.from, w.to).then((pts) => { if (selectedVehicleId === v.vehicle_id) tripPoints = pts; }).catch(() => {});
+		if (!v || !w) {
+			tripPoints = [];
+			tripKey = '';
+			return;
+		}
+		const key = `${v.vehicle_id}|${+w.from}|${+w.to}`;
+		if (key === tripKey) return;
+		// Selecting another truck drops the old fixes at once; a refresh of
+		// the same truck keeps them until the new ones land.
+		if (!tripKey.startsWith(`${v.vehicle_id}|`)) tripPoints = [];
+		tripKey = key;
+		fetchTrip(v.vehicle_id, w.from, w.to)
+			.then((pts) => { if (selectedVehicleId === v.vehicle_id) tripPoints = pts; })
+			.catch(() => {});
 	});
 	// The planned haul from the business service (MAPID geometry), so the
 	// plan on the map is a road, not a straight line, and the actual trace
