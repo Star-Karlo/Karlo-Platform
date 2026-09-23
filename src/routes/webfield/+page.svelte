@@ -101,6 +101,11 @@
 		return h;
 	};
 
+	/**
+	 * Every call goes to /api/v1/shipments/field/… — the endpoints sit under
+	 * the shipments prefix because that is what the load balancer routes to the
+	 * business service; a top-level /api/v1/field reached this console instead.
+	 */
 	async function call(path: string, body?: unknown, auth = false) {
 		const res = await fetch(`/api/v1${path}`, {
 			method: body === undefined ? 'GET' : 'POST',
@@ -136,7 +141,7 @@
 		busy = true;
 		error = '';
 		try {
-			lookup = await call('/field/lookup', { orderNumber: orderNumber.trim() });
+			lookup = await call('/shipments/field/lookup', { orderNumber: orderNumber.trim() });
 			step = 'otp';
 			digits = ['', '', '', '', '', ''];
 			queueMicrotask(() => boxes[0]?.focus());
@@ -210,7 +215,7 @@
 	}
 	async function loadInbox() {
 		try {
-			inbox = (await call('/field/inbox', undefined, true)) ?? [];
+			inbox = (await call('/shipments/field/inbox', undefined, true)) ?? [];
 		} catch {
 			inbox = [];
 		}
@@ -239,7 +244,7 @@
 		busy = true;
 		error = '';
 		try {
-			const path = picToken ? '/field/open' : '/field/verify';
+			const path = picToken ? '/shipments/field/open' : '/shipments/field/verify';
 			const data = await call(path, { orderNumber: lookup?.orderNumber ?? orderNumber.trim(), code }, !!picToken);
 			await openSession(data.token);
 		} catch (e: any) {
@@ -254,7 +259,7 @@
 	// --- step 3 ---------------------------------------------------------------
 	async function openSession(t: string) {
 		try {
-			view = await call(`/field/session/${encodeURIComponent(t)}`);
+			view = await call(`/shipments/field/session/${encodeURIComponent(t)}`);
 			token = t;
 			sessionStorage.setItem(TOKEN_KEY, t);
 			step = 'sheet';
@@ -277,7 +282,7 @@
 		busy = true;
 		error = '';
 		try {
-			view = await call(`/field/session/${encodeURIComponent(token)}/audit`, {
+			view = await call(`/shipments/field/session/${encodeURIComponent(token)}/audit`, {
 				matches,
 				note: note.trim(),
 				picName: picName.trim(),
@@ -299,7 +304,7 @@
 		busy = true;
 		error = '';
 		try {
-			view = await call(`/field/session/${encodeURIComponent(token)}/finalize`, {
+			view = await call(`/shipments/field/session/${encodeURIComponent(token)}/finalize`, {
 				picName: picName.trim(),
 				note: note.trim()
 			});
