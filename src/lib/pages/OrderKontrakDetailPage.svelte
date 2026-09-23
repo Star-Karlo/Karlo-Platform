@@ -376,23 +376,32 @@
 	const POD_PHOTO_MAX = 2;
 	let canShowPodPhotosMuat = $derived(api.testMode() || atOrPassed(order?.status, 'verifikasi_pod_muat'));
 	let canShowPodPhotosBongkar = $derived(api.testMode() || atOrPassed(order?.status, 'verifikasi_pod_bongkar'));
-	function podPhotoSlots(phaseKey: string, typeKey: string): (string | null)[] {
+	/**
+	 * Every photo of one type for one phase: what the driver submitted from
+	 * K-Trip first (it is the POD of record), then anything added here. One
+	 * list, so the review dialog, the E-POD document and the photo grid all
+	 * show the same pictures — the document used to read only the console's
+	 * own uploads, which left the driver's POD out of Linimasa Dokumen.
+	 */
+	function podPhotosOf(phaseKey: string, typeKey: string): string[] {
 		const canShow = phaseKey === 'muat' ? canShowPodPhotosMuat : canShowPodPhotosBongkar;
-		const fromDriver = canShow ? driverPodPhotos(phaseKey, typeKey) : [];
-		const uploaded = canShow ? [...fromDriver, ...(detail.podPhotos?.[phaseKey]?.[typeKey] || [])] : [];
-		return Array.from({ length: Math.max(POD_PHOTO_MAX, fromDriver.length) }, (_, i) => uploaded[i] || null);
+		if (!canShow) return [];
+		return [...driverPodPhotos(phaseKey, typeKey), ...(detail.podPhotos?.[phaseKey]?.[typeKey] || [])];
+	}
+	function podPhotoSlots(phaseKey: string, typeKey: string): (string | null)[] {
+		const uploaded = podPhotosOf(phaseKey, typeKey);
+		return Array.from({ length: Math.max(POD_PHOTO_MAX, uploaded.length) }, (_, i) => uploaded[i] || null);
 	}
 	function podPhotoSlotsForStop(phaseKey: string, typeKey: string, stopIndex: number): (string | null)[] {
-		const canShow = phaseKey === 'muat' ? canShowPodPhotosMuat : canShowPodPhotosBongkar;
-		const uploaded = canShow ? detail.podPhotos?.[phaseKey]?.[typeKey] || [] : [];
+		const uploaded = podPhotosOf(phaseKey, typeKey);
 		const base = stopIndex * POD_PHOTO_MAX;
 		return Array.from({ length: POD_PHOTO_MAX }, (_, i) => uploaded[base + i] || null);
 	}
 	function podPhotoSlotsAll(phaseKey: string, typeKey: string): (string | null)[] {
 		const canShow = phaseKey === 'muat' ? canShowPodPhotosMuat : canShowPodPhotosBongkar;
-		const uploaded = canShow ? detail.podPhotos?.[phaseKey]?.[typeKey] || [] : [];
+		const uploaded = canShow ? podPhotosOf(phaseKey, typeKey) : [];
 		const stops = stopCountFor(phaseKey);
-		const count = stops > 1 ? stops * POD_PHOTO_MAX : POD_PHOTO_MAX;
+		const count = Math.max(stops > 1 ? stops * POD_PHOTO_MAX : POD_PHOTO_MAX, uploaded.length);
 		return Array.from({ length: count }, (_, i) => uploaded[i] || null);
 	}
 	function podPhotosPresent(phaseKey: string, typeKey: string): string[] {
@@ -1070,8 +1079,10 @@
 		const actual = detail[phaseField];
 		return actual ? `${cargoValueNumber(actual[fieldKey])} ${UNIT_BY_FIELD[fieldKey]}` : null;
 	}
-	let epodMuatNote = $derived<string>(detail.podPhotos?.muat?.note || '');
-	let epodBongkarNote = $derived<string>(detail.podPhotos?.bongkar?.note || '');
+	// The note on the E-POD document: what the driver wrote with their
+	// submission, else the console's own note for that phase.
+	let epodMuatNote = $derived<string>(driverPod('muat')?.note || detail.podPhotos?.muat?.note || '');
+	let epodBongkarNote = $derived<string>(driverPod('bongkar')?.note || detail.podPhotos?.bongkar?.note || '');
 
 	function viewDocument(d: { key: string; label: string }) {
 		if (EPOD_DOC_KEYS.has(d.key)) {
