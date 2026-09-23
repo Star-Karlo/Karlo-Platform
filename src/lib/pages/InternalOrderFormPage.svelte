@@ -69,7 +69,19 @@
 	/* ---------- Validation ---------- */
 	function validateStep1() {
 		if (!wizard.estimatedLoadDate) return 'Estimated Load Schedule wajib diisi';
+		// A load cannot be scheduled for a moment that has passed: the order
+		// would be late before it is saved, and the agreement, the allowance
+		// and the driver's own schedule are all read from this time.
+		const loadAt = new Date(`${wizard.estimatedLoadDate}T${wizard.estimatedLoadTime || '00:00'}`);
+		if (Number.isFinite(loadAt.getTime()) && loadAt.getTime() < Date.now() - 60_000) {
+			return wizard.estimatedLoadTime
+				? 'Jadwal muat sudah lewat — pilih tanggal dan jam yang belum berlalu'
+				: 'Tanggal muat sudah lewat — pilih tanggal hari ini atau setelahnya';
+		}
 		if (!wizard.orderExpirationDate) return 'Order Expiration Date wajib diisi';
+		if (wizard.orderExpirationDate < wizard.estimatedLoadDate) {
+			return 'Order Expiration Date tidak boleh sebelum tanggal muat';
+		}
 		for (const [i, sp] of wizard.shipments.entries()) {
 			if (!sp.customerNama) return `Customer pada Data Shipment (${i + 1}) wajib dipilih`;
 			if (!sp.agreementId) return `Agreement pada Data Shipment (${i + 1}) wajib dipilih`;

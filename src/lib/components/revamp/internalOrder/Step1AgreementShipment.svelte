@@ -96,6 +96,11 @@
 		if (points.length <= 1) return;
 		points.splice(pointIndex, 1);
 	}
+	/** Today and now, in the browser's own zone, for the pickers' floors. */
+	const pad = (n: number) => String(n).padStart(2, '0');
+	const stamp = new Date();
+	const today = `${stamp.getFullYear()}-${pad(stamp.getMonth() + 1)}-${pad(stamp.getDate())}`;
+	const nowTime = `${pad(stamp.getHours())}:${pad(stamp.getMinutes())}`;
 </script>
 
 <div class="card card-pad">
@@ -103,13 +108,15 @@
 		<div class="field">
 			<label>Estimated Load Schedule <span class="req">*</span></label>
 			<div class="two-col" style="gap:12px; margin-bottom:0;">
-				<input type="date" bind:value={wizard.estimatedLoadDate} />
-				<input type="time" bind:value={wizard.estimatedLoadTime} />
+				<!-- Today at the earliest; the picker itself refuses a past day,
+				     and the wizard checks the clock too when a time is given. -->
+				<input type="date" min={today} bind:value={wizard.estimatedLoadDate} />
+				<input type="time" min={wizard.estimatedLoadDate === today ? nowTime : undefined} bind:value={wizard.estimatedLoadTime} />
 			</div>
 		</div>
 		<div class="field">
 			<label>Order Expiration Date <span class="req">*</span></label>
-			<input type="date" bind:value={wizard.orderExpirationDate} />
+			<input type="date" min={wizard.estimatedLoadDate || today} bind:value={wizard.orderExpirationDate} />
 		</div>
 	</div>
 </div>
