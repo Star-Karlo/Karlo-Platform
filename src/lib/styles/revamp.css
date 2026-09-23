@@ -1124,6 +1124,7 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .epod-gate-flag--ok .epod-gate-flag-title{color:#1E8E3E;}
 .epod-gate-flag--bad .epod-gate-flag-title{color:#C5221F;}
 .epod-gate-flag-sub{font-size:12.5px; line-height:1.5;}
+.epod-gate-flag-note{margin-top:6px; font-weight:700;}
 .epod-gate-flag--ok .epod-gate-flag-sub{color:#1E7A38;}
 .epod-gate-flag--bad .epod-gate-flag-sub{color:#B3261E;}
 @media (max-width:640px){

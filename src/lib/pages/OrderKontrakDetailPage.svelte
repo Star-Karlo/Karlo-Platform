@@ -611,7 +611,10 @@
 	let gateShown = $state(false);
 	$effect(() => {
 		const o = order;
-		if (!o || gateShown) return;
+		// The banner above the dialog reads the shipment's cargo check, so
+		// the gate waits for it: opening first would show the dialog with no
+		// "sesuai / tidak sesuai" flag and never bring it back.
+		if (!o || gateShown || (o.statusCode === 'assigned' && !shipment)) return;
 		if (o.status === 'verifikasi_pod_muat' || o.status === 'verifikasi_pod_bongkar') {
 			gatePhase = o.status === 'verifikasi_pod_muat' ? 'muat' : 'bongkar';
 			gateModalOpen = true;
@@ -624,7 +627,21 @@
 		const firstUnverified = podFirstUnverifiedStop(order, gatePhase);
 		openVerifyModal(gatePhase, firstUnverified === -1 ? 0 : firstUnverified);
 	}
+	/**
+	 * The "sesuai / tidak sesuai" banner above the verification dialog.
+	 *
+	 * The answer comes from whoever checked the cargo on the spot — the
+	 * driver at muat, the receiving PIC at bongkar — which the shipment
+	 * records. Only when no one has answered (an order verified entirely in
+	 * the console) does it fall back to comparing the figures already typed
+	 * against the plan.
+	 */
 	let gateFlag = $derived.by(() => {
+		const checked =
+			gatePhase === 'muat'
+				? { at: shipment?.loadingCargoCheckedAt, matches: shipment?.loadingCargoMatches }
+				: { at: shipment?.unloadingCargoCheckedAt, matches: shipment?.unloadingCargoMatches };
+		if (checked.at) return checked.matches === false ? 'tidak_sesuai' : 'sesuai';
 		const field = gatePhase === 'muat' ? 'muatanMuat' : 'muatanBongkar';
 		const actual = detail[field];
 		if (!actual) return null;
@@ -632,6 +649,10 @@
 		const matches = CARGO_FIELDS.every((f) => parseMuatanField(f.key, actual[f.key]) === Number(plan[f.key]));
 		return matches ? 'sesuai' : 'tidak_sesuai';
 	});
+	/** What the driver or the PIC wrote when they said "tidak sesuai". */
+	let gateFlagNote = $derived(
+		gatePhase === 'muat' ? (shipment?.loadingCargoNote ?? '') : (shipment?.unloadingCargoNote ?? '')
+	);
 
 	// ---------- Route ----------
 	let routeAllPoints = $derived.by(() => {
@@ -2128,6 +2149,11 @@
 					{gateFlag === 'sesuai'
 						? 'Terimakasih telah berkomitmen untuk mengantarkan muatan dengan baik.'
 						: `Anda harus mengisi form E-POD dengan menyesuaikan berat, jumlah, volume muatan ${gatePhase === 'muat' ? 'muat' : 'bongkar'}.`}
+					{#if gateFlag === 'tidak_sesuai' && gateFlagNote}
+						<div class="epod-gate-flag-note">
+							Catatan {gatePhase === 'muat' ? 'driver' : 'PIC'}: “{gateFlagNote}”
+						</div>
+					{/if}
 				</div>
 			</div>
 		{/if}
