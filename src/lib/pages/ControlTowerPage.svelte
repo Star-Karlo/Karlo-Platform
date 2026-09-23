@@ -670,15 +670,38 @@
 		if (!v || !w) return;
 		fetchSnappedTrip(v.vehicle_id, w.from, w.to).then((t) => { if (selectedVehicleId === v.vehicle_id) trip = t; }).catch(() => {});
 	});
-	/** The trail to draw: the road-snapped one, else the raw fixes joined up, with their summed distance. */
-	let actualTrail = $derived.by<{ points: [number, number][]; distanceKm: number | null } | null>(() => {
-		if (trip && trip.points.length > 1) return { points: trip.points, distanceKm: trip.distance_km };
-		if (tripPoints.length > 1) {
-			const pts = tripPoints.map((p) => [p.lon, p.lat] as [number, number]);
-			let km = 0;
-			for (let i = 1; i < pts.length; i++) km += haversineKm({ lat: pts[i - 1][1], lng: pts[i - 1][0] }, { lat: pts[i][1], lng: pts[i][0] });
-			return { points: pts, distanceKm: Math.round(km * 10) / 10 };
+	/** The raw fixes joined up, and how far they ran. */
+	let rawTrail = $derived.by<{ points: [number, number][]; distanceKm: number } | null>(() => {
+		if (tripPoints.length < 2) return null;
+		const pts = tripPoints.map((p) => [p.lon, p.lat] as [number, number]);
+		let km = 0;
+		for (let i = 1; i < pts.length; i++) km += haversineKm({ lat: pts[i - 1][1], lng: pts[i - 1][0] }, { lat: pts[i][1], lng: pts[i][0] });
+		return { points: pts, distanceKm: Math.round(km * 10) / 10 };
+	});
+	/**
+	 * The journey as it was actually driven.
+	 *
+	 * The tracking service map-matches the fixes onto roads, which is what
+	 * makes the trace read as a route rather than a scatter of dots — but it
+	 * matches only the stretches it can, so the distance comes from the raw
+	 * fixes whenever part of the window went unmatched. `partial` says so,
+	 * and the raw line is then drawn faintly underneath, so nothing driven
+	 * disappears from the map.
+	 */
+	let actualTrail = $derived.by<{ points: [number, number][]; distanceKm: number | null; snapped: boolean; partial: boolean } | null>(() => {
+		const snapped = trip && trip.points.length > 1 ? trip : null;
+		if (snapped) {
+			const missedChunks = (snapped.chunks_total ?? 0) > (snapped.chunks_matched ?? 0);
+			const shortRun = rawTrail != null && snapped.distance_km != null && snapped.distance_km < rawTrail.distanceKm * 0.9;
+			const partial = missedChunks || shortRun;
+			return {
+				points: snapped.points,
+				distanceKm: partial ? (rawTrail?.distanceKm ?? snapped.distance_km) : snapped.distance_km,
+				snapped: true,
+				partial
+			};
 		}
+		if (rawTrail) return { ...rawTrail, snapped: false, partial: false };
 		return null;
 	});
 
@@ -1031,6 +1054,11 @@
 			}
 		}
 		if (actualTrail) {
+			// The raw run under the matched one, so an unmatched stretch is
+			// still visible as the thin line it was driven on.
+			if (actualTrail.snapped && actualTrail.partial && rawTrail) {
+				out.push({ id: `actual-raw-${selectedVehicleId}`, coordinates: rawTrail.points, color: '#F59E0B', width: 2, dashed: true });
+			}
 			out.push({ id: `actual-${selectedVehicleId}`, coordinates: actualTrail.points, color: layerOn('overspeed') ? '#16a34a' : '#dc2626', width: 3 });
 		}
 		if (layerOn('overspeed') && tripPoints.length > 1) {
@@ -1239,7 +1267,7 @@
 							</table>
 							{#if actualTrail}
 								<small class="hint">
-									Jalur aktual (merah{trip && trip.points.length > 1 ? ', mengikuti jalan' : ', titik GPS mentah'}) dari GPS FMS, {tripWindow ? `${tripWindow.from.toLocaleDateString('id-ID')} – ${tripWindow.to.toLocaleDateString('id-ID')}` : ''}{#if trip?.chunks_total && trip.chunks_matched !== undefined && trip.chunks_matched < trip.chunks_total}; {trip.chunks_total - trip.chunks_matched} bagian tak terpetakan ke jalan{/if}.
+									Jalur aktual ({layerOn('overspeed') ? 'hijau' : 'merah'}{actualTrail.snapped ? ', mengikuti jalan' : ', titik GPS mentah'}) dari GPS FMS, {tripWindow ? `${tripWindow.from.toLocaleDateString('id-ID')} – ${tripWindow.to.toLocaleDateString('id-ID')}` : ''}{#if actualTrail.partial}; sebagian belum terpetakan ke jalan — garis oranye putus-putus adalah titik GPS mentah, dan jarak aktual dihitung dari titik tersebut{/if}.
 								</small>
 							{/if}
 						{:else}

@@ -347,6 +347,9 @@ export interface SnappedTrip {
 	distance_km: number | null;
 	chunks_matched?: number;
 	chunks_total?: number;
+	/** How many raw fixes the matcher was given, to judge partial coverage. */
+	points_in?: number;
+	provider?: string;
 }
 
 const rfc = (d: Date) => d.toISOString();
@@ -355,7 +358,10 @@ export async function fetchSnappedTrip(vehicleId: number, from: Date, to: Date):
 	const res = await fmsGet<any>(
 		`/vehicles/${vehicleId}/history/snapped?from=${encodeURIComponent(rfc(from))}&to=${encodeURIComponent(rfc(to))}`
 	);
-	const raw: any[] = res.items ?? res.points ?? res.coordinates ?? [];
+	// The tracking service answers with `geometry`: [[lon, lat], …] along the
+	// roads it matched. The other names are older shapes of the same thing —
+	// reading only those left the map on raw GPS dots.
+	const raw: any[] = res.geometry ?? res.items ?? res.points ?? res.coordinates ?? [];
 	const points: [number, number][] = raw
 		.map((p: any) =>
 			Array.isArray(p) ? [Number(p[0]), Number(p[1])] : [Number(p.lon ?? p.lng), Number(p.lat)]
@@ -365,7 +371,9 @@ export async function fetchSnappedTrip(vehicleId: number, from: Date, to: Date):
 		points,
 		distance_km: res.distance_km ?? null,
 		chunks_matched: res.chunks_matched,
-		chunks_total: res.chunks_total
+		chunks_total: res.chunks_total,
+		points_in: res.points_in,
+		provider: res.provider
 	};
 }
 
