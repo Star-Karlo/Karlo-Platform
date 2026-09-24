@@ -1,4 +1,5 @@
 import { derived, get, writable } from 'svelte/store';
+import { isPublicPath } from '$lib/constants/publicRoutes';
 import { goto } from '$app/navigation';
 import { browser } from '$app/environment';
 import { api, TOKEN_KEY, USER_KEY, tabStore } from '$lib/utils/api';
@@ -69,7 +70,9 @@ function createAuthStore() {
 			void this.adoptShared().then((adopted) => {
 				if (adopted) return;
 				signedOut();
-				goto('/auth');
+				// Not from a page built for people with no account: Web-Field's
+				// PIC is at a warehouse gate and has nothing to sign in with.
+				if (!isPublicPath(window.location.pathname)) goto('/auth');
 			});
 		},
 		/**

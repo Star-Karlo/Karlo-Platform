@@ -3,20 +3,20 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { authStore } from '$lib/stores/auth';
+	import { isPublicPath } from '$lib/constants/publicRoutes';
 	import AppHeader from '$lib/components/layout/AppHeader.svelte';
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 
 	let { children } = $props();
 
-	// Pages a person reaches before they have an account: login, the claim
-	// link a transporter sends a new client, the customer's tracking link,
-	// and Web-Field — the warehouse PIC at the gate has no account at all,
-	// and their credential is the code on the driver's phone.
-	const PUBLIC = ['/auth', '/claim/', '/track/', '/field/', '/webfield'];
-	let isAuthPage = $derived(PUBLIC.some((prefix) => $page.url.pathname.startsWith(prefix)));
+	let isAuthPage = $derived(isPublicPath($page.url.pathname));
 
-	onMount(() => authStore.init());
+	// init() sends a visitor with no session to /auth, which is right
+	// everywhere except the pages that exist for people who have none.
+	onMount(() => {
+		if (!isPublicPath(window.location.pathname)) authStore.init();
+	});
 </script>
 
 {#if isAuthPage}
