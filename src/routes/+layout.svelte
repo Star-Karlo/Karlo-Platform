@@ -9,11 +9,12 @@
 
 	let { children } = $props();
 
-	// Pages a person reaches before they have an account: login, and the
-	// claim link a transporter sends a new client.
-	let isAuthPage = $derived(
-		$page.url.pathname.startsWith('/auth') || $page.url.pathname.startsWith('/claim/') || $page.url.pathname.startsWith('/track/') || $page.url.pathname.startsWith('/field/')
-	);
+	// Pages a person reaches before they have an account: login, the claim
+	// link a transporter sends a new client, the customer's tracking link,
+	// and Web-Field — the warehouse PIC at the gate has no account at all,
+	// and their credential is the code on the driver's phone.
+	const PUBLIC = ['/auth', '/claim/', '/track/', '/field/', '/webfield'];
+	let isAuthPage = $derived(PUBLIC.some((prefix) => $page.url.pathname.startsWith(prefix)));
 
 	onMount(() => authStore.init());
 </script>
