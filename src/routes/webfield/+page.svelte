@@ -143,8 +143,7 @@
 			// code both in hand, so the PIC should land on the audit rather
 			// than retype what they were just sent.
 			orderNumber = order;
-			digits = linkCode.split('');
-			void openFromLink();
+			void openFromLink(linkCode);
 		} else if (token) {
 			void openSession(token);
 		} else if (order) {
@@ -162,8 +161,13 @@
 	 * to it: the banner explains what is missing, and this keeps checking
 	 * until the driver is done.
 	 */
-	async function openFromLink() {
+	async function openFromLink(linkCode: string) {
+		// The code goes in AFTER the lookup: find() clears the boxes, which is
+		// right when a PIC types an order number and wrong here — it silently
+		// emptied the code the link carried, and the auto-login fell back to
+		// the screen it exists to skip.
 		await find();
+		digits = linkCode.split('');
 		if (lookup?.ready) {
 			await verify();
 			return;
@@ -177,6 +181,7 @@
 			}
 			if (lookup?.ready) {
 				clearInterval(poll);
+				digits = linkCode.split('');
 				await verify();
 			}
 		}, 15_000);
@@ -314,6 +319,11 @@
 			token = t;
 			sessionStorage.setItem(TOKEN_KEY, t);
 			step = 'sheet';
+			// The code has done its work. Leaving it in the address bar puts it
+			// in every screenshot of this page and every shared tab.
+			if (location.search.includes('code=')) {
+				history.replaceState(null, '', `${location.pathname}?token=${encodeURIComponent(t)}`);
+			}
 			error = '';
 			if (view?.picName && !picName) picName = view.picName;
 			if (view?.actual) {
