@@ -37,6 +37,7 @@
 		cargoCheck?: { matches: boolean; note?: string; checkedAt: string } | null;
 		pod?: { status: string; submittedAt: string } | null;
 		handoverVerified: boolean;
+		sessionVerified?: boolean;
 		finalizedAt?: string;
 		finalizedBy?: string;
 		finalizedNote?: string;
@@ -88,11 +89,7 @@
 	let token = $state('');
 	let view = $state<FieldView | null>(null);
 	let auditing = $state(false);
-	let picName = $state('');
 	let note = $state('');
-	let actualWeight = $state('');
-	let actualVolume = $state('');
-	let actualQuantity = $state('');
 	let confirm = $state<null | { matches: boolean }>(null);
 
 	const headers = (auth = false): Record<string, string> => {
@@ -322,6 +319,15 @@
 			view = await call(`/shipments/field/session/${encodeURIComponent(t)}`);
 			token = t;
 			sessionStorage.setItem(TOKEN_KEY, t);
+			if (view && view.sessionVerified === false) {
+				// An older link carries only the token, which reads the order
+				// sheet but cannot record anything until the code has been
+				// entered here. Ask for it now rather than drawing buttons
+				// that would be refused at the last step.
+				orderNumber = view.orderNumber;
+				await find();
+				return;
+			}
 			step = 'sheet';
 			// The code has done its work. Leaving it in the address bar puts it
 			// in every screenshot of this page and every shared tab.
@@ -329,19 +335,12 @@
 				history.replaceState(null, '', `${location.pathname}?token=${encodeURIComponent(t)}`);
 			}
 			error = '';
-			if (view?.picName && !picName) picName = view.picName;
-			if (view?.actual) {
-				actualWeight = view.actual.weightKg?.toString() ?? '';
-				actualVolume = view.actual.volumeM3?.toString() ?? '';
-				actualQuantity = view.actual.quantity?.toString() ?? '';
-			}
 		} catch (e: any) {
 			error = e.message;
 			sessionStorage.removeItem(TOKEN_KEY);
 		}
 	}
 
-	const num = (s: string) => (s.trim() === '' ? undefined : Number(s));
 	async function submitAudit(matches: boolean) {
 		if (busy) return;
 		busy = true;
@@ -349,32 +348,40 @@
 		try {
 			view = await call(`/shipments/field/session/${encodeURIComponent(token)}/audit`, {
 				matches,
-				note: note.trim(),
-				picName: picName.trim(),
-				weightKg: num(actualWeight),
-				volumeM3: num(actualVolume),
-				quantity: num(actualQuantity)
+				note: note.trim()
 			});
 			confirm = null;
 			auditing = false;
 		} catch (e: any) {
 			error = e.message;
 			confirm = null;
+			await recoverIfUnverified(e.message);
 		} finally {
 			busy = false;
 		}
 	}
+
+	/**
+	 * A refusal for want of the code sends the PIC to the code step for this
+	 * order, rather than leaving them pressing a button that cannot work.
+	 */
+	async function recoverIfUnverified(message: string) {
+		if (!/kode otp/i.test(message) || !view) return;
+		orderNumber = view.orderNumber;
+		await find();
+	}
+
 	async function finalize() {
 		if (busy) return;
 		busy = true;
 		error = '';
 		try {
 			view = await call(`/shipments/field/session/${encodeURIComponent(token)}/finalize`, {
-				picName: picName.trim(),
 				note: note.trim()
 			});
 		} catch (e: any) {
 			error = e.message;
+			await recoverIfUnverified(e.message);
 		} finally {
 			busy = false;
 		}
@@ -403,15 +410,17 @@
 
 	let canAudit = $derived(!!view && view.shipmentStatus === 'unloading' && !view.finalizedAt);
 	let canFinalize = $derived(!!view?.cargoCheck && !view?.finalizedAt);
+	// What the order says should arrive. The PIC confirms or disputes it and
+	// counts nothing into this page: asking a warehouse clerk to key three
+	// figures on a phone at a gate is how the figures stop being true.
 	let diff = $derived.by(() => {
 		const e = view?.expected ?? {};
-		const a = view?.actual ?? {};
-		const rows: { label: string; expected?: number; actual?: number; unit: string }[] = [
-			{ label: 'Total berat', expected: e.weightKg, actual: a.weightKg, unit: ' kg' },
-			{ label: 'Total volume', expected: e.volumeM3, actual: a.volumeM3, unit: ' m³' },
-			{ label: 'Total kuantitas', expected: e.quantity, actual: a.quantity, unit: '' }
+		const rows: { label: string; expected?: number; unit: string }[] = [
+			{ label: 'Total berat', expected: e.weightKg, unit: ' kg' },
+			{ label: 'Total volume', expected: e.volumeM3, unit: ' m³' },
+			{ label: 'Total kuantitas', expected: e.quantity, unit: '' }
 		];
-		return rows.filter((r) => r.expected != null || r.actual != null);
+		return rows.filter((r) => r.expected != null);
 	});
 </script>
 
@@ -602,22 +611,17 @@
 				{/if}
 
 				<table class="wf-table">
-					<thead><tr><th>Detail muatan</th><th>Data muat</th><th>Data bongkar</th></tr></thead>
+					<thead><tr><th>Detail muatan barang</th><th>Sesuai order</th></tr></thead>
 					<tbody>
 						{#each diff as row (row.label)}
-							<tr>
-								<td>{row.label}</td>
-								<td>{qty(row.expected, row.unit)}</td>
-								<td class:wf-gap={row.actual != null && row.expected != null && row.actual !== row.expected}>
-									{qty(row.actual, row.unit)}
-								</td>
-							</tr>
+							<tr><td>{row.label}</td><td>{qty(row.expected, row.unit)}</td></tr>
 						{/each}
 						{#if diff.length === 0}
-							<tr><td colspan="3" class="wf-sub">Rincian muatan tidak tersedia pada order ini.</td></tr>
+							<tr><td colspan="2" class="wf-sub">Rincian muatan tidak tersedia pada order ini.</td></tr>
 						{/if}
 					</tbody>
 				</table>
+				{#if view.picName}<p class="wf-sub">PIC pada order: <b>{view.picName}</b></p>{/if}
 
 				{#if !canAudit && !view.cargoCheck}
 					<p class="wf-sub">
@@ -633,23 +637,11 @@
 
 				{#if canAudit && auditing}
 					<div class="wf-audit">
-						<label class="wf-label" for="wf-pic">Nama PIC</label>
-						<input id="wf-pic" class="wf-input" bind:value={picName} placeholder="Nama Anda" />
-						<div class="wf-three">
-							<div>
-								<label class="wf-label" for="wf-w">Berat diterima (kg)</label>
-								<input id="wf-w" class="wf-input" inputmode="decimal" bind:value={actualWeight} />
-							</div>
-							<div>
-								<label class="wf-label" for="wf-v">Volume diterima (m³)</label>
-								<input id="wf-v" class="wf-input" inputmode="decimal" bind:value={actualVolume} />
-							</div>
-							<div>
-								<label class="wf-label" for="wf-q">Kuantitas diterima</label>
-								<input id="wf-q" class="wf-input" inputmode="decimal" bind:value={actualQuantity} />
-							</div>
-						</div>
-						<label class="wf-label" for="wf-note">Catatan (wajib bila tidak sesuai)</label>
+						<p class="wf-sub">
+							Cocokkan rincian di atas dengan muatan yang diterima, lalu pilih hasilnya. Tidak ada
+							angka yang perlu Anda isi.
+						</p>
+						<label class="wf-label" for="wf-note">Catatan {#if true}(wajib bila tidak sesuai){/if}</label>
 						<textarea id="wf-note" class="wf-input" rows="3" bind:value={note} placeholder="Mis. 2 koli rusak, kurang 5 karung"></textarea>
 						{#if error}<p class="wf-error">{error}</p>{/if}
 						<div class="wf-actions">
@@ -857,7 +849,6 @@
 	}
 	.wf-table td { padding: 8px 0; border-bottom: 1px solid #eef0f4; }
 	.wf-table td:not(:first-child) { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
-	.wf-gap { color: #b3261e; }
 	.wf-answer { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14.5px; }
 	.wf-answer.ok { color: #146c2e; }
 	.wf-answer.bad { color: #b45309; }
@@ -874,7 +865,6 @@
 		font-size: 13.5px;
 	}
 	.wf-audit { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-	.wf-three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 	.wf-rule { border: 0; border-top: 1px solid #eef0f4; margin: 10px 0; width: 100%; }
 	.wf-error { color: #b3261e; font-size: 12.5px; margin: 4px 0 0; }
 	.wf-inbox { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -930,7 +920,7 @@
 	:global(.wf-spin) { animation: wf-spin 1s linear infinite; }
 	@keyframes wf-spin { to { transform: rotate(360deg); } }
 	@media (max-width: 520px) {
-		.wf-grid, .wf-three { grid-template-columns: 1fr; }
+		.wf-grid { grid-template-columns: 1fr; }
 		.wf-btn { flex: 1 1 100%; }
 	}
 </style>
