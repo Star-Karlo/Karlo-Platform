@@ -106,8 +106,12 @@
 	 * "validation failed: kode tidak sesuai". The classification is for the
 	 * log; the PIC gets the sentence.
 	 */
-	const clean = (m?: string) =>
-		(m ?? '').replace(/^(validation failed|forbidden|transition not allowed):\s*/i, '').trim();
+	const clean = (m?: string) => {
+		const text = (m ?? '').replace(/^(validation failed|forbidden|transition not allowed):\s*/i, '').trim();
+		// The services write their messages as clause continuations, so what
+		// is left after the prefix starts mid-sentence.
+		return text ? text[0].toUpperCase() + text.slice(1) : '';
+	};
 
 	/**
 	 * Every call goes to /api/v1/shipments/field/… — the endpoints sit under
