@@ -271,6 +271,22 @@
 										disabled={!sp.agreementId}
 										onchange={(id) => onPointChosen(i, 'loadingPoints', li, id)}
 									/>
+									{#if sp.loadingPoints[li]}
+											<div class="point-pic">
+											<span class="point-pic-label">PIC muat</span>
+											<select
+												class="point-pic-select"
+												value={picValue(sp.loadingPics[li] ?? null, sp.loadingPoints[li])}
+												onchange={(e) => onPicSelect(i, 'loadingPoints', li, (e.currentTarget as HTMLSelectElement).value)}
+											>
+												<option value="">— pilih PIC —</option>
+												{#each picOptions(sp.loadingPoints[li]) as o (o.value)}
+													<option value={o.value}>{o.label}</option>
+												{/each}
+												<option value="__new__">+ PIC baru…</option>
+											</select>
+										</div>
+									{/if}
 								</div>
 								<button
 									type="button"
@@ -289,22 +305,6 @@
 									><span class="icon-wrap"><X size={15} /></span></button
 								>
 							</div>
-							{#if sp.loadingPoints[li]}
-								<div class="point-pic-row">
-									<span class="point-pic-label">PIC muat</span>
-									<select
-										class="point-pic-select"
-										value={picValue(sp.loadingPics[li] ?? null, sp.loadingPoints[li])}
-										onchange={(e) => onPicSelect(i, 'loadingPoints', li, (e.currentTarget as HTMLSelectElement).value)}
-									>
-										<option value="">— pilih PIC —</option>
-										{#each picOptions(sp.loadingPoints[li]) as o (o.value)}
-											<option value={o.value}>{o.label}</option>
-										{/each}
-										<option value="__new__">+ PIC baru…</option>
-									</select>
-								</div>
-							{/if}
 						</div>
 					{/each}
 					<button
@@ -328,6 +328,22 @@
 										disabled={!sp.agreementId}
 										onchange={(id) => onPointChosen(i, 'unloadingPoints', ui, id)}
 									/>
+									{#if sp.unloadingPoints[ui]}
+											<div class="point-pic">
+											<span class="point-pic-label">PIC bongkar</span>
+											<select
+												class="point-pic-select"
+												value={picValue(sp.unloadingPics[ui] ?? null, sp.unloadingPoints[ui])}
+												onchange={(e) => onPicSelect(i, 'unloadingPoints', ui, (e.currentTarget as HTMLSelectElement).value)}
+											>
+												<option value="">— pilih PIC —</option>
+												{#each picOptions(sp.unloadingPoints[ui]) as o (o.value)}
+													<option value={o.value}>{o.label}</option>
+												{/each}
+												<option value="__new__">+ PIC baru…</option>
+											</select>
+										</div>
+									{/if}
 								</div>
 								<button
 									type="button"
@@ -346,22 +362,6 @@
 									><span class="icon-wrap"><X size={15} /></span></button
 								>
 							</div>
-							{#if sp.unloadingPoints[ui]}
-								<div class="point-pic-row">
-									<span class="point-pic-label">PIC bongkar</span>
-									<select
-										class="point-pic-select"
-										value={picValue(sp.unloadingPics[ui] ?? null, sp.unloadingPoints[ui])}
-										onchange={(e) => onPicSelect(i, 'unloadingPoints', ui, (e.currentTarget as HTMLSelectElement).value)}
-									>
-										<option value="">— pilih PIC —</option>
-										{#each picOptions(sp.unloadingPoints[ui]) as o (o.value)}
-											<option value={o.value}>{o.label}</option>
-										{/each}
-										<option value="__new__">+ PIC baru…</option>
-									</select>
-								</div>
-							{/if}
 						</div>
 					{/each}
 					<button
@@ -405,9 +405,48 @@
 </Modal>
 
 <style>
-	.point-pic-row { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; }
-	.point-pic-label { font-size: 12px; color: var(--on-surface-variant, #6b7280); white-space: nowrap; }
-	.point-pic-select { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--outline-variant, #e5e7eb); border-radius: 8px; font: inherit; background: #fff; }
+	/* The PIC control sits inside the point's own column, so its edges line
+	   up with the search field above it instead of running under the two icon
+	   buttons. Pill and padding come from .field select; the chevron is drawn
+	   here because a native select's arrow does not follow the radius. */
+	/* The point's controls are taller than the icon buttons now, so the row
+	   aligns to the top and the buttons drop to the search field's own line. */
+	.multi-point-search-row { align-items: flex-start; }
+	.multi-point-search-row > button { margin-top: 6px; }
+	.point-pic { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+	.point-pic-label {
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--on-surface-variant, #6b7280);
+		white-space: nowrap;
+	}
+	.point-pic-select {
+		flex: 1;
+		min-width: 0;
+		padding: 9px 34px 9px 16px;
+		border: 1px solid var(--outline, #d5d9e2);
+		border-radius: 999px;
+		font: inherit;
+		font-size: 13px;
+		color: var(--on-surface, #1b1c1e);
+		background: var(--surface, #fff);
+		appearance: none;
+		background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: right 12px center;
+		background-size: 15px;
+		transition: border-color .15s, box-shadow .15s;
+	}
+	.point-pic-select:focus {
+		border-color: var(--primary, #0b57d0);
+		box-shadow: 0 0 0 3px rgba(11, 87, 208, .14);
+		outline: none;
+	}
+	/* Nothing chosen yet reads as a placeholder, not as a value. */
+	.point-pic-select:invalid, .point-pic-select option[value=""] { color: var(--on-surface-variant, #6b7280); }
+	@media (max-width: 720px) {
+		.point-pic { align-items: stretch; flex-direction: column; gap: 4px; }
+	}
 	.np-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 	.np-error { color: var(--danger, #b91c1c); font-size: 12px; margin-top: 8px; }
 </style>

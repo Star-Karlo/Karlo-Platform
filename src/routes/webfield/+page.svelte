@@ -12,7 +12,7 @@
 	 * gate does not cost the PIC the code again. It is a credential for one
 	 * delivery's audit and nothing else.
 	 */
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import {
 		Truck, PackageCheck, CheckCircle2, XCircle, ScanLine, LogIn, Loader2,
 		ArrowRight, ShieldCheck, Inbox, MapPin, AlertTriangle, Lock
@@ -102,6 +102,14 @@
 	};
 
 	/**
+	 * The services prefix a rejection with how it was classified —
+	 * "validation failed: kode tidak sesuai". The classification is for the
+	 * log; the PIC gets the sentence.
+	 */
+	const clean = (m?: string) =>
+		(m ?? '').replace(/^(validation failed|forbidden|transition not allowed):\s*/i, '').trim();
+
+	/**
 	 * Every call goes to /api/v1/shipments/field/… — the endpoints sit under
 	 * the shipments prefix because that is what the load balancer routes to the
 	 * business service; a top-level /api/v1/field reached this console instead.
@@ -113,27 +121,70 @@
 			body: body === undefined ? undefined : JSON.stringify(body)
 		});
 		const payload = await res.json().catch(() => ({}));
-		if (!res.ok) throw new Error(payload?.message || 'Permintaan gagal. Coba lagi.');
+		if (!res.ok) throw new Error(clean(payload?.message) || 'Permintaan gagal. Coba lagi.');
 		return payload?.data ?? payload;
 	}
 
 	onMount(() => {
+		let params = new URLSearchParams();
 		try {
+			params = new URLSearchParams(location.search);
 			picToken = sessionStorage.getItem(PIC_TOKEN_KEY) ?? '';
-			const saved = sessionStorage.getItem(TOKEN_KEY);
-			const fromUrl = new URLSearchParams(location.search).get('token');
-			const resume = fromUrl || saved;
-			if (resume) void openSession(resume);
-			const prefill = new URLSearchParams(location.search).get('order');
-			if (prefill) {
-				orderNumber = prefill;
-				void find();
-			}
 		} catch {
 			/* private browsing: the PIC types the order number again, which is fine */
 		}
+
+		const order = params.get('order') ?? '';
+		const linkCode = (params.get('code') ?? '').replace(/\D/g, '').slice(0, 6);
+		const token = params.get('token') ?? sessionStorage.getItem(TOKEN_KEY) ?? '';
+
+		if (order && linkCode.length === 6) {
+			// The dedicated link from the arrival message: order number and
+			// code both in hand, so the PIC should land on the audit rather
+			// than retype what they were just sent.
+			orderNumber = order;
+			digits = linkCode.split('');
+			void openFromLink();
+		} else if (token) {
+			void openSession(token);
+		} else if (order) {
+			orderNumber = order;
+			void find();
+		}
 		if (picToken) void loadInbox();
 	});
+
+	/**
+	 * Look the order up and verify in one go, for a link that carries both.
+	 *
+	 * A PIC often opens the message before the driver has entered the code in
+	 * K-Trip, so the page waits for them rather than making the PIC come back
+	 * to it: the banner explains what is missing, and this keeps checking
+	 * until the driver is done.
+	 */
+	async function openFromLink() {
+		await find();
+		if (lookup?.ready) {
+			await verify();
+			return;
+		}
+		const poll = setInterval(async () => {
+			if (step !== 'otp' || busy) return;
+			try {
+				lookup = await call('/shipments/field/lookup', { orderNumber: orderNumber.trim() });
+			} catch {
+				return;
+			}
+			if (lookup?.ready) {
+				clearInterval(poll);
+				await verify();
+			}
+		}, 15_000);
+		onDestroyPolls.push(poll);
+	}
+
+	const onDestroyPolls: ReturnType<typeof setInterval>[] = [];
+	onDestroy(() => onDestroyPolls.forEach(clearInterval));
 
 	// --- step 1 ---------------------------------------------------------------
 	async function find() {
