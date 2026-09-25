@@ -1014,8 +1014,32 @@
 			events.push({ time: formatTimestampLabel(iso), title, actor, role, at });
 		};
 
-		const podMuat = driverPod('muat');
-		const podBongkar = driverPod('bongkar');
+		/**
+		 * Every round of one stage's POD, not just the last.
+		 *
+		 * A rejected POD is re-submitted, and the sheet counts each round:
+		 * submit, pengecekan, ditolak, submit again, pengecekan again,
+		 * terverifikasi. Reading only the latest submission — which is what
+		 * this did — erased the rejection and the attempt that earned it,
+		 * which is exactly the history somebody looks here to find.
+		 */
+		const podRounds = (stage: string, label: string) => {
+			const all = (shipment?.podHistory ?? []).filter((p: any) => p.stage === stage);
+			// podHistory is newest first; fall back to the latest-per-stage
+			// read for a server that predates it.
+			const rounds = all.length
+				? [...all].sort((a: any, b: any) => String(a.submittedAt).localeCompare(String(b.submittedAt)))
+				: [driverPod(stage === 'loading' ? 'muat' : 'bongkar')].filter(Boolean);
+			for (const pod of rounds) {
+				add(pod.submittedAt, `Submit POD & Selesai ${label}`, driver, 'Driver');
+				add(pod.submittedAt, `Pengecekan POD ${label}`, TRANSPORTER_NAME, 'Planner');
+				if (pod.status === 'rejected') {
+					add(pod.reviewedAt, `POD ${label} Ditolak`, TRANSPORTER_NAME, 'Planner');
+				} else if (pod.status === 'approved') {
+					add(pod.reviewedAt, `POD ${label} Terverifikasi`, TRANSPORTER_NAME, 'Planner');
+				}
+			}
+		};
 
 		// The titles are the sheet's Status Order column, word for word. Where
 		// the sheet lists several statuses against one trigger ("Submit POD"),
@@ -1038,32 +1062,14 @@
 		add(shipment?.loadingStartedAt, 'Mulai Muat', driver, 'Driver');
 		add(shipment?.loadingCargoCheckedAt, 'Verifikasi Item Muat', driver, 'Driver');
 		add(shipment?.loadingCargoCheckedAt, 'Item Muatan Telah Diverifikasi', driver, 'Driver');
-		add(podMuat?.submittedAt, 'Submit POD & Selesai Muat', driver, 'Driver');
-		add(podMuat?.submittedAt, 'Pengecekan POD Muat', TRANSPORTER_NAME, 'Planner');
-		if (podMuat?.status !== 'submitted') {
-			add(
-				podMuat?.reviewedAt,
-				podMuat?.status === 'rejected' ? 'POD Muat Ditolak' : 'POD Muat Terverifikasi',
-				TRANSPORTER_NAME,
-				'Planner'
-			);
-		}
+		podRounds('loading', 'Muat');
 		add(shipment?.startedToUnloadingAt, 'Menuju Titik Bongkar', driver, 'Driver');
 		add(shipment?.arrivedUnloadingAt, 'Sampai di Titik Bongkar', driver, 'Driver');
 		add(shipment?.handoverVerifiedAt, 'OTP Bongkar Terverifikasi', driver, 'Driver');
 		add(shipment?.unloadingStartedAt, 'Mulai Bongkar', driver, 'Driver');
 		add(shipment?.unloadingCargoCheckedAt, 'Verifikasi Item Bongkar', pic, 'PIC');
 		add(shipment?.unloadingCargoCheckedAt, 'Item Muatan Telah Diverifikasi', pic, 'PIC');
-		add(podBongkar?.submittedAt, 'Submit POD & Selesai Bongkar', driver, 'Driver');
-		add(podBongkar?.submittedAt, 'Pengecekan POD Bongkar', TRANSPORTER_NAME, 'Planner');
-		if (podBongkar?.status !== 'submitted') {
-			add(
-				podBongkar?.reviewedAt,
-				podBongkar?.status === 'rejected' ? 'POD Bongkar Ditolak' : 'POD Bongkar Terverifikasi',
-				TRANSPORTER_NAME,
-				'Planner'
-			);
-		}
+		podRounds('unloading', 'Bongkar');
 		add(shipment?.finishedAt, 'Order Selesai', TRANSPORTER_NAME, 'Planner');
 
 		// Recorded order, not declared order: a step taken late shows late.
