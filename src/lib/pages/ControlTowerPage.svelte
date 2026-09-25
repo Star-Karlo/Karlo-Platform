@@ -16,7 +16,6 @@
 	 * the id).
 	 */
 	import { onMount, onDestroy } from 'svelte';
-	import GeofencingToggle from '$lib/components/revamp/GeofencingToggle.svelte';
 	import { goto } from '$app/navigation';
 	import { Search, Truck, MapPin, X, Fuel, Gauge, Radio, Mountain, Battery, Activity, Bell, ZoomIn, Clock, ChevronDown, ChevronUp, Filter, Download, FileText, Copy, AlertCircle, Scale, Settings, GripVertical, Plus, Check, CircleDot } from 'lucide-svelte';
 	import { toast } from '$lib/stores/ui';
@@ -1154,8 +1153,7 @@
 		<!-- The company's own geofencing switch, as the old console had it:
 		     on, an arrival reported outside the warehouse's fence is
 		     refused; off, it is recorded with the distance and let through. -->
-		<span style="margin-left:auto;"><GeofencingToggle compact /></span>
-		<span class="hint">
+		<span class="hint" style="margin-left:auto;">
 			{#if liveAt}GPS dari FMS · {liveAt.toLocaleTimeString('id-ID')}{:else if liveError}{liveError}{/if}
 		</span>
 		<span class="ct-topbar-clock"><Clock size={13} /> {clockLabel}</span>

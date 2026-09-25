@@ -6,75 +6,43 @@
 	 * it on later safe — you can look back and see how often a driver would
 	 * have been blocked.
 	 *
-	 * Two scopes, one control. Given an `orderId` it sets that order's own
-	 * answer (PUT /orders/{id}/geofencing); without one it sets the company
-	 * default (PUT /companies/me). An order whose answer is unset follows the
-	 * company, so the order page opens showing what will actually happen to
-	 * that delivery rather than a blank switch.
+	 * Per order, and only per order: the company-wide switch it replaced is
+	 * gone, because a fenced distribution yard and a roadside drop happen on
+	 * the same day and a single company answer was wrong for one of them. An
+	 * order nobody has decided about is not enforced, so the switch opens OFF
+	 * and means exactly what it says for this delivery.
 	 */
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { toast } from '$lib/stores/ui';
-	import { actingFor } from '$lib/stores/actingFor';
 
 	let {
 		compact = false,
-		orderId = '',
-		/** The order's own answer: true, false, or null/undefined to inherit. */
+		orderId,
+		/** The order's own answer; null or undefined means nobody has decided. */
 		orderValue = undefined,
 		onchanged
 	}: {
 		compact?: boolean;
-		orderId?: string;
+		orderId: string;
 		orderValue?: boolean | null;
 		onchanged?: (v: boolean) => void;
 	} = $props();
 
-	let on = $state(false);
-	let inherited = $state(true);
 	let saving = $state(false);
+	let on = $derived(orderValue === true);
 
-	async function load() {
-		// The company default, which is what an order without its own answer
-		// follows. Read even in per-order mode, so the switch shows what will
-		// really happen to this delivery.
-		let company = false;
-		try {
-			const res = await api.get(ENDPOINTS.companyMe);
-			company = res.data?.data?.settings?.finishWithGeofencing === true;
-		} catch {
-			company = false;
-		}
-		if (orderId && orderValue != null) {
-			on = orderValue;
-			inherited = false;
-		} else {
-			on = company;
-			inherited = !!orderId;
-		}
-	}
 	async function toggle() {
-		if (saving) return;
+		if (saving || !orderId) return;
 		const next = !on;
 		saving = true;
 		try {
-			if (orderId) {
-				await api.put(ENDPOINTS.orders.geofencing(orderId), { enabled: next });
-				inherited = false;
-				toast(
-					next
-						? 'Geofencing aktif untuk order ini — driver harus di dalam radius gudang saat lapor tiba'
-						: 'Geofencing nonaktif untuk order ini — lokasi tetap dicatat, tapi tidak menolak'
-				);
-			} else {
-				await api.put(ENDPOINTS.companyMe, { settings: { finishWithGeofencing: next } });
-				toast(
-					next
-						? 'Geofencing aktif — driver harus di dalam radius gudang saat lapor tiba'
-						: 'Geofencing nonaktif — lokasi tetap dicatat, tapi tidak menolak'
-				);
-			}
-			on = next;
+			await api.put(ENDPOINTS.orders.geofencing(orderId), { enabled: next });
+			toast(
+				next
+					? 'Geofencing aktif untuk order ini — driver harus di dalam radius gudang saat lapor tiba'
+					: 'Geofencing nonaktif untuk order ini — lokasi tetap dicatat, tapi tidak menolak'
+			);
 			onchanged?.(next);
 		} catch (e: any) {
 			toast(e?.response?.data?.message ?? 'Gagal mengubah setelan geofencing');
@@ -82,26 +50,14 @@
 			saving = false;
 		}
 	}
-
-	// Reloads when the acting-for company changes: the setting belongs to
-	// whichever company is being acted for, not to the signed-in account.
-	$effect(() => {
-		void $actingFor.companyId;
-		void orderId;
-		void orderValue;
-		void load();
-	});
 </script>
 
 <label
 	class="geofence-toggle"
 	class:compact
-	title={orderId
-		? `Wajibkan driver berada di dalam radius gudang saat melaporkan tiba, untuk order ini${inherited ? ' (saat ini mengikuti setelan perusahaan)' : ''}`
-		: 'Setelan perusahaan: wajibkan driver berada di dalam radius gudang saat melaporkan tiba'}
+	title="Wajibkan driver berada di dalam radius gudang saat melaporkan tiba, untuk order ini"
 >
 	<span class="geofence-label">Geofencing {on ? 'ON' : 'OFF'}</span>
-	{#if orderId && inherited}<span class="geofence-note">ikut perusahaan</span>{/if}
 	<input type="checkbox" checked={on} disabled={saving} onchange={toggle} />
 	<span class="geofence-track" class:on><span class="geofence-knob"></span></span>
 </label>
@@ -122,11 +78,6 @@
 	}
 	.compact .geofence-label {
 		font-size: 11.5px;
-	}
-	.geofence-note {
-		font-size: 10.5px;
-		color: var(--on-surface-variant, #6b7280);
-		white-space: nowrap;
 	}
 	.geofence-toggle input {
 		position: absolute;
