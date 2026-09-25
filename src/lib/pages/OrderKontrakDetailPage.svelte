@@ -273,6 +273,8 @@
 			assignedTruckType: raw.truckTypeName || '',
 			assignedDriverName: raw.driverName || '',
 			createdAt: raw.createdAt,
+			// Null means this order follows the company setting.
+			geofencingEnabled: raw.geofencingEnabled ?? null,
 			tanggalPickup: d.tanggalPickup || (raw.pickupAt ? formatTimestampLabel(new Date(raw.pickupAt)) : ''),
 			agreementId: d.agreementId || raw.agreementId || '',
 			loadingPoints: d.loadingPoints || (raw.originWarehouseId ? [raw.originWarehouseId] : []),
@@ -1591,10 +1593,16 @@
 
 			<!-- RIGHT COLUMN -->
 			<div>
-				<!-- The company's geofencing switch. Here as well as on Control
-				     Tower because this is the page somebody opens when a driver
-				     says they cannot report arrival. -->
-				<div class="linimasa-geofence"><GeofencingToggle /></div>
+				<!-- Geofencing for THIS order. Unset follows the company
+				     setting, so the switch shows what will actually happen to
+				     this delivery, and changing it here changes nothing else. -->
+				<div class="linimasa-geofence">
+					<GeofencingToggle
+						orderId={order?.id ?? ''}
+						orderValue={order?.geofencingEnabled ?? null}
+						onchanged={(v) => raw && (raw = { ...raw, geofencingEnabled: v })}
+					/>
+				</div>
 				<div class="linimasa-panel-head">
 					<h3>Linimasa</h3>
 					<button class="btn btn-outline btn-sm" onclick={refreshData}

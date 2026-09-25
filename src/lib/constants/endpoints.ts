@@ -100,6 +100,8 @@ export const ENDPOINTS = {
 		/** Which transitions this caller may make right now, for rendering buttons. */
 		transitions: (id: string) => `/orders/${id}/transitions`,
 		shipment: (id: string) => `/orders/${id}/shipment`,
+		/** Geofence enforcement for this order; null follows the company setting. */
+		geofencing: (id: string) => `/orders/${id}/geofencing`,
 		/** The customer's public tracking link: POST issues (or returns) the token, DELETE revokes. */
 		trackingLink: (id: string) => `/orders/${id}/tracking-link`,
 		summary: '/orders/summary',
