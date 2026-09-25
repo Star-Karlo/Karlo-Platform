@@ -7,6 +7,7 @@
 	 * shape (`order`) so the template stays a straight transcription.
 	 */
 	import { onMount, tick } from 'svelte';
+	import GeofencingToggle from '$lib/components/revamp/GeofencingToggle.svelte';
 	import { goto } from '$app/navigation';
 	import {
 		ChevronDown,
@@ -1590,6 +1591,10 @@
 
 			<!-- RIGHT COLUMN -->
 			<div>
+				<!-- The company's geofencing switch. Here as well as on Control
+				     Tower because this is the page somebody opens when a driver
+				     says they cannot report arrival. -->
+				<div class="linimasa-geofence"><GeofencingToggle /></div>
 				<div class="linimasa-panel-head">
 					<h3>Linimasa</h3>
 					<button class="btn btn-outline btn-sm" onclick={refreshData}
