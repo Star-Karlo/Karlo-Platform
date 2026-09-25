@@ -67,15 +67,19 @@ export function kontrakStatus(o: OrderLike): string {
 			case 'toUnloading':
 				return 'menuju_lokasi_bongkar';
 			case 'atUnloading':
-				return 'tiba_lokasi_bongkar';
+				// The code is confirmed at the gate and the driver's slide is
+				// what starts the work, so "OTP terverifikasi" is a state the
+				// truck sits in — not a moment inside "Mulai bongkar".
+				return o.shipmentHandoverVerified ? 'otp_bongkar_terverifikasi' : 'tiba_lokasi_bongkar';
 			case 'unloadingApproved':
 			case 'unloading':
-				// OTP confirmed → the PIC's cargo check → the POD under review.
+				// Unloading has begun (the slide, after the code): the PIC's
+				// cargo check, then the POD under review.
 				if (podPending(o, 'unloading')) return 'verifikasi_pod_bongkar';
 				if (o.shipmentUnloadingCargoCheckedAt) {
 					return o.shipmentUnloadingCargoMatches === false ? 'item_bongkar_tidak_sesuai' : 'item_bongkar_terverifikasi';
 				}
-				return o.shipmentHandoverVerified ? 'otp_bongkar_terverifikasi' : 'proses_bongkar_muatan';
+				return 'proses_bongkar_muatan';
 			case 'unloaded':
 				return 'pod_bongkar_terverifikasi';
 			case 'finished':
