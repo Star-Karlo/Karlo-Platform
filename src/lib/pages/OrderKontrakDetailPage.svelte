@@ -1013,15 +1013,19 @@
 
 		const podMuat = driverPod('muat');
 		const podBongkar = driverPod('bongkar');
-		const check = (matches: boolean | null | undefined, ok: string, bad: string) =>
-			matches === false ? bad : ok;
 
+		// The titles are the sheet's Status Order column, word for word. Where
+		// the sheet lists several statuses against one trigger ("Submit POD"),
+		// all of them are shown: the planner reads this list expecting the
+		// steps they were promised, and folding them lost three of the four
+		// the loading POD is supposed to raise. Sesuai / tidak sesuai is NOT a
+		// status — the answer itself lives on the E-POD card.
 		add(order.createdAt, 'Order Dibuat', TRANSPORTER_NAME, 'Planner');
 		if (order.assignedTruckPlate) {
 			add(
 				shipment?.createdAt ?? order.createdAt,
-				`Driver & Truck Ditugaskan (${order.assignedTruckPlate})`,
-				TRANSPORTER_NAME,
+				'Driver Dipilih',
+				`${order.assignedDriverName || 'Driver'} · ${order.assignedTruckPlate}`,
 				'Planner'
 			);
 		}
@@ -1029,13 +1033,10 @@
 		add(shipment?.startedToLoadingAt, 'Menuju Titik Muat', driver, 'Driver');
 		add(shipment?.arrivedLoadingAt, 'Sampai di Titik Muat', driver, 'Driver');
 		add(shipment?.loadingStartedAt, 'Mulai Muat', driver, 'Driver');
-		add(
-			shipment?.loadingCargoCheckedAt,
-			check(shipment?.loadingCargoMatches, 'Item Muat Telah Diverifikasi', 'Item Muat Tidak Sesuai'),
-			driver,
-			'Driver'
-		);
-		add(podMuat?.submittedAt, 'Submit POD Muat — Menunggu Pengecekan', driver, 'Driver');
+		add(shipment?.loadingCargoCheckedAt, 'Verifikasi Item Muat', driver, 'Driver');
+		add(shipment?.loadingCargoCheckedAt, 'Item Muatan Telah Diverifikasi', driver, 'Driver');
+		add(podMuat?.submittedAt, 'Submit POD & Selesai Muat', driver, 'Driver');
+		add(podMuat?.submittedAt, 'Pengecekan POD Muat', TRANSPORTER_NAME, 'Planner');
 		if (podMuat?.status !== 'submitted') {
 			add(
 				podMuat?.reviewedAt,
@@ -1048,13 +1049,10 @@
 		add(shipment?.arrivedUnloadingAt, 'Sampai di Titik Bongkar', driver, 'Driver');
 		add(shipment?.handoverVerifiedAt, 'OTP Bongkar Terverifikasi', driver, 'Driver');
 		add(shipment?.unloadingStartedAt, 'Mulai Bongkar', driver, 'Driver');
-		add(
-			shipment?.unloadingCargoCheckedAt,
-			check(shipment?.unloadingCargoMatches, 'Item Bongkar Telah Diverifikasi', 'Item Bongkar Tidak Sesuai'),
-			pic,
-			'PIC'
-		);
-		add(podBongkar?.submittedAt, 'Submit POD Bongkar — Menunggu Pengecekan', driver, 'Driver');
+		add(shipment?.unloadingCargoCheckedAt, 'Verifikasi Item Bongkar', pic, 'PIC');
+		add(shipment?.unloadingCargoCheckedAt, 'Item Muatan Telah Diverifikasi', pic, 'PIC');
+		add(podBongkar?.submittedAt, 'Submit POD & Selesai Bongkar', driver, 'Driver');
+		add(podBongkar?.submittedAt, 'Pengecekan POD Bongkar', TRANSPORTER_NAME, 'Planner');
 		if (podBongkar?.status !== 'submitted') {
 			add(
 				podBongkar?.reviewedAt,
@@ -1066,7 +1064,7 @@
 		add(shipment?.finishedAt, 'Order Selesai', TRANSPORTER_NAME, 'Planner');
 
 		// Recorded order, not declared order: a step taken late shows late.
-		return events.sort((a, b) => a.at - b.at);
+		return events.map((e, i) => ({ ...e, i })).sort((a, b) => a.at - b.at || a.i - b.i);
 	});
 
 	async function refreshData() {
