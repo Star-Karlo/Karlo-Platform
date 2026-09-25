@@ -81,6 +81,51 @@ export function statusLabel(status) {
   return SPOT_ORDER_STATUSES[status]?.label ?? status
 }
 
+/**
+ * The transporter-facing alias — "Copywriting Status Alias - User Transporter"
+ * in Nathanael's status sheet (Testing K-Trip, Sheet1).
+ *
+ * Two label sets, deliberately: the tabs and the pipeline speak the internal
+ * status ("Driver Dipilih", "Verifikasi Item Muat"), while the badge on an
+ * order row speaks the transporter's coarser language ("Pengemudi
+ * Ditugaskan", "Proses Muat Barang"). Several internal steps share one alias,
+ * which is why the sheet leaves those rows blank — the transporter's view
+ * does not change while the driver works through them. A blank therefore
+ * carries the previous alias forward rather than showing nothing.
+ */
+const STATUS_ALIAS = {
+  penugasan_pengemudi: 'Penugasan Pengemudi',
+  pengemudi_ditugaskan: 'Pengemudi Ditugaskan',
+  pengemudi_menerima_order: 'Menuju Lokasi Muat',
+  menuju_lokasi_muat: 'Tiba di Lokasi Muat',
+  tiba_lokasi_muat: 'Proses Muat Barang',
+  // Blank in the sheet: the transporter still sees "Proses Muat Barang"
+  // while the driver loads, checks the items and takes the photos.
+  proses_muat_barang: 'Proses Muat Barang',
+  item_muat_terverifikasi: 'Proses Muat Barang',
+  item_muat_tidak_sesuai: 'Proses Muat Barang',
+  verifikasi_pod_muat: 'Verifikasi POD dan Muatan',
+  pod_muat_terverifikasi: 'POD dan Muatan Terverifikasi',
+  menuju_lokasi_bongkar: 'Menuju Lokasi Bongkar',
+  tiba_lokasi_bongkar: 'Tiba di Lokasi Bongkar',
+  // Blank in the sheet, as above: the OTP is between the transporter's
+  // "tiba" and "proses bongkar".
+  otp_bongkar_terverifikasi: 'Tiba di Lokasi Bongkar',
+  proses_bongkar_muatan: 'Proses Bongkar Muatan',
+  item_bongkar_terverifikasi: 'Proses Bongkar Muatan',
+  item_bongkar_tidak_sesuai: 'Proses Bongkar Muatan',
+  verifikasi_pod_bongkar: 'Verifikasi POD dan Muatan',
+  pod_bongkar_terverifikasi: 'POD dan Muatan Terverifikasi',
+  pengiriman_terkonfirmasi: 'Order Selesai',
+  menunggu_konfirmasi_pengiriman: 'Order Selesai',
+  dibatalkan: 'Order Dibatalkan',
+  kadaluarsa: 'Order Sudah Kadaluarsa',
+}
+
+export function statusAlias(status) {
+  return STATUS_ALIAS[status] ?? statusLabel(status)
+}
+
 export function statusBadgeClass(status) {
   return SPOT_ORDER_STATUSES[status]?.badge ?? 'badge-wait'
 }

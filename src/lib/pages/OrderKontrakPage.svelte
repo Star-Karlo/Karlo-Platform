@@ -10,7 +10,7 @@
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { toast } from '$lib/stores/ui';
-	import { ORDER_KONTRAK_TABS, statusLabel, statusBadgeClass } from '$lib/revamp/spotOrderStatus.js';
+	import { ORDER_KONTRAK_TABS, statusLabel, statusAlias, statusBadgeClass } from '$lib/revamp/spotOrderStatus.js';
 	import { kontrakStatus } from '$lib/revamp/kontrakStatus';
 	import { formatTimestampLabel } from '$lib/revamp/date.js';
 	import { initials } from '$lib/revamp/initials.js';
@@ -182,7 +182,9 @@
 							<td>{o.muatan || '-'}</td>
 							<td>
 								<span class="badge {statusBadgeClass(o.status || 'penugasan_pengemudi')}">
-									{statusLabel(o.status || 'penugasan_pengemudi')}
+									<!-- The badge speaks the transporter's language, the tabs
+									     above speak the pipeline's; see statusAlias. -->
+									{statusAlias(o.status || 'penugasan_pengemudi')}
 								</span>
 							</td>
 						</tr>
