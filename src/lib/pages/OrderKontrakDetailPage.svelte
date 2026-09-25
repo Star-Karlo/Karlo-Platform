@@ -989,43 +989,86 @@
 
 	// ---------- Linimasa ----------
 	let linimasaTab = $state('order');
-	const DRIVER_ACTION_STATUSES = new Set([
-		'pengemudi_menerima_order',
-		'menuju_lokasi_muat',
-		'tiba_lokasi_muat',
-		'proses_muat_barang',
-		'menuju_lokasi_bongkar',
-		'tiba_lokasi_bongkar',
-		'proses_bongkar_muatan'
-	]);
+	/**
+	 * Linimasa Order — what actually happened, and when.
+	 *
+	 * It used to walk the status sequence and stamp every milestone with the
+	 * order's creation time, which put the wrong hour on every line, invented
+	 * steps the delivery never took (the sequence lists both the sesuai and
+	 * tidak-sesuai branches), and missed the ones the sequence has no status
+	 * for — the OTP, each POD submission and its review. Each entry below is
+	 * a recorded timestamp: no timestamp, no line.
+	 */
 	let orderTimeline = $derived.by(() => {
-		if (!order) return [] as { time: string; title: string; actor: string; role: string }[];
-		const events: { time: string; title: string; actor: string; role: string }[] = [];
-		const createdLabel = formatTimestampLabel(order.createdAt);
-		events.push({ time: createdLabel, title: 'Order Dibuat', actor: TRANSPORTER_NAME, role: 'Planner' });
+		if (!order) return [] as { time: string; title: string; actor: string; role: string; at: number }[];
+		const driver = order.assignedDriverName || 'Driver';
+		const pic = shipment?.unloadingCargoCheckedVia === 'field' ? 'PIC Gudang' : TRANSPORTER_NAME;
+		const events: { time: string; title: string; actor: string; role: string; at: number }[] = [];
+		const add = (iso: string | null | undefined, title: string, actor: string, role: string) => {
+			if (!iso) return;
+			const at = new Date(iso).getTime();
+			if (Number.isNaN(at)) return;
+			events.push({ time: formatTimestampLabel(iso), title, actor, role, at });
+		};
+
+		const podMuat = driverPod('muat');
+		const podBongkar = driverPod('bongkar');
+		const check = (matches: boolean | null | undefined, ok: string, bad: string) =>
+			matches === false ? bad : ok;
+
+		add(order.createdAt, 'Order Dibuat', TRANSPORTER_NAME, 'Planner');
 		if (order.assignedTruckPlate) {
-			events.push({
-				time: createdLabel,
-				title: `Driver & Truck Ditugaskan (${order.assignedTruckPlate})`,
-				actor: order.assignedDriverName || 'Driver',
-				role: 'Driver'
-			});
+			add(
+				shipment?.createdAt ?? order.createdAt,
+				`Driver & Truck Ditugaskan (${order.assignedTruckPlate})`,
+				TRANSPORTER_NAME,
+				'Planner'
+			);
 		}
-		const status = order.status;
-		for (const milestone of STATUS_SEQUENCE.slice(2)) {
-			if (!atOrPassed(status, milestone)) continue;
-			const isDriverAction = DRIVER_ACTION_STATUSES.has(milestone);
-			// The accept is the one milestone whose time the shipment records.
-			const acceptedAt = milestone === 'pengemudi_menerima_order' ? shipment?.acceptedAt : null;
-			events.push({
-				time: acceptedAt ? formatTimestampLabel(acceptedAt) : createdLabel,
-				title: statusLabel(milestone),
-				actor: isDriverAction ? order.assignedDriverName || 'Driver' : TRANSPORTER_NAME,
-				role: isDriverAction ? 'Driver' : 'Planner'
-			});
+		add(shipment?.acceptedAt, 'Driver Menerima Order', driver, 'Driver');
+		add(shipment?.startedToLoadingAt, 'Menuju Titik Muat', driver, 'Driver');
+		add(shipment?.arrivedLoadingAt, 'Sampai di Titik Muat', driver, 'Driver');
+		add(shipment?.loadingStartedAt, 'Mulai Muat', driver, 'Driver');
+		add(
+			shipment?.loadingCargoCheckedAt,
+			check(shipment?.loadingCargoMatches, 'Item Muat Telah Diverifikasi', 'Item Muat Tidak Sesuai'),
+			driver,
+			'Driver'
+		);
+		add(podMuat?.submittedAt, 'Submit POD Muat — Menunggu Pengecekan', driver, 'Driver');
+		if (podMuat?.status !== 'submitted') {
+			add(
+				podMuat?.reviewedAt,
+				podMuat?.status === 'rejected' ? 'POD Muat Ditolak' : 'POD Muat Terverifikasi',
+				TRANSPORTER_NAME,
+				'Planner'
+			);
 		}
-		return events;
+		add(shipment?.startedToUnloadingAt, 'Menuju Titik Bongkar', driver, 'Driver');
+		add(shipment?.arrivedUnloadingAt, 'Sampai di Titik Bongkar', driver, 'Driver');
+		add(shipment?.handoverVerifiedAt, 'OTP Bongkar Terverifikasi', driver, 'Driver');
+		add(shipment?.unloadingStartedAt, 'Mulai Bongkar', driver, 'Driver');
+		add(
+			shipment?.unloadingCargoCheckedAt,
+			check(shipment?.unloadingCargoMatches, 'Item Bongkar Telah Diverifikasi', 'Item Bongkar Tidak Sesuai'),
+			pic,
+			'PIC'
+		);
+		add(podBongkar?.submittedAt, 'Submit POD Bongkar — Menunggu Pengecekan', driver, 'Driver');
+		if (podBongkar?.status !== 'submitted') {
+			add(
+				podBongkar?.reviewedAt,
+				podBongkar?.status === 'rejected' ? 'POD Bongkar Ditolak' : 'POD Bongkar Terverifikasi',
+				TRANSPORTER_NAME,
+				'Planner'
+			);
+		}
+		add(shipment?.finishedAt, 'Order Selesai', TRANSPORTER_NAME, 'Planner');
+
+		// Recorded order, not declared order: a step taken late shows late.
+		return events.sort((a, b) => a.at - b.at);
 	});
+
 	async function refreshData() {
 		await loadOrder();
 		toast('Data diperbarui');
