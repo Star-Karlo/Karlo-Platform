@@ -421,16 +421,34 @@
 				documentType: form.documentType
 			};
 			const customerCompanyId = selectedCustomer?.id || existing?.shipperCompanyId || '';
-			const rates = [
-				{
-					customerCompanyId,
-					originCityId: payload.kotaAsal,
-					destinationCityId: payload.kotaTujuan,
-					pricingTypeId: payload.pricingType,
-					truckTypeId: '',
-					price: String(payload.tarif)
+			// One rate per lane, not one rate holding every lane.
+			//
+			// This used to send the joined summary ("KOTA A + KOTA B") as the
+			// city, which overflowed the column and answered 500, and — worse
+			// when it fitted — meant an order could never match the agreement
+			// by lane, because no lane is called "A + B". A multi-shipment
+			// agreement covers each origin against each destination at the
+			// one price it names.
+			const rates = [];
+			for (const o of form.initialRoutes) {
+				for (const d of form.destinationRoutes) {
+					if (!o.kota || !d.kota) continue;
+					rates.push({
+						customerCompanyId,
+						originCityId: o.kota,
+						destinationCityId: d.kota,
+						originDistrictId: o.level === 'kecamatan' ? o.kecamatan || '' : '',
+						destinationDistrictId: d.level === 'kecamatan' ? d.kecamatan || '' : '',
+						pricingTypeId: payload.pricingType,
+						truckTypeId: '',
+						price: String(payload.tarif)
+					});
 				}
-			];
+			}
+			if (rates.length === 0) {
+				toast('Pilih minimal satu rute asal dan satu rute tujuan');
+				return;
+			}
 			if (editing && id) {
 				await api.post(ENDPOINTS.agreements.revise(id), {
 					kind: 'renewal',
