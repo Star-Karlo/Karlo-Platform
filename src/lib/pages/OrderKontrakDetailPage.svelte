@@ -395,7 +395,23 @@
 		const uploaded = podPhotosOf(phaseKey, typeKey);
 		return Array.from({ length: Math.max(POD_PHOTO_MAX, uploaded.length) }, (_, i) => uploaded[i] || null);
 	}
+	/** One visit's photos.
+	 *
+	 *  A stop's own submission carries its photos, so they are read from it
+	 *  directly. Only an order whose PODs do not name a stop falls back to
+	 *  slicing the phase's photos into blocks of two by position, which is a
+	 *  guess: it puts the photos in the wrong row the moment the driver
+	 *  uploads out of order. */
 	function podPhotoSlotsForStop(phaseKey: string, typeKey: string, stopIndex: number): (string | null)[] {
+		const canShow = phaseKey === 'muat' ? canShowPodPhotosMuat : canShowPodPhotosBongkar;
+		const stop = stopsOfPhase(phaseKey)[stopIndex];
+		const pod = stop ? podForStop(phaseKey, stopIndex) : null;
+		if (canShow && pod?.stopId) {
+			const own = (pod.photos ?? [])
+				.filter((p: any) => p.docType === typeKey)
+				.map((p: any) => p.fileUrl as string);
+			return Array.from({ length: Math.max(POD_PHOTO_MAX, own.length) }, (_, i) => own[i] || null);
+		}
 		const uploaded = podPhotosOf(phaseKey, typeKey);
 		const base = stopIndex * POD_PHOTO_MAX;
 		return Array.from({ length: POD_PHOTO_MAX }, (_, i) => uploaded[base + i] || null);
@@ -455,6 +471,83 @@
 	}
 
 	// ---------- Verifikasi Muatan/Bongkaran (E-POD review) ----------
+	/* ---------- The real stops, and the POD each one carries ----------
+	   A journey through Semarang and then Priok files two unloading PODs, one
+	   per visit. The page used to read one POD per stage, so the second could
+	   never be approved and the order could never finish. These read the
+	   stop rows the server sends and the submission belonging to each.
+
+	   An order placed before stops existed has none, and the legacy
+	   index-based helpers below still answer for it. */
+	const STAGE_OF_PHASE: Record<string, string> = { muat: 'loading', bongkar: 'unloading' };
+	const KIND_OF_PHASE: Record<string, string> = { muat: 'load', bongkar: 'unload' };
+
+	/** This phase's visits, in the order the truck makes them. */
+	function stopsOfPhase(phaseKey: string): any[] {
+		const kind = KIND_OF_PHASE[phaseKey];
+		return (shipment?.stops ?? [])
+			.filter((s: any) => s.kind === kind)
+			.sort((a: any, b: any) => (a.seq ?? 0) - (b.seq ?? 0));
+	}
+
+	/** The driver's newest submission for one visit. */
+	function podForStop(phaseKey: string, stopIndex: number): any | null {
+		const history: any[] = shipment?.podHistory ?? [];
+		const stop = stopsOfPhase(phaseKey)[stopIndex];
+		if (stop) {
+			// podHistory is newest first, which is the round that is waiting.
+			const own = history.filter((p) => p.stopId === stop.id);
+			if (own.length) return own[0];
+		}
+		// A two-ended journey, or an order from before PODs named a stop:
+		// one submission for the stage, which is what it always had.
+		const stage = STAGE_OF_PHASE[phaseKey];
+		return history.find((p) => p.stage === stage && !p.stopId) ?? driverPod(phaseKey);
+	}
+
+	/** One shipment's own plan: the items carrying its number.
+	 *  An order whose items are not numbered — placed before shipments were
+	 *  paired — has no per-shipment plan, so every stop shows the order's
+	 *  total, which is what it always showed. */
+	function planForShipment(shipmentNo: number | null): Record<string, number> | null {
+		if (shipmentNo == null) return null;
+		const mine = (order?.items || []).filter((it: any) => Number(it.shipmentNo || 1) === shipmentNo);
+		if (!mine.length || !(order?.items || []).some((it: any) => it.shipmentNo != null)) return null;
+		const weight = mine.reduce((sum: number, it: any) => sum + (Number(it.weightKg) || 0), 0);
+		const qty = mine.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0), 0);
+		const volume = mine.reduce(
+			(sum: number, it: any) => sum + (Number(it.dimP) || 0) * (Number(it.dimL) || 0) * (Number(it.dimT) || 0),
+			0
+		);
+		return {
+			totalBerat: Math.round(weight * 100) / 100,
+			kuantitas: qty,
+			totalVolume: Math.round(volume * 100) / 100
+		};
+	}
+
+	/** The visit that must be verified before this one.
+	 *  Stops are verified in the order the truck makes them, across both
+	 *  phases: on M1 → B1 → M2 → B2, Muat 2 waits for Bongkar 1. */
+	function stopAwaitingBefore(phaseKey: string, stopIndex: number): any | null {
+		const all = (shipment?.stops ?? []).slice().sort((a: any, b: any) => (a.seq ?? 0) - (b.seq ?? 0));
+		const target = stopsOfPhase(phaseKey)[stopIndex];
+		if (!target || !all.length) return null;
+		for (const s of all) {
+			if (s.id === target.id) return null;
+			if (!s.finishedAt) return s;
+		}
+		return null;
+	}
+
+	function stopLabelOf(stop: any): string {
+		const base = stop?.kind === 'load' ? 'Muat' : 'Bongkar';
+		const sameKind = stopsOfPhase(stop?.kind === 'load' ? 'muat' : 'bongkar');
+		if (sameKind.length <= 1) return base;
+		const at = sameKind.findIndex((s: any) => s.id === stop.id);
+		return `${base} ${at + 1}`;
+	}
+
 	function stopCountFor(phaseKey: string) {
 		return podStopCount(order, phaseKey);
 	}
@@ -484,18 +577,34 @@
 		return verifyStopCount > 1 ? `${base} ${verifyModalStopIndex + 1}` : base;
 	});
 	let verifyStopVerified = $derived(isStopVerified(verifyModalPhase, verifyModalStopIndex));
-	let verifyPlanValues = $derived<Record<string, any>>({
-		totalBerat: order?.totalTonnage ?? 0,
-		kuantitas: totalKuantitas,
-		totalVolume: totalVolumeM3
+	/** Whether to read this phase's photos per visit. True as soon as the
+	 *  journey has stop rows, because then each submission names its own. */
+	let verifyPerStop = $derived(stopsOfPhase(verifyModalPhase).length > 0 || verifyStopCount > 1);
+	/** Muat 1 and Bongkar 1 both plan against Shipment 1's items. An order
+	 *  whose items are not numbered plans against the whole order, which is
+	 *  what it always did. */
+	let verifyPlanValues = $derived.by<Record<string, any>>(() => {
+		const stop = stopsOfPhase(verifyModalPhase)[verifyModalStopIndex];
+		const own = planForShipment(stop?.shipmentNo ?? null);
+		return (
+			own ?? {
+				totalBerat: order?.totalTonnage ?? 0,
+				kuantitas: totalKuantitas,
+				totalVolume: totalVolumeM3
+			}
+		);
 	});
+	/** The visit that has to be verified first, if any — stops are verified
+	 *  in the order the truck makes them. */
+	let verifyBlockedBy = $derived(stopAwaitingBefore(verifyModalPhase, verifyModalStopIndex));
+	let verifyStopPod = $derived(podForStop(verifyModalPhase, verifyModalStopIndex));
 	let verifyFirstSuratJalanPhoto = $derived(
-		verifyStopCount > 1
+		verifyPerStop
 			? podPhotoSlotsForStop(verifyModalPhase, 'suratJalan', verifyModalStopIndex)[0] || null
 			: podPhotoSlots(verifyModalPhase, 'suratJalan')[0] || null
 	);
 	function verifyPhotosFor(typeKey: string): string[] {
-		if (verifyStopCount > 1) {
+		if (verifyPerStop) {
 			return podPhotoSlotsForStop(verifyModalPhase, typeKey, verifyModalStopIndex).filter(
 				(s): s is string => !!s
 			);
@@ -558,10 +667,13 @@
 			},
 			podPhotos
 		});
-		// The driver's submission, when there is one: approving it is what
-		// moves the shipment to loaded / unloaded (and finishes it).
-		const pod = driverPod(phaseKey);
-		if (pod && pod.status === 'submitted' && shipment && newStops.every((s) => s.verified)) {
+		// The driver's submission for THIS visit: approving it closes that
+		// stop, and the server moves the shipment on only once every stop of
+		// the stage is done. Approving one POD per stage instead left the
+		// second unloading point's submission waiting for ever, so a journey
+		// with two drop-offs could never finish.
+		const pod = podForStop(phaseKey, stopIndex);
+		if (pod && pod.status === 'submitted' && shipment) {
 			try {
 				await api.put(`/shipments/${shipment.id}/pod/${pod.id}/review`, { approved: true });
 				await Promise.all([loadShipment(), loadOrder()]);
@@ -2493,17 +2605,28 @@
 					<div class="epod-footer">
 						{#if !verifyStopVerified}
 							<button class="btn btn-outline" onclick={rejectVerification}>Tolak</button>
+							<!-- Stops are verified in the order the truck makes them, so a
+							     later visit cannot be signed off while an earlier one is
+							     still waiting. -->
+							{#if verifyBlockedBy}
+								<span class="epod-blocked-hint"
+									>Verifikasi {stopLabelOf(verifyBlockedBy)} dulu — stop diverifikasi sesuai urutan rute.</span
+								>
+							{/if}
 							<button
 								class="btn btn-primary"
-								disabled={(!api.testMode() &&
-									!phaseHasAnyPhoto(verifyModalPhase, verifyStopCount > 1 ? verifyModalStopIndex : null)) ||
+								disabled={!!verifyBlockedBy ||
+									(!api.testMode() &&
+										!phaseHasAnyPhoto(verifyModalPhase, verifyPerStop ? verifyModalStopIndex : null)) ||
 									!verifyDraftValid}
-								title={api.testMode() && !phaseHasAnyPhoto(verifyModalPhase, verifyStopCount > 1 ? verifyModalStopIndex : null)
-									? 'Mode Uji: verifikasi tanpa foto POD'
-									: ''}
+								title={verifyBlockedBy
+									? `Verifikasi ${stopLabelOf(verifyBlockedBy)} dulu`
+									: api.testMode() && !phaseHasAnyPhoto(verifyModalPhase, verifyPerStop ? verifyModalStopIndex : null)
+										? 'Mode Uji: verifikasi tanpa foto POD'
+										: ''}
 								onclick={confirmVerification}
 							>
-								Setuju{#if api.testMode() && !phaseHasAnyPhoto(verifyModalPhase, verifyStopCount > 1 ? verifyModalStopIndex : null)} (Mode Uji){/if}
+								Setuju{#if api.testMode() && !phaseHasAnyPhoto(verifyModalPhase, verifyPerStop ? verifyModalStopIndex : null)} (Mode Uji){/if}
 							</button>
 						{:else}
 							<button class="btn btn-primary" onclick={closeVerifyModal}>Tutup</button>
