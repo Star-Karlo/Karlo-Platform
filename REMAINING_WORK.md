@@ -231,12 +231,23 @@ open.
   Every `WizardItem` carries `shipmentNo`, which is what Step 2's per-shipment
   item table and per-shipment weight subtotal are filtered by
   (`itemsOfShipment`, `shipmentWeightKg` in
-  `components/revamp/internalOrder/wizardTypes.ts`), and what the create call
-  sends inside `detail.items[]`. **Total Tonnage is read-only** — `totalTonnageKg`
-  sums every item of every shipment, because a figure typed by hand is how an
-  order's weight comes to disagree with the items it is made of. Step-1 and
-  step-2 validation names the shipment ("Loading Point pada Shipment 2 wajib
-  dipilih") only when there is more than one, so a one-shipment order reads
-  exactly as it did before. Note the server pairs nothing by `shipmentNo` yet:
-  its `order_items` rows come from the create request's own top-level `items`,
-  which carries no shipment number.
+  `components/revamp/internalOrder/wizardTypes.ts`). Step-1 and step-2 validation
+  names the shipment ("Loading Point pada Shipment 2 wajib dipilih") only when
+  there is more than one, so a one-shipment order reads exactly as it did before.
+- **The create call sends the items twice, and only one of the two is stored.**
+  `detail.items[]` is the wizard's own copy, in the shape the wizard holds
+  (`itemName`, P/L/T in **metres**); the rows the server keeps as `order_items`
+  go at the **top level** of the request as `items[]` — `name`, `shipmentNo`, and
+  the dimensions converted to **centimetres**, which is what the service stores
+  and derives the volume from. Until af988ef the wizard sent only the `detail`
+  copy, so internal orders had no `order_items` rows at all and nothing could
+  total one shipment's plan apart from the rest.
+- **There is no `totalTonnage` field on a shipment any more.** Making the input
+  read-only had left `WizardShipment.totalTonnage` never written while the
+  order's `weightKg` and its estimated value still read it, which on a per-kg
+  agreement submits an order weighing nothing and worth nothing. The field is
+  gone: every reader — the Step 2 and Step 4 boxes, `weightKg`, `detail.nilai`
+  and `detail.totalTonnage` — now calls `totalTonnageKg(sp)`, the computed total
+  of every item of every shipment. Note that orders read back still carry a
+  `detail.totalTonnage`, which is what `orderPricing.js`, `financeData.ts` and
+  the Planner page take; the wizard writes it, nothing types it.
