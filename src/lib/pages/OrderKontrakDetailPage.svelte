@@ -1193,6 +1193,19 @@
 		sectionOpen[key] = !sectionOpen[key];
 	}
 
+	/** The visit the current status refers to: the first that has not
+	 *  finished, in the order the truck makes them. Null on a two-ended
+	 *  journey, where the status refers to the delivery itself. */
+	let currentStopLabel = $derived.by(() => {
+		const stops = (shipment?.stops ?? []).slice().sort((a: any, b: any) => (a.seq ?? 0) - (b.seq ?? 0));
+		if (stops.length <= 2) return '';
+		const at = stops.find((s: any) => !s.finishedAt);
+		if (!at) return '';
+		const base = at.kind === 'load' ? 'Muat' : 'Bongkar';
+		const n = Number(at.shipmentNo || 1);
+		return `${base} #${n} (Shipment ${n})`;
+	});
+
 	// ---------- Linimasa ----------
 	let linimasaTab = $state('order');
 	/**
@@ -1243,6 +1256,85 @@
 				}
 			}
 		};
+
+		/** One visit's submissions, oldest first. */
+		const podsOfStop = (stopId: string) =>
+			(shipment?.podHistory ?? [])
+				.filter((p: any) => p.stopId === stopId)
+				.sort((a: any, b: any) => String(a.submittedAt).localeCompare(String(b.submittedAt)));
+
+		/** "Muat #2 (Shipment 2)" — the point's own number, which is also its
+		 *  shipment's, because loadingPoints[k] and unloadingPoints[k] are the
+		 *  two ends of shipment k+1. */
+		const stopEventLabel = (stop: any) => {
+			const base = stop.kind === 'load' ? 'Muat' : 'Bongkar';
+			const n = Number(stop.shipmentNo || 1);
+			return `${base} #${n} (Shipment ${n})`;
+		};
+
+		/* A journey with more than two points runs the whole Muat/Bongkar
+		   cycle once per point, in the order the truck makes them. The
+		   shipment's own timestamps describe only the first point of each
+		   kind, so reading those alone showed one arrival for a delivery that
+		   made three and left the planner unable to tell which POD belonged
+		   to which warehouse.
+
+		   A two-ended journey keeps the shipment-level lines below, unchanged:
+		   there the two are the same events. */
+		const journeyStops = (shipment?.stops ?? [])
+			.slice()
+			.sort((a: any, b: any) => (a.seq ?? 0) - (b.seq ?? 0));
+		if (journeyStops.length > 2) {
+			add(order.createdAt, 'Order Dibuat', TRANSPORTER_NAME, 'Planner');
+			if (order.assignedTruckPlate) {
+				add(
+					shipment?.createdAt ?? order.createdAt,
+					'Driver Dipilih',
+					`${order.assignedDriverName || 'Driver'} · ${order.assignedTruckPlate}`,
+					'Planner'
+				);
+			}
+			add(shipment?.acceptedAt, 'Driver Menerima Order', driver, 'Driver');
+
+			journeyStops.forEach((stop: any, i: number) => {
+				const label = stopEventLabel(stop);
+				const isLoad = stop.kind === 'load';
+				const going = isLoad ? 'Menuju Titik Muat' : 'Menuju Titik Bongkar';
+
+				// Setting off. The first point of the journey is the shipment's
+				// own departure; every later one is raised by the planner
+				// approving the previous point's POD, so that approval is the
+				// moment it happened.
+				if (i === 0) {
+					add(shipment?.startedToLoadingAt, `${going} — ${label}`, driver, 'Driver');
+				} else {
+					const before = podsOfStop(journeyStops[i - 1].id).filter((p: any) => p.status === 'approved');
+					add(before[before.length - 1]?.reviewedAt, `${going} — ${label}`, TRANSPORTER_NAME, 'Planner');
+				}
+
+				add(stop.arrivedAt, `Sampai di ${isLoad ? 'Titik Muat' : 'Titik Bongkar'} — ${label}`, driver, 'Driver');
+				if (!isLoad) {
+					add(stop.handoverVerifiedAt, `OTP Bongkar Terverifikasi — ${label}`, driver, 'Driver');
+				}
+				add(stop.startedAt, `Mulai ${isLoad ? 'Muat' : 'Bongkar'} — ${label}`, driver, 'Driver');
+				if (isLoad) {
+					add(stop.cargoCheckedAt, `Verifikasi Item Muat — ${label}`, driver, 'Driver');
+					add(stop.cargoCheckedAt, `Item Muatan Telah Diverifikasi — ${label}`, driver, 'Driver');
+				}
+				for (const pod of podsOfStop(stop.id)) {
+					add(pod.submittedAt, `Submit POD & Selesai ${isLoad ? 'Muat' : 'Bongkar'} — ${label}`, driver, 'Driver');
+					add(pod.submittedAt, `Pengecekan POD — ${label}`, TRANSPORTER_NAME, 'Planner');
+					if (pod.status === 'rejected') {
+						add(pod.reviewedAt, `POD Ditolak — ${label}`, TRANSPORTER_NAME, 'Planner');
+					} else if (pod.status === 'approved') {
+						add(pod.reviewedAt, `POD dan Muatan Terverifikasi — ${label}`, TRANSPORTER_NAME, 'Planner');
+					}
+				}
+			});
+
+			add(shipment?.finishedAt, 'Order Selesai', TRANSPORTER_NAME, 'Planner');
+			return events.map((e, i) => ({ ...e, i })).sort((a, b) => a.at - b.at || a.i - b.i);
+		}
 
 		// The titles are the sheet's Status Order column, word for word. Where
 		// the sheet lists several statuses against one trigger ("Submit POD"),
@@ -1449,7 +1541,9 @@
 			<div class="epod-info-row"><span>Tanggal Rilis</span><b>{order?.tanggalPickup || '-'}</b></div>
 			<div class="epod-info-row">
 				<span>Status</span>
-				<span class="badge {statusBadgeClass(currentStatusKey)}">{statusLabel(currentStatusKey)}</span>
+				<span class="badge {statusBadgeClass(currentStatusKey)}"
+					>{statusLabel(currentStatusKey)}{currentStopLabel ? ` — ${currentStopLabel}` : ''}</span
+				>
 			</div>
 		</div>
 	</div>
@@ -1535,7 +1629,8 @@
 						<div class="detail-row">
 							<div class="detail-row-label"><b>Status</b></div>
 							<div class="detail-row-value">
-								<span class="badge {statusBadgeClass(currentStatusKey)}">{statusLabel(currentStatusKey)}</span
+								<span class="badge {statusBadgeClass(currentStatusKey)}"
+									>{statusLabel(currentStatusKey)}{currentStopLabel ? ` — ${currentStopLabel}` : ''}</span
 								>
 							</div>
 						</div>
