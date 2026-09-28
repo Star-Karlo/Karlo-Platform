@@ -101,11 +101,103 @@ files under `src/routes/` are three-line wrappers:
 | `PlannerPage` (Allocate; its Toll Fare Estimate card reads `route.toll` per golongan, defaulting to the picked truck's class) | `/t`, `/m` |
 | `SettingsPage` | `/s`, `/t`, `/m` |
 | `MonitoringPage`, `InvestorDashboardPage` | `/a`, `/i` |
+| `OrderKontrakDetailPage`, `OrderKontrakInvoicePage` (`/order/kontrak/[id]`, `…/invoice`) | `/t`, `/m`, `/a` |
+| `ControlTowerPage` (`/control-tower`) | `/s`, `/t`, `/m`, `/a` |
 | `NotBuiltPage` | every nav destination without a screen yet |
 
 This is what the five byte-identical copies of the order list used to be — and
 why the warehouse's list linked to the shipper's detail route. Adding a role
 means adding wrappers, not copying pages.
+
+### The multi-stop order screens
+
+`OrderKontrakDetailPage`, `OrderKontrakInvoicePage` and `ControlTowerPage` read
+the **journey's own points** — `stops[]` on the shipment read, each row carrying
+`seq`, `kind`, `shipmentNo`, `finishedAt` and its own site — rather than the two
+ends the shipment's own timestamps describe. A journey with **more than two
+points** reports one of everything per point; a two-ended journey, and an order
+placed before stops existed, takes the path it always took. The flow these
+screens present is `MICROSERVICES/docs/shared/BUSINESS.md` §*When the order
+carries several shipments*, and the rows behind it are
+`MICROSERVICES/docs/business/MODEL.md` §*order_stops*.
+
+- **E-POD approval acts on the POD of the visit being verified**, not one POD per
+  stage (`podForStop`: the newest `podHistory` entry whose `stopId` is this
+  stop's, falling back to the stage's un-stopped submission). This was the
+  blocker: the page approved one submission per stage and only once every stop
+  had been ticked, so on a journey with two unloading points the second POD was
+  never sent for review, its stop never closed, and the order could never reach
+  *Order Selesai*. `confirmVerification` now `PUT`s
+  `/shipments/{id}/pod/{podId}/review` for that visit alone; the server closes
+  that stop and advances the shipment when the **last** stop of the stage is
+  done, so the console writes no status of its own.
+- **Plan in the modal is the stop's own shipment.** `planForShipment(stop.shipmentNo)`
+  totals the order items carrying that number, so Muat 1 and Bongkar 1 both plan
+  against Shipment 1. An order whose items are **not** numbered has no
+  per-shipment plan and every stop plans against the order total
+  (`totalTonnage`, `totalKuantitas`, `totalVolumeM3`), which is what it always
+  showed.
+- **Photos come from that visit's own submission.** The modal and *Foto POD*
+  read `pod.photos` filtered by `docType` off the stop's own POD
+  (`podPhotoSlotsForStop`, once the journey has stop rows — `verifyPerStop`).
+  The old positional slicing of a phase's photos into blocks of two survives
+  only for orders whose PODs carry no `stopId`; it was a guess that puts a photo
+  in the wrong row as soon as the driver uploads out of order.
+- **Setuju waits for the earlier visit, and names it.** `stopAwaitingBefore`
+  walks every stop of the journey in `seq` order and returns the first without a
+  `finishedAt` before the target, so the ordering runs across **both** phases:
+  on Muat 1 → Bongkar 1 → Muat 2 → Bongkar 2, Muat 2 waits for Bongkar 1. The
+  button is disabled and the hint reads *Verifikasi Bongkar 1 dulu — stop
+  diverifikasi sesuai urutan rute*.
+- **Verifying a stop records its own figures.** The stop's entry in
+  `detail.podPhotos.{muat|bongkar}.stops[]` — indexed by the stop's position
+  **within its phase**, in visit order — gains `actual` alongside `verified` and
+  `note`, so a stop re-opened later shows what was counted there rather than the
+  last number typed in the phase. The order-level `detail.muatanMuat` /
+  `muatanBongkar` are still written, because the invoice, Control Tower and the
+  planner read them, but on a multi-stop journey they are `sumOfVerifiedStops` —
+  the sum of every verified visit, not the latest one.
+- **Detail Muatan reports one Plan / Muat / Bongkar block per shipment**
+  (`cargoByShipment`) once either phase has two or more points, each block
+  headed *Shipment N* and its own lane (the two sites' names). The Muat and
+  Bongkar columns stay empty until the order is at or past
+  `pod_muat_terverifikasi` / `pod_bongkar_terverifikasi`, as they did before. A
+  single-shipment order keeps the one table (`cargoComparison`). The block markup
+  uses `.muatan-shipment*`, which has no rules in `revamp.css` yet — it inherits
+  the compare-row grid and reads unstyled, as does `.epod-blocked-hint`.
+- **Linimasa runs the whole cycle once per point** when the journey has more than
+  two, in `seq` order, each line naming the point — *Sampai di Titik Bongkar —
+  Bongkar #2 (Shipment 2)*. Setting off for a later point is stamped with the
+  planner's **approval of the previous point's POD** (`reviewedAt` of its last
+  approved submission), because that approval is what raises it; the first point
+  keeps the shipment's own `startedToLoadingAt`. Every line is still a recorded
+  timestamp — no timestamp, no line. A two-ended journey keeps the
+  shipment-level lines unchanged.
+- **The status badge names the first unfinished point** in visit order
+  (`currentStopLabel`, e.g. `Proses Bongkar — Bongkar #2 (Shipment 2)`), on the
+  E-POD header and in *Detail Permintaan*. Blank on a two-ended journey, where
+  the status refers to the delivery itself.
+- **Control Tower lists one verification task per point** for a journey with more
+  than two (`Verifikasi POD Bongkar #2 (Shipment 2)`), in visit order, in place
+  of the two status-keyed tasks. A task is `done` on the stop's `finishedAt` or
+  an approved POD for it, and `pending` only once that point's POD is
+  `submitted` **and** every earlier point is done — the same order the E-POD
+  modal enforces. *Finalisasi Uang Sangu* is appended either way; two-ended
+  journeys keep the two status-based tasks.
+- **The invoice has a tab per shipment.** *Jumlah Shipment* is the real count
+  (`invoiceShipmentCount`, the longer of the two point lists), and the selected
+  tab reports that shipment's own lane, its two addresses, the POD photos signed
+  at its own stops (`shipmentPodPhotoSrc`, by `stopId`, falling back to the
+  phase's photos on an order with no stops) and *Rincian Kargo Shipment (N)* —
+  plan weight and volume from its items, the verified unloaded weight and the
+  quantity from the verification record. Price stays at **order** level:
+  *Kesepakatan Awal* and *Final* are labelled *— Seluruh Order* on a
+  multi-shipment invoice, because one agreement tariff covers the whole order.
+  Splitting the price per shipment is still an open product question. One caveat:
+  the delivered figures are looked up positionally,
+  `detail.podPhotos.bongkar.stops[N-1]`, which is that shipment's own row only
+  while the unloading points are visited in shipment order — the detail page
+  indexes the same array by visit order within the phase.
 
 ---
 
@@ -123,12 +215,12 @@ calls a mutation. Still to build:
 - Truck and warehouse CRUD
 
 ### Screens
-20 routes render `NotBuiltPage`. They are reachable and correctly shelled, but
+18 routes render `NotBuiltPage`. They are reachable and correctly shelled, but
 have no content — API keys, trackers, share-orders and the fleet/performance
 reports on each persona, plus draft order (`/s`), collaboration (`/m`),
-document verification and general settings (`/a`) and the planner's control
-tower (`/t`). The dashboard, company profile, truck and driver detail, trip
-allowance and finance screens are built now (see the shared-page table above).
+document verification and general settings (`/a`). The dashboard, company
+profile, truck and driver detail, trip allowance, finance and Control Tower
+screens are built now (see the shared-page table above).
 
 ### Integrations
 None of these exist yet: Socket.IO notifications, Firebase push, PDF export, and
