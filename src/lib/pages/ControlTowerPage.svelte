@@ -921,11 +921,38 @@
 		const d = o.detail ?? {};
 		const idx = (k: string) => ['penugasan_pengemudi','pengemudi_ditugaskan','pengemudi_menerima_order','menuju_lokasi_muat','tiba_lokasi_muat','proses_muat_barang','verifikasi_pod_muat','pod_muat_terverifikasi','menuju_lokasi_bongkar','tiba_lokasi_bongkar','proses_bongkar_muatan','verifikasi_pod_bongkar','pod_bongkar_terverifikasi','menunggu_konfirmasi_pengiriman','pengiriman_terkonfirmasi'].indexOf(k);
 		const cur = idx(status);
-		const items: { key: string; label: string; state: TaskState }[] = [
-			{ key: 'podMuat', label: 'Verifikasi POD Muat', state: cur > idx('verifikasi_pod_muat') ? 'done' : status === 'verifikasi_pod_muat' ? 'pending' : 'upcoming' },
-			{ key: 'podBongkar', label: 'Verifikasi POD Bongkar', state: cur > idx('verifikasi_pod_bongkar') ? 'done' : status === 'verifikasi_pod_bongkar' ? 'pending' : 'upcoming' },
-			{ key: 'sangu', label: 'Finalisasi Uang Sangu', state: d.uangSanguFinalized ? 'done' : 'pending' }
-		];
+		// A journey with more than two points is verified one point at a time,
+		// in the order the truck makes them. Two tasks keyed on the order's
+		// status cannot say that: they show one Bongkar to verify when there
+		// are two, and give the planner no way to see which is waiting.
+		const stops = (shipment?.stops ?? []).slice().sort((a: any, b: any) => (a.seq ?? 0) - (b.seq ?? 0));
+		const history: any[] = shipment?.podHistory ?? [];
+		const items: { key: string; label: string; state: TaskState }[] = [];
+
+		if (stops.length > 2) {
+			let earlierWaiting = false;
+			for (const stop of stops) {
+				const base = stop.kind === 'load' ? 'Muat' : 'Bongkar';
+				const n = Number(stop.shipmentNo || 1);
+				const pods = history.filter((p: any) => p.stopId === stop.id);
+				const done = !!stop.finishedAt || pods.some((p: any) => p.status === 'approved');
+				// Waiting on the planner only once the driver has filed the POD
+				// and every earlier point has been signed off.
+				const waiting = !done && pods.some((p: any) => p.status === 'submitted') && !earlierWaiting;
+				if (!done) earlierWaiting = true;
+				items.push({
+					key: `pod-${stop.id}`,
+					label: `Verifikasi POD ${base} #${n} (Shipment ${n})`,
+					state: done ? 'done' : waiting ? 'pending' : 'upcoming'
+				});
+			}
+		} else {
+			items.push(
+				{ key: 'podMuat', label: 'Verifikasi POD Muat', state: cur > idx('verifikasi_pod_muat') ? 'done' : status === 'verifikasi_pod_muat' ? 'pending' : 'upcoming' },
+				{ key: 'podBongkar', label: 'Verifikasi POD Bongkar', state: cur > idx('verifikasi_pod_bongkar') ? 'done' : status === 'verifikasi_pod_bongkar' ? 'pending' : 'upcoming' }
+			);
+		}
+		items.push({ key: 'sangu', label: 'Finalisasi Uang Sangu', state: d.uangSanguFinalized ? 'done' : 'pending' });
 		return { items, pendingCount: items.filter((t) => t.state === 'pending').length };
 	});
 
