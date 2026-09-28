@@ -349,6 +349,68 @@
 	];
 	let canShowMuatanMuat = $derived(atOrPassed(order?.status, 'pod_muat_terverifikasi'));
 	let canShowMuatanBongkar = $derived(atOrPassed(order?.status, 'pod_bongkar_terverifikasi'));
+	/** Detail Muatan, one block per shipment.
+	 *
+	 *  A shipment's Plan is its own items, and its Muat and Bongkar are the
+	 *  figures counted at its own two stops — so Shipment 1 reads as delivered
+	 *  in full while Shipment 2 is still empty, instead of both being averaged
+	 *  into one order-wide row that matches neither.
+	 *
+	 *  Null for an order that has no per-shipment data to show: one shipment,
+	 *  or items that were never numbered. Those keep the single table. */
+	let cargoByShipment = $derived.by(() => {
+		if (!order) return null;
+		const loads = stopsOfPhase('muat');
+		const unloads = stopsOfPhase('bongkar');
+		const count = Math.max(loads.length, unloads.length);
+		if (count < 2) return null;
+
+		const muatStops = phaseStops('muat');
+		const bongkarStops = phaseStops('bongkar');
+		/** What was counted at the stop of this kind belonging to shipment n. */
+		const actualFor = (stops: any[], recorded: any[], n: number) => {
+			const at = stops.findIndex((s: any) => Number(s.shipmentNo || 0) === n);
+			if (at < 0) return null;
+			const row = recorded[at];
+			return row?.verified ? (row.actual ?? null) : null;
+		};
+
+		const blocks = [];
+		for (let n = 1; n <= count; n++) {
+			const plan = planForShipment(n);
+			const load = loads.find((s: any) => Number(s.shipmentNo || 0) === n);
+			const unload = unloads.find((s: any) => Number(s.shipmentNo || 0) === n);
+			const phases = [
+				{ key: 'plan', label: 'Plan', data: plan },
+				{
+					key: 'muat',
+					label: 'Muat',
+					data: canShowMuatanMuat ? actualFor(loads, muatStops, n) : null
+				},
+				{
+					key: 'bongkar',
+					label: 'Bongkar',
+					data: canShowMuatanBongkar ? actualFor(unloads, bongkarStops, n) : null
+				}
+			];
+			blocks.push({
+				no: n,
+				// The shipment's own lane, which is how a planner recognises it.
+				rute: [load?.site?.name, unload?.site?.name].filter(Boolean).join(' — '),
+				phases,
+				rows: CARGO_FIELDS.map((f) => ({
+					...f,
+					values: phases.map((p: any) =>
+						p.data && p.data[f.key] != null && p.data[f.key] !== ''
+							? cargoValueNumber(p.data[f.key])
+							: null
+					)
+				}))
+			});
+		}
+		return blocks;
+	});
+
 	let cargoComparison = $derived.by(() => {
 		if (!order) return null;
 		const okDetail = detail;
@@ -551,7 +613,13 @@
 	function stopCountFor(phaseKey: string) {
 		return podStopCount(order, phaseKey);
 	}
-	function phaseStops(phaseKey: string): { verified: boolean; note: string }[] {
+	/** A verified stop also carries the figures counted there (`actual`),
+	 *  which Detail Muatan reports per shipment. */
+	function phaseStops(phaseKey: string): {
+		verified: boolean;
+		note: string;
+		actual?: Record<string, number>;
+	}[] {
 		return podStops(order, phaseKey);
 	}
 	function isPhaseVerified(phaseKey: string) {
@@ -619,8 +687,11 @@
 	function openVerifyModal(phaseKey: string, stopIndex = 0) {
 		verifyModalPhase = phaseKey;
 		verifyModalStopIndex = stopIndex;
+		// This visit's own recorded figures if it has been verified before,
+		// otherwise the phase total (which for a two-ended journey is the
+		// same thing), otherwise the plan.
 		const field = phaseKey === 'muat' ? 'muatanMuat' : 'muatanBongkar';
-		const existing = detail[field];
+		const existing = phaseStops(phaseKey)[stopIndex]?.actual ?? detail[field];
 		const plan = verifyPlanValues;
 		verifyDraft = {
 			totalBerat:
@@ -635,6 +706,19 @@
 		verifyNote = phaseStops(phaseKey)[stopIndex]?.note || '';
 		verifyModalOpen = true;
 	}
+	/** The phase's figures: every verified visit added up. A journey with one
+	 *  stop yields that stop's own numbers, which is what it always wrote. */
+	function sumOfVerifiedStops(
+		stops: any[],
+		fallback: Record<string, number>
+	): Record<string, number> {
+		const verified = stops.filter((s) => s?.verified && s.actual);
+		if (!verified.length) return fallback;
+		const add = (k: string) =>
+			Math.round(verified.reduce((sum, s) => sum + (Number(s.actual[k]) || 0), 0) * 100) / 100;
+		return { totalBerat: add('totalBerat'), kuantitas: add('kuantitas'), totalVolume: add('totalVolume') };
+	}
+
 	function closeVerifyModal() {
 		verifyModalOpen = false;
 	}
@@ -647,8 +731,16 @@
 		if (!order) return;
 		const phaseKey = verifyModalPhase;
 		const stopIndex = verifyModalStopIndex;
+		const actual = {
+			totalBerat: Number(verifyDraft.totalBerat),
+			kuantitas: Number(verifyDraft.kuantitas),
+			totalVolume: Number(verifyDraft.totalVolume)
+		};
+		// The figures belong to the visit they were counted at: Detail Muatan
+		// reports Shipment 2's own weight, and a stop re-opened later shows
+		// what was recorded there rather than the whole phase's total.
 		const newStops = phaseStops(phaseKey).map((s, i) =>
-			i === stopIndex ? { verified: true, note: verifyNote.trim() } : s
+			i === stopIndex ? { ...s, verified: true, note: verifyNote.trim(), actual } : s
 		);
 		// No status write here: the server owns the state machine, and once
 		// every stop is verified kontrakStatus() itself reads
@@ -659,12 +751,11 @@
 			[phaseKey]: { ...((detail.podPhotos || {})[phaseKey] || {}), stops: newStops }
 		};
 		const label = verifyPhaseLabel;
+		// The phase total stays written at order level: the invoice, Control
+		// Tower and the planner all read it. On a multi-stop journey it is the
+		// sum of every verified visit, not the last one typed.
 		await patchDetail({
-			[muatanField]: {
-				totalBerat: Number(verifyDraft.totalBerat),
-				kuantitas: Number(verifyDraft.kuantitas),
-				totalVolume: Number(verifyDraft.totalVolume)
-			},
+			[muatanField]: sumOfVerifiedStops(newStops, actual),
 			podPhotos
 		});
 		// The driver's submission for THIS visit: approving it closes that
@@ -1531,7 +1622,33 @@
 							</div>
 							<div class="detail-row-value"><b>{order.muatan || '-'}</b></div>
 						</div>
-						{#if cargoComparison}
+						<!-- One block per shipment when the order carries several: a
+						     shipment's plan and its own two stops' figures belong
+						     together. Otherwise the single table, unchanged. -->
+						{#if cargoByShipment}
+							{#each cargoByShipment as block (block.no)}
+								<div class="muatan-shipment">
+									<div class="muatan-shipment-head">
+										<span class="muatan-shipment-title">Shipment {block.no}</span>
+										{#if block.rute}<span class="muatan-shipment-rute">{block.rute}</span>{/if}
+									</div>
+									<div class="muatan-compare-row muatan-compare-row--head">
+										<span></span>
+										{#each block.phases as p (p.key)}
+											<span>{p.label}</span>
+										{/each}
+									</div>
+									{#each block.rows as row (row.key)}
+										<div class="muatan-compare-row">
+											<span class="muatan-compare-field">{row.label}</span>
+											{#each row.values as v, i (i)}
+												<span class="muatan-compare-value">{v ?? '0'}</span>
+											{/each}
+										</div>
+									{/each}
+								</div>
+							{/each}
+						{:else if cargoComparison}
 							<div class="muatan-compare-row muatan-compare-row--head">
 								<span></span>
 								{#each cargoComparison.phases as p (p.key)}
