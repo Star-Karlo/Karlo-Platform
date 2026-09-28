@@ -3,6 +3,7 @@
 	 * Port of the prototype's OrderKontrakInvoiceView.vue (1:1).
 	 */
 	import { onMount } from 'svelte';
+	import { downloadUrl } from '$lib/utils/upload';
 	import { goto } from '$app/navigation';
 	import {
 		Download,
@@ -118,7 +119,25 @@
 			raw = null;
 		}
 		loaded = true;
-		if (raw) await Promise.all([loadAgreement(raw), loadWarehouses(raw)]);
+		if (raw) await Promise.all([loadAgreement(raw), loadWarehouses(raw), loadShipment(raw)]);
+	}
+
+	/**
+	 * The driver's POD submissions.
+	 *
+	 * The invoice used to show only detail.podPhotos — what somebody uploaded
+	 * through the console — so a delivery documented entirely by the driver
+	 * printed "No photo" on its invoice, which is the document the customer
+	 * is asked to pay against.
+	 */
+	let shipment = $state<any>(null);
+	async function loadShipment(o: any) {
+		try {
+			const res = await api.get(ENDPOINTS.orders.shipment(o.id));
+			shipment = res.data?.data ?? null;
+		} catch {
+			shipment = null;
+		}
 	}
 	onMount(() => {
 		loadCompany();
@@ -212,8 +231,46 @@
 		return Math.round(v * 100) / 100;
 	});
 
+	/**
+	 * A POD photo is stored as a key; the viewable URL is fetched once and
+	 * kept. Started after the render pass, never during it — writing state
+	 * while a template renders is a hard error in Svelte 5, and it takes the
+	 * whole page down with it.
+	 */
+	let resolvedPodSrc = $state<Record<string, string>>({});
+	const requestedPodSrc = new Set<string>();
+	function resolveSrc(src: string | null | undefined): string {
+		if (!src) return '';
+		if (/^(https?:|data:|blob:)/.test(src)) return src;
+		if (resolvedPodSrc[src]) return resolvedPodSrc[src];
+		if (!requestedPodSrc.has(src)) {
+			requestedPodSrc.add(src);
+			queueMicrotask(() => {
+				downloadUrl(src)
+					.then((u) => (resolvedPodSrc = { ...resolvedPodSrc, [src]: u }))
+					.catch(() => requestedPodSrc.delete(src));
+			});
+		}
+		return '';
+	}
+
+	/** The driver's photos of one type for a phase, newest submission first. */
+	function driverPodPhoto(phaseKey: string, typeKey: string): string | null {
+		const stage = phaseKey === 'muat' ? 'loading' : 'unloading';
+		const pods = (shipment?.podHistory ?? shipment?.pods ?? []).filter((p: any) => p.stage === stage);
+		for (const pod of pods) {
+			const hit = (pod.photos ?? []).find((ph: any) => ph.docType === typeKey);
+			if (hit?.fileUrl) return hit.fileUrl;
+		}
+		return null;
+	}
+
 	function podPhotoSrc(phaseKey: string, typeKey: string): string | null {
-		return detail.podPhotos?.[phaseKey]?.[typeKey]?.[0] || null;
+		// The console's own upload wins when there is one — somebody chose it
+		// for this invoice — and the driver's POD is what fills the page
+		// otherwise.
+		const own = detail.podPhotos?.[phaseKey]?.[typeKey]?.[0];
+		return resolveSrc(own || driverPodPhoto(phaseKey, typeKey)) || null;
 	}
 
 	let invoiceId = $derived(order ? `INV${String(order.idOrder).replace(/^ORM/, '')}` : '');
