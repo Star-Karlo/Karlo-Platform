@@ -99,6 +99,12 @@
 		telepon?: string;
 		coords: [number, number] | null;
 		shipmentLabel?: string;
+		/** Which shipment of the order this point belongs to, 1-based. A muat
+		 *  and a bongkar sharing it are the two ends of one shipment. */
+		shipmentNo?: number;
+		/** Its position in its own list, which is what the server indexes a
+		 *  stored visit order by. */
+		pointIndex?: number;
 	};
 	type RouteSummary = {
 		distanceKm: number | null;
@@ -369,10 +375,11 @@
 	function stopsForOrder(o: OpenOrder | null, shipmentLabel?: string): Stop[] {
 		if (!o) return [];
 		const d = o.raw.detail ?? {};
-		const out: Stop[] = [];
-		const push = (id: string, type: 'muat' | 'bongkar', fallback: any) => {
+		const muat: Stop[] = [];
+		const bongkar: Stop[] = [];
+		const push = (id: string, type: 'muat' | 'bongkar', i: number, fallback: any) => {
 			const w = warehouseById.get(id);
-			out.push({
+			(type === 'muat' ? muat : bongkar).push({
 				type,
 				kota: w?.city ?? fallback?.kota ?? '',
 				label: w?.name ?? fallback?.label ?? (type === 'muat' ? o.raw.originWarehouseName : o.raw.destinationWarehouseName) ?? '-',
@@ -380,12 +387,31 @@
 				pic: w?.picName ?? fallback?.pic,
 				telepon: w?.picPhone ?? fallback?.telepon,
 				coords: warehouseCoords(w),
-				shipmentLabel
+				shipmentLabel,
+				// Index k of each list is shipment k+1 — that pairing is what
+				// joins a drop-off to the pick-up whose goods it carries, and
+				// it does not change when the visit order does.
+				shipmentNo: i + 1,
+				pointIndex: i
 			});
 		};
-		for (const id of o.loadingIds) push(id, 'muat', d.alamatMuat);
-		for (const id of o.unloadingIds) push(id, 'bongkar', d.alamatBongkar);
-		return out;
+		o.loadingIds.forEach((id, i) => push(id, 'muat', i, d.alamatMuat));
+		o.unloadingIds.forEach((id, i) => push(id, 'bongkar', i, d.alamatBongkar));
+
+		// The planner's own visit order, when one was saved. Default — and the
+		// fallback for a sequence that no longer describes these points — is
+		// every muat then every bongkar, which is what the server does too.
+		const seq = Array.isArray(d.stopSequence) ? d.stopSequence : null;
+		if (seq && seq.length === muat.length + bongkar.length) {
+			const picked: Stop[] = [];
+			for (const e of seq) {
+				const from = e?.type === 'bongkar' ? bongkar : muat;
+				const at = from[Number(e?.index)];
+				if (at && !picked.includes(at)) picked.push(at);
+			}
+			if (picked.length === seq.length) return picked;
+		}
+		return [...muat, ...bongkar];
 	}
 
 	// ---------------------------------------------------------------------
@@ -686,16 +712,23 @@
 	type ViaPoint = { lng: number; lat: number };
 	let customRouteMode = $state(false);
 	let customViaPoints = $state<ViaPoint[]>([]);
-	/** LTL only: a hand-ordered muat/bongkar sequence; null = the system's order. */
-	let ltlStopOrderOverride = $state<Stop[] | null>(null);
+	/** A hand-ordered muat/bongkar sequence; null = the system's order.
+	 *  Used for an LTL group's combined route and for a single multi-shipment
+	 *  order, where the planner may choose Muat 1 → Bongkar 1 → Muat 2 →
+	 *  Bongkar 2 instead of loading everything before delivering any of it. */
+	let stopOrderOverride = $state<Stop[] | null>(null);
+	let savingSequence = $state(false);
 	$effect(() => {
 		void selectedOrderKey, ltlSelectedKeys;
 		customRouteMode = false;
 		customViaPoints = [];
-		ltlStopOrderOverride = null;
+		stopOrderOverride = null;
 	});
-	const ltlActiveStops = $derived(ltlStopOrderOverride ?? ltlCombinedStops);
-	const baseRouteStops = $derived(ltlPanelActive ? ltlActiveStops : stops);
+	const ltlActiveStops = $derived(stopOrderOverride ?? ltlCombinedStops);
+	/** A single order the planner may reorder: more than one shipment to order. */
+	const multiShipmentOrder = $derived(!ltlPanelActive && stops.length > 2);
+	const orderActiveStops = $derived(stopOrderOverride ?? stops);
+	const baseRouteStops = $derived(ltlPanelActive ? ltlActiveStops : orderActiveStops);
 	/** Waypoints in travel order: first stop, the via-points, then the rest. */
 	const routeWaypoints = $derived.by<[number, number][]>(() => {
 		const pts = baseRouteStops.map((s) => s.coords).filter(Boolean) as [number, number][];
@@ -714,13 +747,13 @@
 	const customStopsList = $derived.by<CustomStopRow[]>(() => {
 		const points = baseRouteStops;
 		if (!points.length) return [];
-		const isLtl = ltlShipments.length > 0;
+		const reorderable = ltlShipments.length > 0 || multiShipmentOrder;
 		const fixed = (p: Stop, i: number): CustomStopRow => ({
 			kind: p.type,
 			label: p.label,
 			coords: p.coords,
 			shipmentLabel: p.shipmentLabel,
-			stopIndex: isLtl ? i : undefined
+			stopIndex: reorderable ? i : undefined
 		});
 		const vias = customViaPoints.map((v, i): CustomStopRow => ({
 			kind: 'via',
@@ -736,7 +769,7 @@
 	}
 	function resetCustomRoute() {
 		customViaPoints = [];
-		ltlStopOrderOverride = null;
+		stopOrderOverride = null;
 	}
 	function addViaPointAt([lng, lat]: [number, number]) {
 		if (!customRouteMode || baseRouteStops.length < 2) return;
@@ -766,10 +799,10 @@
 	// Drag-and-drop reordering — via-points among themselves, and (LTL only)
 	// the combined muat/bongkar sequence.
 	let draggingViaIndex = $state<number | null>(null);
-	let draggingLtlStopIndex = $state<number | null>(null);
+	let draggingStopIndex = $state<number | null>(null);
 	function onRowDragStart(row: CustomStopRow, e: DragEvent) {
 		if (row.kind === 'via') draggingViaIndex = row.viaIndex!;
-		else if (row.stopIndex != null) draggingLtlStopIndex = row.stopIndex;
+		else if (row.stopIndex != null) draggingStopIndex = row.stopIndex;
 		if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
 	}
 	function onRowDrop(target: CustomStopRow, e: DragEvent) {
@@ -785,28 +818,79 @@
 				customViaPoints = arr;
 			}
 		}
-		if (draggingLtlStopIndex != null) {
-			const from = draggingLtlStopIndex;
-			draggingLtlStopIndex = null;
+		if (draggingStopIndex != null) {
+			const from = draggingStopIndex;
+			draggingStopIndex = null;
 			if (target.stopIndex != null && target.stopIndex !== from) {
-				const arr = [...ltlActiveStops];
+				const arr = [...baseRouteStops];
 				const [moved] = arr.splice(from, 1);
 				const to = target.stopIndex > from ? target.stopIndex - 1 : target.stopIndex;
 				arr.splice(to, 0, moved);
-				ltlStopOrderOverride = arr;
+				const bad = firstImpossibleStop(arr);
+				if (bad) {
+					// Refuse the move rather than let the planner save a journey
+					// that delivers goods it has not picked up yet.
+					toast(bad);
+					return;
+				}
+				stopOrderOverride = arr;
 			}
+		}
+	}
+
+	/** The one rule a visit order cannot break: a shipment's Bongkar cannot come
+	 *  before its own Muat. Returns the wording for the move that broke it. */
+	function firstImpossibleStop(order: Stop[]): string | null {
+		// Keyed on the order too, not the shipment number alone: in an LTL
+		// group every order contributes its own "shipment 1", and a number on
+		// its own would let one order's Bongkar pass because a different
+		// order's Muat had already been visited.
+		const key = (s: Stop) => `${s.shipmentLabel ?? ''}#${s.shipmentNo}`;
+		const loaded = new Set<string>();
+		for (const s of order) {
+			if (s.shipmentNo == null) continue;
+			if (s.type === 'muat') loaded.add(key(s));
+			else if (!loaded.has(key(s))) {
+				// On one order the shipment's number is what the planner sees;
+				// in an LTL group it is the order's own label.
+				const which = s.shipmentLabel ?? String(s.shipmentNo);
+				return `Bongkar ${which} tidak bisa sebelum Muat ${which} — barang harus dimuat dulu.`;
+			}
+		}
+		return null;
+	}
+
+	/** Save the visit order onto the order, so the driver's next stop and the
+	 *  planned distance both follow it. LTL's combined order stays a preview:
+	 *  it spans several orders and none of them owns it. */
+	async function saveStopSequence() {
+		const order = selectedOrder;
+		if (!order || !stopOrderOverride) return;
+		savingSequence = true;
+		try {
+			const stopSequence = stopOrderOverride
+				.filter((s) => s.pointIndex != null)
+				.map((s) => ({ type: s.type, index: s.pointIndex }));
+			await api.put(ENDPOINTS.orders.stopSequence(order.raw.id), { stopSequence });
+			toast('Urutan rute disimpan');
+			stopOrderOverride = null;
+			await loadOrders();
+		} catch (e: any) {
+			toast(e?.response?.data?.message ?? 'Urutan rute gagal disimpan');
+		} finally {
+			savingSequence = false;
 		}
 	}
 	function onRowDragEnd() {
 		draggingViaIndex = null;
-		draggingLtlStopIndex = null;
+		draggingStopIndex = null;
 	}
 
 	let haulToken = 0;
 	$effect(() => {
 		const order = selectedOrder;
 		const pts = routeWaypoints;
-		const customised = customViaPoints.length > 0 || ltlStopOrderOverride !== null;
+		const customised = customViaPoints.length > 0 || stopOrderOverride !== null;
 		const token = ++haulToken;
 		haulRoute = { distanceKm: null, durationMin: null, geometry: [] };
 		if (!pts.length) return;
@@ -1313,7 +1397,7 @@
 							{@const draggable = row.kind === 'via' || row.stopIndex != null}
 							<div
 								class="planner-custom-stop"
-								class:planner-custom-stop--dragging={(row.kind === 'via' && draggingViaIndex === row.viaIndex) || (row.stopIndex != null && draggingLtlStopIndex === row.stopIndex)}
+								class:planner-custom-stop--dragging={(row.kind === 'via' && draggingViaIndex === row.viaIndex) || (row.stopIndex != null && draggingStopIndex === row.stopIndex)}
 								role="listitem"
 								ondragover={(e) => e.preventDefault()}
 								ondrop={(e) => onRowDrop(row, e)}
@@ -1454,8 +1538,21 @@
 				{#if customRouteMode}
 					<div class="planner-custom-route-hint">
 						<span>Klik di map untuk menambah titik rute yang ingin dilewati, geser untuk menyesuaikan, klik kanan untuk menghapus.</span>
-						{#if customViaPoints.length || ltlStopOrderOverride}<button type="button" class="planner-custom-route-reset" onclick={resetCustomRoute}>Reset Rute</button>{/if}
+						{#if multiShipmentOrder}<span>Geser urutan Muat dan Bongkar di bawah untuk mengubah urutan kunjungan. Bongkar sebuah shipment tidak bisa sebelum Muat-nya.</span>{/if}
+						{#if customViaPoints.length || stopOrderOverride}<button type="button" class="planner-custom-route-reset" onclick={resetCustomRoute}>Reset Rute</button>{/if}
 					</div>
+					<!-- Only a single order's own visit order can be saved: an LTL
+					     group's combined order spans several orders and none of
+					     them owns it, so that stays a preview. -->
+					{#if multiShipmentOrder && stopOrderOverride}
+						<button
+							type="button"
+							class="btn btn-primary"
+							style="width:100%; justify-content:center;"
+							disabled={savingSequence}
+							onclick={saveStopSequence}
+						>{savingSequence ? 'Menyimpan urutan...' : 'Simpan Urutan Rute'}</button>
+					{/if}
 				{/if}
 
 				{#if selectedTruck && !findTransporterOpen}

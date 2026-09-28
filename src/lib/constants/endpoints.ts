@@ -102,6 +102,7 @@ export const ENDPOINTS = {
 		shipment: (id: string) => `/orders/${id}/shipment`,
 		/** Geofence enforcement for this order; null follows the company setting. */
 		geofencing: (id: string) => `/orders/${id}/geofencing`,
+		stopSequence: (id: string) => `/orders/${id}/stop-sequence`,
 		/** The customer's public tracking link: POST issues (or returns) the token, DELETE revokes. */
 		trackingLink: (id: string) => `/orders/${id}/tracking-link`,
 		summary: '/orders/summary',
