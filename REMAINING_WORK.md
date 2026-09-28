@@ -220,3 +220,23 @@ open.
 - Company names on agreements and invoices (`shipperCompanyName`,
   `transporterCompanyName`) are resolved server-side once per page. Do not join
   `/users` per row. An empty name means master data was unreachable.
+- **A shipment is a pair of points, and the Internal Order wizard enforces it.**
+  `detail.loadingPoints[k]` with `detail.unloadingPoints[k]` is Shipment *k+1*,
+  so the two arrays are always the same length: Step 1 shows one block per
+  shipment and the pair is added and removed together ("+ Tambah Shipment" /
+  "Hapus"), never a point at a time. The **agreement** decides whether more than
+  one is allowed (`agreementType === 'multi-shipment'`, `allowsManyShipments`);
+  switching to a single-shipment agreement drops the extra shipments *and their
+  items*, and removing one renumbers the rest so the numbers stay 1..N.
+  Every `WizardItem` carries `shipmentNo`, which is what Step 2's per-shipment
+  item table and per-shipment weight subtotal are filtered by
+  (`itemsOfShipment`, `shipmentWeightKg` in
+  `components/revamp/internalOrder/wizardTypes.ts`), and what the create call
+  sends inside `detail.items[]`. **Total Tonnage is read-only** — `totalTonnageKg`
+  sums every item of every shipment, because a figure typed by hand is how an
+  order's weight comes to disagree with the items it is made of. Step-1 and
+  step-2 validation names the shipment ("Loading Point pada Shipment 2 wajib
+  dipilih") only when there is more than one, so a one-shipment order reads
+  exactly as it did before. Note the server pairs nothing by `shipmentNo` yet:
+  its `order_items` rows come from the create request's own top-level `items`,
+  which carries no shipment number.
