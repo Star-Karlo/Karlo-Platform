@@ -9,9 +9,13 @@
 	import FieldSelect from '../FieldSelect.svelte';
 	import {
 		agreementFor,
+		itemsOfShipment,
 		itemsShipped,
 		lengthShipment,
 		newItem,
+		shipmentCount,
+		shipmentWeightKg,
+		totalTonnageKg,
 		totalVolume,
 		type Warehouse,
 		type Wizard,
@@ -45,12 +49,15 @@
 		return `${formatIDR(d.tarif)} ${pricingTypeLabel(d.pricingType)}`;
 	}
 
-	function addItem(sp: WizardShipment) {
-		sp.items.push(newItem());
+	function addItem(sp: WizardShipment, shipmentNo: number) {
+		sp.items.push(newItem(shipmentNo));
 	}
-	function removeItem(sp: WizardShipment, idx: number) {
-		if (sp.items.length <= 1) return;
-		sp.items.splice(idx, 1);
+	/** A shipment's last row stays: every shipment carries at least one item,
+	   so removing it would leave a shipment with nothing to plan against. */
+	function removeItem(sp: WizardShipment, item: any, shipmentNo: number) {
+		if (itemsOfShipment(sp, shipmentNo).length <= 1) return;
+		const at = sp.items.indexOf(item);
+		if (at >= 0) sp.items.splice(at, 1);
 	}
 
 	function notReady() {
@@ -135,71 +142,86 @@
 				</div>
 			</div>
 
-			<div class="section-title">
-				<h2 style="display:inline-block;">Item Details</h2>
-				<div style="float:right; display:flex; gap:10px;">
-					<button type="button" class="btn btn-outline btn-sm" onclick={notReady}>Download Template</button>
-					<button type="button" class="btn btn-outline btn-sm" onclick={notReady}>Upload CSV</button>
+			<!-- One table per shipment. Each shipment carries its own items,
+			     and its weight is what its plan is checked against at its own
+			     stops, so the rows are never pooled into one list. An order
+			     with a single shipment sees exactly one table, titled the way
+			     it always was. -->
+			{#each { length: shipmentCount(sp) } as _s, k (k)}
+				{@const shipmentNo = k + 1}
+				<div class="section-title">
+					<h2 style="display:inline-block;">
+						Item Details{shipmentCount(sp) > 1 ? ` — Shipment ${shipmentNo}` : ''}
+					</h2>
+					<div style="float:right; display:flex; gap:10px;">
+						<button type="button" class="btn btn-outline btn-sm" onclick={notReady}>Download Template</button>
+						<button type="button" class="btn btn-outline btn-sm" onclick={notReady}>Upload CSV</button>
+					</div>
 				</div>
-			</div>
 
-			<div class="table-wrap">
-				<table class="item-detail-table">
-					<thead>
-						<tr>
-							<th>Item's Name <span class="req">*</span></th>
-							<th>Quantity</th>
-							<th>Weight (Kg)</th>
-							<th>P (m)</th>
-							<th>L (m)</th>
-							<th>T (m)</th>
-							<th>Loading Description</th>
-							<th></th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each sp.items as item, idx (idx)}
+				<div class="table-wrap">
+					<table class="item-detail-table">
+						<thead>
 							<tr>
-								<td><input type="text" bind:value={item.itemName} placeholder="Nama barang" /></td>
-								<td><input type="number" min="0" bind:value={item.quantity} placeholder="0" /></td>
-								<td><input type="number" min="0" bind:value={item.weightKg} placeholder="0" /></td>
-								<td><input type="number" min="0" step="0.1" bind:value={item.dimP} placeholder="P" /></td>
-								<td><input type="number" min="0" step="0.1" bind:value={item.dimL} placeholder="L" /></td>
-								<td><input type="number" min="0" step="0.1" bind:value={item.dimT} placeholder="T" /></td>
-								<td
-									><input
-										type="text"
-										bind:value={item.loadingDescription}
-										placeholder="Catatan muat (opsional)"
-									/></td
-								>
-								<td>
-									<button
-										type="button"
-										class="mini-icon-btn-del"
-										title="Hapus"
-										disabled={sp.items.length <= 1}
-										onclick={() => removeItem(sp, idx)}
-									>
-										<span class="icon-wrap"><Trash2 size={15} /></span>
-									</button>
-								</td>
+								<th>Item's Name <span class="req">*</span></th>
+								<th>Quantity</th>
+								<th>Weight (Kg) <span class="req">*</span></th>
+								<th>P (m)</th>
+								<th>L (m)</th>
+								<th>T (m)</th>
+								<th>Loading Description</th>
+								<th></th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-			<button
-				type="button"
-				class="btn btn-outline btn-sm"
-				style="margin-top:10px;"
-				onclick={() => addItem(sp)}>+ Tambah Item</button
-			>
+						</thead>
+						<tbody>
+							{#each itemsOfShipment(sp, shipmentNo) as item, idx (idx)}
+								<tr>
+									<td><input type="text" bind:value={item.itemName} placeholder="Nama barang" /></td>
+									<td><input type="number" min="0" bind:value={item.quantity} placeholder="0" /></td>
+									<td><input type="number" min="0" bind:value={item.weightKg} placeholder="0" /></td>
+									<td><input type="number" min="0" step="0.1" bind:value={item.dimP} placeholder="P" /></td>
+									<td><input type="number" min="0" step="0.1" bind:value={item.dimL} placeholder="L" /></td>
+									<td><input type="number" min="0" step="0.1" bind:value={item.dimT} placeholder="T" /></td>
+									<td
+										><input
+											type="text"
+											bind:value={item.loadingDescription}
+											placeholder="Catatan muat (opsional)"
+										/></td
+									>
+									<td>
+										<button
+											type="button"
+											class="mini-icon-btn-del"
+											title="Hapus"
+											disabled={itemsOfShipment(sp, shipmentNo).length <= 1}
+											onclick={() => removeItem(sp, item, shipmentNo)}
+										>
+											<span class="icon-wrap"><Trash2 size={15} /></span>
+										</button>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+				<button
+					type="button"
+					class="btn btn-outline btn-sm"
+					style="margin-top:10px;"
+					onclick={() => addItem(sp, shipmentNo)}>+ Tambah Item</button
+				>
+				{#if shipmentCount(sp) > 1}
+					<p class="shipment-weight">Total berat Shipment {shipmentNo}: <strong>{shipmentWeightKg(sp, shipmentNo)} Kg</strong></p>
+				{/if}
+			{/each}
 
 			<div class="two-col" style="margin-top:22px;">
 				<div class="field">
-					<label>Total Tonnage (Kg) <span class="req">*</span></label>
-					<input type="number" min="0" bind:value={sp.totalTonnage} placeholder="0" />
+					<label>Total Tonnage (Kg)</label>
+					<!-- Read-only: adding it up by hand is how the order's weight
+					     comes to disagree with the items it is made of. -->
+					<input type="text" readonly value={totalTonnageKg(sp)} />
 				</div>
 				<div class="field">
 					<label>Total Volume (m&sup3;)</label>
@@ -230,3 +252,14 @@
 		</div>
 	</div>
 {/each}
+
+<style>
+	/* The shipment's own weight, under its own table: the number a planner
+	   checks against that shipment's plan at its own stops. */
+	.shipment-weight {
+		margin: 10px 0 0;
+		font-size: 13px;
+		color: var(--on-surface-variant, #6b7280);
+	}
+	.shipment-weight strong { color: var(--on-surface, #1b1c1e); }
+</style>

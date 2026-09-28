@@ -11,8 +11,12 @@
 	import FieldSelect from '../FieldSelect.svelte';
 	import {
 		agreementFor,
+		itemsOfShipment,
 		itemsShipped,
 		lengthShipment,
+		shipmentCount,
+		shipmentWeightKg,
+		totalTonnageKg,
 		totalVolume,
 		type Warehouse,
 		type Wizard,
@@ -84,29 +88,31 @@
 			</div>
 		</div>
 
+		<!-- Reviewed as pairs: the planner checks Shipment 2 as one journey
+		     rather than matching the second Loading row to the second
+		     Unloading row by eye. -->
 		<div class="detail-shipment-card" style="margin-bottom:20px;">
-			{#each sp.loadingPoints as id, li (`load-${li}`)}
+			{#each { length: shipmentCount(sp) } as _s, k (k)}
+				{@const n = shipmentCount(sp) > 1 ? ` ${k + 1}` : ''}
 				<div class="detail-shipment-row">
 					<span class="detail-shipment-icon"><MapPin /></span>
 					<div class="detail-shipment-info">
 						<div class="detail-shipment-label">
-							Loading {sp.loadingPoints.length > 1 ? li + 1 : ''} — {warehouseFor(id)?.city || '-'}
+							Loading{n} — {warehouseFor(sp.loadingPoints[k])?.city || '-'}
 						</div>
 						<div class="detail-shipment-value">
-							{warehouseFor(id)?.address || warehouseFor(id)?.name || '-'}
+							{warehouseFor(sp.loadingPoints[k])?.address || warehouseFor(sp.loadingPoints[k])?.name || '-'}
 						</div>
 					</div>
 				</div>
-			{/each}
-			{#each sp.unloadingPoints as id, ui (`unload-${ui}`)}
 				<div class="detail-shipment-row">
 					<span class="detail-shipment-icon"><MapPin /></span>
 					<div class="detail-shipment-info">
 						<div class="detail-shipment-label">
-							Unloading {sp.unloadingPoints.length > 1 ? ui + 1 : ''} — {warehouseFor(id)?.city || '-'}
+							Unloading{n} — {warehouseFor(sp.unloadingPoints[k])?.city || '-'}
 						</div>
 						<div class="detail-shipment-value">
-							{warehouseFor(id)?.address || warehouseFor(id)?.name || '-'}
+							{warehouseFor(sp.unloadingPoints[k])?.address || warehouseFor(sp.unloadingPoints[k])?.name || '-'}
 						</div>
 					</div>
 				</div>
@@ -124,42 +130,48 @@
 			</div>
 		</div>
 
-		<div class="section-title">
-			<h2>Item Details</h2>
-		</div>
-		<div class="table-wrap">
-			<table>
-				<thead>
-					<tr>
-						<th>Item's Name</th>
-						<th>Quantity</th>
-						<th>Weight (Kg)</th>
-						<th>P (m)</th>
-						<th>L (m)</th>
-						<th>T (m)</th>
-						<th>Loading Description</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each sp.items as item, idx (idx)}
+		{#each { length: shipmentCount(sp) } as _s, k (k)}
+			{@const shipmentNo = k + 1}
+			<div class="section-title">
+				<h2>Item Details{shipmentCount(sp) > 1 ? ` — Shipment ${shipmentNo}` : ''}</h2>
+			</div>
+			<div class="table-wrap">
+				<table>
+					<thead>
 						<tr>
-							<td>{item.itemName || '-'}</td>
-							<td>{item.quantity || 0}</td>
-							<td>{item.weightKg || 0}</td>
-							<td>{item.dimP || 0}</td>
-							<td>{item.dimL || 0}</td>
-							<td>{item.dimT || 0}</td>
-							<td>{item.loadingDescription || '-'}</td>
+							<th>Item's Name</th>
+							<th>Quantity</th>
+							<th>Weight (Kg)</th>
+							<th>P (m)</th>
+							<th>L (m)</th>
+							<th>T (m)</th>
+							<th>Loading Description</th>
 						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
+					</thead>
+					<tbody>
+						{#each itemsOfShipment(sp, shipmentNo) as item, idx (idx)}
+							<tr>
+								<td>{item.itemName || '-'}</td>
+								<td>{item.quantity || 0}</td>
+								<td>{item.weightKg || 0}</td>
+								<td>{item.dimP || 0}</td>
+								<td>{item.dimL || 0}</td>
+								<td>{item.dimT || 0}</td>
+								<td>{item.loadingDescription || '-'}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+			{#if shipmentCount(sp) > 1}
+				<p class="shipment-weight">Total berat Shipment {shipmentNo}: <strong>{shipmentWeightKg(sp, shipmentNo)} Kg</strong></p>
+			{/if}
+		{/each}
 
 		<div class="two-col" style="margin-top:18px;">
 			<div class="field">
 				<label>Total Tonnage (Kg)</label>
-				<input type="text" readonly value={sp.totalTonnage || 0} />
+				<input type="text" readonly value={totalTonnageKg(sp)} />
 			</div>
 			<div class="field">
 				<label>Total Volume (m&sup3;)</label>
@@ -242,3 +254,14 @@
 		<b>{formatIDR(totalEstimatedValue)}</b>
 	</div>
 </div>
+
+<style>
+	/* The shipment's own weight, under its own table: the number a planner
+	   checks against that shipment's plan at its own stops. */
+	.shipment-weight {
+		margin: 10px 0 0;
+		font-size: 13px;
+		color: var(--on-surface-variant, #6b7280);
+	}
+	.shipment-weight strong { color: var(--on-surface, #1b1c1e); }
+</style>

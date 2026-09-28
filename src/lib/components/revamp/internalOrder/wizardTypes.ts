@@ -3,6 +3,11 @@
 export type NumInput = string | number | null;
 
 export type WizardItem = {
+	/** Which shipment of this order the item belongs to, 1-based. A shipment is
+	 *  one pair of points — loadingPoints[k] with unloadingPoints[k] is
+	 *  Shipment k+1 — and its items are what its plan, weight and volume are
+	 *  totalled from. An order with one shipment has 1 on every item. */
+	shipmentNo: number;
 	itemName: string;
 	quantity: NumInput;
 	weightKg: NumInput;
@@ -17,6 +22,10 @@ export type WizardShipment = {
 	/** The agreement's uuid (the prototype stored the AGR number). */
 	agreementId: string;
 	agreementLabel: string;
+	/** The two lists are read in step: index k of each is Shipment k+1, so they
+	 *  are always the same length and points are added and removed as a pair.
+	 *  Kept as arrays of warehouse ids because everything downstream reads
+	 *  them that way. */
 	loadingPoints: string[];
 	unloadingPoints: string[];
 	/** The PIC responsible at each point, one per entry of the arrays above (null = not chosen yet). */
@@ -27,6 +36,9 @@ export type WizardShipment = {
 	truckOptions: string[];
 	/** The picked agreement's truck-type matrix — what truckOptions may be chosen from. */
 	agreementTruckTypes: string[];
+	/** "single-shipment" or "multi-shipment", from the agreement. It decides
+	 *  whether this order may carry more than one shipment at all. */
+	agreementType: string;
 	expanded: boolean;
 	items: WizardItem[];
 	totalTonnage: NumInput;
@@ -70,8 +82,8 @@ export function defaultPicOf(w: Warehouse | undefined | null): PointPic | null {
 	return null;
 }
 
-export function newItem(): WizardItem {
-	return { itemName: '', quantity: '', weightKg: '', dimP: '', dimL: '', dimT: '', loadingDescription: '' };
+export function newItem(shipmentNo = 1): WizardItem {
+	return { shipmentNo, itemName: '', quantity: '', weightKg: '', dimP: '', dimL: '', dimT: '', loadingDescription: '' };
 }
 
 export function newShipment(): WizardShipment {
@@ -86,8 +98,9 @@ export function newShipment(): WizardShipment {
 		fleetDescription: '',
 		truckOptions: [],
 		agreementTruckTypes: [],
+		agreementType: '',
 		expanded: true,
-		items: [newItem()],
+		items: [newItem(1)],
 		totalTonnage: '',
 		additionalNeeds: [],
 		description: '',
@@ -114,4 +127,35 @@ export function itemsShipped(sp: WizardShipment): number {
 export function lengthShipment(sp: WizardShipment): number {
 	const v = sp.items.reduce((sum, it) => sum + (Number(it.dimP) || 0), 0);
 	return Math.round(v * 100) / 100;
+}
+
+/** How many shipments this order carries: one per pair of points. */
+export function shipmentCount(sp: WizardShipment): number {
+	return Math.max(sp.loadingPoints.length, sp.unloadingPoints.length, 1);
+}
+
+/** Whether the chosen agreement allows more than one shipment on an order.
+ *  Before an agreement is chosen the answer is no, which is why the button to
+ *  add one is disabled rather than hidden at that point. */
+export function allowsManyShipments(sp: WizardShipment): boolean {
+	return sp.agreementType === 'multi-shipment';
+}
+
+/** The items belonging to one shipment, in the order they were entered.
+ *  An item written before items carried a shipment number belongs to the
+ *  first, which is what such an order always had. */
+export function itemsOfShipment(sp: WizardShipment, shipmentNo: number): WizardItem[] {
+	return sp.items.filter((it) => (it.shipmentNo || 1) === shipmentNo);
+}
+
+/** One shipment's own weight, shown under its table. */
+export function shipmentWeightKg(sp: WizardShipment, shipmentNo: number): number {
+	const total = itemsOfShipment(sp, shipmentNo).reduce((s, it) => s + (Number(it.weightKg) || 0), 0);
+	return Math.round(total * 100) / 100;
+}
+
+/** The order's tonnage: every item of every shipment. Never typed by hand. */
+export function totalTonnageKg(sp: WizardShipment): number {
+	const total = sp.items.reduce((s, it) => s + (Number(it.weightKg) || 0), 0);
+	return Math.round(total * 100) / 100;
 }

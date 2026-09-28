@@ -18,8 +18,11 @@
 	import Step4ReviewSubmit from '$lib/components/revamp/internalOrder/Step4ReviewSubmit.svelte';
 	import {
 		agreementFor,
+		itemsOfShipment,
 		itemsShipped,
 		newShipment,
+		shipmentCount,
+		totalTonnageKg,
 		totalVolume,
 		type Customer,
 		type Warehouse,
@@ -88,27 +91,41 @@
 		for (const [i, sp] of wizard.shipments.entries()) {
 			if (!sp.customerNama) return `Customer pada Data Shipment (${i + 1}) wajib dipilih`;
 			if (!sp.agreementId) return `Agreement pada Data Shipment (${i + 1}) wajib dipilih`;
-			if (sp.loadingPoints.some((id) => !id))
-				return `Loading Point pada Data Shipment (${i + 1}) wajib dipilih`;
-			if (sp.unloadingPoints.some((id) => !id))
-				return `Unloading Point pada Data Shipment (${i + 1}) wajib dipilih`;
-			// A PIC per point: the person the driver's OTP goes to and who
-			// answers for the cargo there. The warehouse's default is proposed
-			// automatically, so this only bites when the warehouse has none.
-			if (sp.loadingPoints.some((_, k) => !sp.loadingPics?.[k]?.name))
-				return `PIC Loading Point pada Data Shipment (${i + 1}) wajib dipilih (atau tambahkan PIC baru)`;
-			if (sp.unloadingPoints.some((_, k) => !sp.unloadingPics?.[k]?.name))
-				return `PIC Unloading Point pada Data Shipment (${i + 1}) wajib dipilih (atau tambahkan PIC baru)`;
+			// Named by shipment, not by position in a list: on an order with
+			// three shipments "Loading Point wajib dipilih" does not say which
+			// block to scroll to.
+			const many = shipmentCount(sp) > 1;
+			const at = (k: number) => (many ? ` pada Shipment ${k + 1}` : '');
+			for (let k = 0; k < shipmentCount(sp); k++) {
+				if (!sp.loadingPoints[k]) return `Loading Point${at(k)} wajib dipilih`;
+				if (!sp.unloadingPoints[k]) return `Unloading Point${at(k)} wajib dipilih`;
+				// A PIC per point: the person the driver's OTP goes to and who
+				// answers for the cargo there. The warehouse's default is
+				// proposed automatically, so this only bites when it has none.
+				if (!sp.loadingPics?.[k]?.name)
+					return `PIC Loading Point${at(k)} wajib dipilih (atau tambahkan PIC baru)`;
+				if (!sp.unloadingPics?.[k]?.name)
+					return `PIC Unloading Point${at(k)} wajib dipilih (atau tambahkan PIC baru)`;
+			}
 		}
 		return null;
 	}
 
 	function validateStep2() {
-		for (const [i, sp] of wizard.shipments.entries()) {
-			const hasEmptyName = sp.items.some((it) => !it.itemName.trim());
-			if (hasEmptyName) return `Item's Name wajib diisi di semua baris pada Data Shipment (${i + 1})`;
-			if (!Number(sp.totalTonnage) || Number(sp.totalTonnage) <= 0)
-				return `Total Tonnage pada Data Shipment (${i + 1}) wajib diisi`;
+		for (const sp of wizard.shipments) {
+			const many = shipmentCount(sp) > 1;
+			for (let k = 0; k < shipmentCount(sp); k++) {
+				const rows = itemsOfShipment(sp, k + 1);
+				const at = many ? ` pada Shipment ${k + 1}` : '';
+				if (!rows.length) return `Item wajib diisi${at}`;
+				if (rows.some((it) => !it.itemName.trim()))
+					return `Item's Name wajib diisi di semua baris${at}`;
+				// Weight is what the shipment's plan is checked against at its
+				// own stops, so a blank one cannot be totalled away.
+				if (rows.some((it) => !(Number(it.weightKg) > 0)))
+					return `Total Weight (Kg) wajib diisi di semua baris${at}`;
+			}
+			if (!(totalTonnageKg(sp) > 0)) return 'Total Tonnage wajib lebih dari 0';
 		}
 		return null;
 	}
@@ -157,6 +174,9 @@
 				const loadingNames = sp.loadingPoints.map(warehouseName).join(' + ');
 				const unloadingNames = sp.unloadingPoints.map(warehouseName).join(' + ');
 				const items = sp.items.map((it) => ({
+					// Which shipment's goods these are — the server pairs a
+					// stop's plan to its items by this number.
+					shipmentNo: it.shipmentNo || 1,
 					itemName: it.itemName,
 					quantity: it.quantity,
 					weightKg: it.weightKg,
@@ -202,7 +222,7 @@
 						loadingPic: sp.loadingPics[0] ?? null,
 						unloadingPic: sp.unloadingPics[sp.unloadingPics.length - 1] ?? null,
 						items,
-						totalTonnage: sp.totalTonnage,
+						totalTonnage: totalTonnageKg(sp),
 						additionalNeeds: [...sp.additionalNeeds],
 						description: sp.description,
 						warehouseLabel: sp.warehouseLabel,

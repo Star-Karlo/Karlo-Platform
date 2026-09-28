@@ -1,12 +1,22 @@
 <script lang="ts">
 	/** Port of Step1AgreementShipment.vue. */
-	import { ChevronDown, Pencil, X } from 'lucide-svelte';
+	import { ChevronDown, Pencil } from 'lucide-svelte';
 	import FieldSelect from '../FieldSelect.svelte';
 	import WarehouseFormModal from '../WarehouseFormModal.svelte';
 	import AgreementPickerModal from '../AgreementPickerModal.svelte';
 	import WarehouseSearchField from '../WarehouseSearchField.svelte';
 	import { MAX_TRUCK_OPTIONS } from '$lib/revamp/truckOptions.js';
-	import { defaultPicOf, type Customer, type PointPic, type Warehouse, type Wizard } from './wizardTypes';
+	import {
+		allowsManyShipments,
+		defaultPicOf,
+		newItem,
+		shipmentCount,
+		type Customer,
+		type PointPic,
+		type Warehouse,
+		type Wizard,
+		type WizardShipment
+	} from './wizardTypes';
 	import { Modal, Field, FormGrid, Input, Button } from '$lib/components/ui';
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
@@ -63,6 +73,58 @@
 		const agreed: string[] = Array.isArray(d.truckOptions) ? d.truckOptions : [];
 		sp.agreementTruckTypes = Array.isArray(d.truckTypeMatrix) ? d.truckTypeMatrix : [];
 		sp.truckOptions = agreed.slice(0, MAX_TRUCK_OPTIONS);
+		// The agreement decides how many shipments an order may carry, so
+		// switching to a single-shipment one drops the shipments that contract
+		// does not allow — and their items with them, rather than leaving
+		// items behind pointing at a shipment that no longer exists.
+		sp.agreementType = a.agreementType ?? d.agreementType ?? '';
+		if (!allowsManyShipments(sp)) keepOnlyFirstShipment(sp);
+	}
+
+	/* ---------- Shipments: one pair of points each ----------
+	   A shipment is a pair — Shipment k+1 is loadingPoints[k] with
+	   unloadingPoints[k] — so the two lists are only ever changed together.
+	   Adding or removing one side alone would silently repair the wrong
+	   drop-off to the wrong pick-up. */
+	function addShipment(i: number) {
+		const sp = wizard.shipments[i];
+		if (!allowsManyShipments(sp)) return;
+		sp.loadingPoints.push('');
+		sp.unloadingPoints.push('');
+		sp.loadingPics.push(null);
+		sp.unloadingPics.push(null);
+		// A new shipment starts with one empty item row, the way the first does.
+		sp.items.push(newItem(sp.loadingPoints.length));
+	}
+
+	function removeShipment(i: number, k: number) {
+		const sp = wizard.shipments[i];
+		if (shipmentCount(sp) <= 1) return;
+		sp.loadingPoints.splice(k, 1);
+		sp.unloadingPoints.splice(k, 1);
+		sp.loadingPics.splice(k, 1);
+		sp.unloadingPics.splice(k, 1);
+		dropShipmentItems(sp, k + 1);
+	}
+
+	/** Remove a shipment's items and renumber the ones after it, so the
+	 *  numbers stay 1..N with no gap and every remaining item still points at
+	 *  the pair it was entered against. */
+	function dropShipmentItems(sp: WizardShipment, shipmentNo: number) {
+		sp.items = sp.items
+			.filter((it) => (it.shipmentNo || 1) !== shipmentNo)
+			.map((it) => ({ ...it, shipmentNo: (it.shipmentNo || 1) > shipmentNo ? it.shipmentNo - 1 : it.shipmentNo || 1 }));
+		if (!sp.items.length) sp.items = [newItem(1)];
+	}
+
+	function keepOnlyFirstShipment(sp: WizardShipment) {
+		if (shipmentCount(sp) <= 1) return;
+		sp.loadingPoints = sp.loadingPoints.slice(0, 1);
+		sp.unloadingPoints = sp.unloadingPoints.slice(0, 1);
+		sp.loadingPics = sp.loadingPics.slice(0, 1);
+		sp.unloadingPics = sp.unloadingPics.slice(0, 1);
+		sp.items = sp.items.filter((it) => (it.shipmentNo || 1) === 1);
+		if (!sp.items.length) sp.items = [newItem(1)];
 	}
 
 	/* ---------- Create warehouse inline ---------- */
@@ -85,27 +147,6 @@
 	}
 
 	/* ---------- Multi pickup / multi drop ---------- */
-	function addLoadingPoint(i: number) {
-		wizard.shipments[i].loadingPoints.push('');
-		wizard.shipments[i].loadingPics.push(null);
-	}
-	function removeLoadingPoint(i: number, pointIndex: number) {
-		const points = wizard.shipments[i].loadingPoints;
-		if (points.length <= 1) return;
-		points.splice(pointIndex, 1);
-		wizard.shipments[i].loadingPics.splice(pointIndex, 1);
-	}
-	function addUnloadingPoint(i: number) {
-		wizard.shipments[i].unloadingPoints.push('');
-		wizard.shipments[i].unloadingPics.push(null);
-	}
-	function removeUnloadingPoint(i: number, pointIndex: number) {
-		const points = wizard.shipments[i].unloadingPoints;
-		if (points.length <= 1) return;
-		points.splice(pointIndex, 1);
-		wizard.shipments[i].unloadingPics.splice(pointIndex, 1);
-	}
-
 	/* ---------- PIC per point ----------
 	   Picking a warehouse proposes its default PIC; the planner may switch to
 	   another of the warehouse's PICs or add a new one, which is also saved to
@@ -257,30 +298,40 @@
 				</div>
 			</div>
 
-			<div class="two-col">
-				<div class="field">
-					<label>Loading Point <span class="req">*</span></label>
-					{#each sp.loadingPoints as _lp, li (li)}
-						<div class="multi-point-row">
+			<!-- One block per shipment: its own pair of points, so a planner
+			     reads Shipment 2 as one journey rather than picking the second
+			     entry out of two separate lists. -->
+			{#each { length: shipmentCount(sp) } as _pair, k (k)}
+				<div class="shipment-pair">
+					<div class="shipment-pair-head">
+						<span class="shipment-pair-title">Shipment {k + 1}</span>
+						{#if shipmentCount(sp) > 1}
+							<button type="button" class="shipment-pair-remove" onclick={() => removeShipment(i, k)}>Hapus</button>
+						{/if}
+					</div>
+
+					<div class="two-col">
+						<div class="field">
+							<label>Loading Point <span class="req">*</span></label>
 							<div class="multi-point-search-row">
 								<div class="multi-point-field">
 									<WarehouseSearchField
-										bind:value={sp.loadingPoints[li]}
+										bind:value={sp.loadingPoints[k]}
 										{warehouses}
 										placeholder="Cari alamat atau nama warehouse..."
 										disabled={!sp.agreementId}
-										onchange={(id) => onPointChosen(i, 'loadingPoints', li, id)}
+										onchange={(id) => onPointChosen(i, 'loadingPoints', k, id)}
 									/>
-									{#if sp.loadingPoints[li]}
-											<div class="point-pic">
+									{#if sp.loadingPoints[k]}
+										<div class="point-pic">
 											<span class="point-pic-label">PIC muat</span>
 											<select
 												class="point-pic-select"
-												value={picValue(sp.loadingPics[li] ?? null, sp.loadingPoints[li])}
-												onchange={(e) => onPicSelect(i, 'loadingPoints', li, (e.currentTarget as HTMLSelectElement).value)}
+												value={picValue(sp.loadingPics[k] ?? null, sp.loadingPoints[k])}
+												onchange={(e) => onPicSelect(i, 'loadingPoints', k, (e.currentTarget as HTMLSelectElement).value)}
 											>
 												<option value="">— pilih PIC —</option>
-												{#each picOptions(sp.loadingPoints[li]) as o (o.value)}
+												{#each picOptions(sp.loadingPoints[k]) as o (o.value)}
 													<option value={o.value}>{o.label}</option>
 												{/each}
 												<option value="__new__">+ PIC baru…</option>
@@ -293,51 +344,33 @@
 									class="mini-icon-btn"
 									disabled={!sp.agreementId}
 									title={!sp.agreementId ? 'Pilih agreement terlebih dahulu' : 'Daftarkan warehouse baru'}
-									onclick={() => openCreateWarehouse(i, 'loadingPoints', li)}
+									onclick={() => openCreateWarehouse(i, 'loadingPoints', k)}
 									><span class="icon-wrap"><Pencil size={16} /></span></button
-								>
-								<button
-									type="button"
-									class="mini-icon-btn-del"
-									title="Hapus titik muat"
-									disabled={sp.loadingPoints.length <= 1}
-									onclick={() => removeLoadingPoint(i, li)}
-									><span class="icon-wrap"><X size={15} /></span></button
 								>
 							</div>
 						</div>
-					{/each}
-					<button
-						type="button"
-						class="btn btn-outline btn-sm"
-						disabled={!sp.agreementId}
-						onclick={() => addLoadingPoint(i)}>+ Tambah Titik Muat</button
-					>
-				</div>
 
-				<div class="field">
-					<label>Unloading Point <span class="req">*</span></label>
-					{#each sp.unloadingPoints as _up, ui (ui)}
-						<div class="multi-point-row">
+						<div class="field">
+							<label>Unloading Point <span class="req">*</span></label>
 							<div class="multi-point-search-row">
 								<div class="multi-point-field">
 									<WarehouseSearchField
-										bind:value={sp.unloadingPoints[ui]}
+										bind:value={sp.unloadingPoints[k]}
 										{warehouses}
 										placeholder="Cari alamat atau nama warehouse..."
 										disabled={!sp.agreementId}
-										onchange={(id) => onPointChosen(i, 'unloadingPoints', ui, id)}
+										onchange={(id) => onPointChosen(i, 'unloadingPoints', k, id)}
 									/>
-									{#if sp.unloadingPoints[ui]}
-											<div class="point-pic">
+									{#if sp.unloadingPoints[k]}
+										<div class="point-pic">
 											<span class="point-pic-label">PIC bongkar</span>
 											<select
 												class="point-pic-select"
-												value={picValue(sp.unloadingPics[ui] ?? null, sp.unloadingPoints[ui])}
-												onchange={(e) => onPicSelect(i, 'unloadingPoints', ui, (e.currentTarget as HTMLSelectElement).value)}
+												value={picValue(sp.unloadingPics[k] ?? null, sp.unloadingPoints[k])}
+												onchange={(e) => onPicSelect(i, 'unloadingPoints', k, (e.currentTarget as HTMLSelectElement).value)}
 											>
 												<option value="">— pilih PIC —</option>
-												{#each picOptions(sp.unloadingPoints[ui]) as o (o.value)}
+												{#each picOptions(sp.unloadingPoints[k]) as o (o.value)}
 													<option value={o.value}>{o.label}</option>
 												{/each}
 												<option value="__new__">+ PIC baru…</option>
@@ -350,28 +383,27 @@
 									class="mini-icon-btn"
 									disabled={!sp.agreementId}
 									title={!sp.agreementId ? 'Pilih agreement terlebih dahulu' : 'Daftarkan warehouse baru'}
-									onclick={() => openCreateWarehouse(i, 'unloadingPoints', ui)}
+									onclick={() => openCreateWarehouse(i, 'unloadingPoints', k)}
 									><span class="icon-wrap"><Pencil size={16} /></span></button
-								>
-								<button
-									type="button"
-									class="mini-icon-btn-del"
-									title="Hapus titik bongkar"
-									disabled={sp.unloadingPoints.length <= 1}
-									onclick={() => removeUnloadingPoint(i, ui)}
-									><span class="icon-wrap"><X size={15} /></span></button
 								>
 							</div>
 						</div>
-					{/each}
-					<button
-						type="button"
-						class="btn btn-outline btn-sm"
-						disabled={!sp.agreementId}
-						onclick={() => addUnloadingPoint(i)}>+ Tambah Titik Bongkar</button
-					>
+					</div>
 				</div>
-			</div>
+			{/each}
+
+			<!-- Only a multi-shipment agreement allows a second shipment, so
+			     the button is absent under a single-shipment contract rather
+			     than offering something the order would be refused for. -->
+			{#if !sp.agreementId || allowsManyShipments(sp)}
+				<button
+					type="button"
+					class="btn btn-outline btn-sm add-shipment-btn"
+					disabled={!sp.agreementId}
+					title={!sp.agreementId ? 'Pilih agreement terlebih dahulu' : 'Tambah satu pasang titik muat dan bongkar'}
+					onclick={() => addShipment(i)}>+ Tambah Shipment</button
+				>
+			{/if}
 
 			<div class="field" style="margin-bottom:0;">
 				<label>Fleet Description</label>
@@ -405,6 +437,39 @@
 </Modal>
 
 <style>
+	/* A shipment is a pair of points, so its two fields sit in one block with
+	   the shipment's own name on it. Separated by a rule rather than a card,
+	   because these are parts of one order, not a list of things. */
+	.shipment-pair + .shipment-pair {
+		margin-top: 18px;
+		padding-top: 18px;
+		border-top: 1px solid var(--outline-variant, #e6e8ee);
+	}
+	.shipment-pair-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		margin-bottom: 10px;
+	}
+	.shipment-pair-title {
+		font-size: 14px;
+		font-weight: 700;
+		color: var(--on-surface, #1b1c1e);
+	}
+	.shipment-pair-remove {
+		border: 0;
+		background: none;
+		padding: 0;
+		font: inherit;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--error, #b3261e);
+		cursor: pointer;
+	}
+	.shipment-pair-remove:hover { text-decoration: underline; }
+	.add-shipment-btn { margin-top: 16px; }
+
 	/* The PIC control sits inside the point's own column, so its edges line
 	   up with the search field above it instead of running under the two icon
 	   buttons. Pill and padding come from .field select; the chevron is drawn
