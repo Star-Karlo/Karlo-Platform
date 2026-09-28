@@ -41,7 +41,6 @@ export type WizardShipment = {
 	agreementType: string;
 	expanded: boolean;
 	items: WizardItem[];
-	totalTonnage: NumInput;
 	additionalNeeds: string[];
 	description: string;
 	warehouseLabel: string;
@@ -101,7 +100,6 @@ export function newShipment(): WizardShipment {
 		agreementType: '',
 		expanded: true,
 		items: [newItem(1)],
-		totalTonnage: '',
 		additionalNeeds: [],
 		description: '',
 		warehouseLabel: '',

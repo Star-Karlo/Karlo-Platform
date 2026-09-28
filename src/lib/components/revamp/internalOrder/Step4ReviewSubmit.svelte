@@ -45,7 +45,10 @@
 		return `${formatIDR(d.tarif)} ${pricingTypeLabel(d.pricingType)}`;
 	}
 	function estimatedValue(sp: WizardShipment): number {
-		return estimatedOrderValue(agreementFor(agreements, sp)?.detail ?? null, sp);
+		// The tonnage is the items' own total, not a field on the shipment.
+		return estimatedOrderValue(agreementFor(agreements, sp)?.detail ?? null, {
+			totalTonnage: totalTonnageKg(sp)
+		});
 	}
 	let totalEstimatedValue = $derived(wizard.shipments.reduce((sum, sp) => sum + estimatedValue(sp), 0));
 </script>
