@@ -2125,7 +2125,11 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .invoice-info-value{font-size:13.5px; font-weight:700; color:var(--on-surface); margin-top:1px;}
 
 .invoice-tabs{display:flex;}
-.invoice-tab{padding:9px 18px; border-radius:8px 8px 0 0; font-size:12.5px; font-weight:700;}
+/* A tab is a button now — one per shipment — so the browser's own button
+   styling is cleared and the tab keeps the look it had as a span. */
+.invoice-tab{padding:9px 18px; border-radius:8px 8px 0 0; font-size:12.5px; font-weight:700;
+  border:0; background:none; color:inherit; font-family:inherit; cursor:pointer;}
+.invoice-tab:not(.invoice-tab--active):hover{background:var(--surface-variant, #eef1f6);}
 .invoice-tab--active{background:var(--primary); color:#fff;}
 
 .invoice-card{background:var(--surface); border:1px solid var(--outline-variant); border-radius:var(--r-lg); padding:24px 26px;}

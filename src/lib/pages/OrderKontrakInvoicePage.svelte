@@ -273,6 +273,75 @@
 		return resolveSrc(own || driverPodPhoto(phaseKey, typeKey)) || null;
 	}
 
+	/* ---------- Data Shipment, one tab per shipment ----------
+	   Index k of the point lists is Shipment k+1, so each tab reports one
+	   pair: its own lane, its own two addresses, the photos signed at its own
+	   stops and the cargo it carried. Price stays at order level — one
+	   agreement tariff covers the whole order — which is why only the
+	   descriptive half is split here. */
+	let invoiceShipmentCount = $derived(
+		Math.max(loadingWarehouses.length, unloadingWarehouses.length, 1)
+	);
+	let invoiceShipmentNo = $state(1);
+	$effect(() => {
+		// A shipment that no longer exists cannot stay selected.
+		if (invoiceShipmentNo > invoiceShipmentCount) invoiceShipmentNo = 1;
+	});
+
+	/** The selected shipment's own two points. */
+	let shipmentLoadWarehouse = $derived(loadingWarehouses[invoiceShipmentNo - 1] ?? null);
+	let shipmentUnloadWarehouse = $derived(unloadingWarehouses[invoiceShipmentNo - 1] ?? null);
+
+	/** The stop of one kind belonging to a shipment. */
+	function stopOfShipment(kind: string, shipmentNo: number): any | null {
+		return (
+			(shipment?.stops ?? []).find(
+				(s: any) => s.kind === kind && Number(s.shipmentNo || 1) === shipmentNo
+			) ?? null
+		);
+	}
+
+	/** A photo signed at this shipment's own stop, falling back to the phase's
+	 *  when the journey has no stops — an order from before they existed. */
+	function shipmentPodPhotoSrc(phaseKey: string, typeKey: string, shipmentNo: number): string | null {
+		const stop = stopOfShipment(phaseKey === 'muat' ? 'load' : 'unload', shipmentNo);
+		if (stop) {
+			const pods = (shipment?.podHistory ?? []).filter((p: any) => p.stopId === stop.id);
+			for (const pod of pods) {
+				const hit = (pod.photos ?? []).find((ph: any) => ph.docType === typeKey);
+				if (hit?.fileUrl) return resolveSrc(hit.fileUrl) || null;
+			}
+			return null;
+		}
+		return podPhotoSrc(phaseKey, typeKey);
+	}
+
+	/** One shipment's cargo: the plan from its items, the delivered weight
+	 *  from what was counted at its unloading stop once verified. */
+	function kargoOfShipment(shipmentNo: number) {
+		const mine = (order?.items || []).filter((it: any) => Number(it.shipmentNo || 1) === shipmentNo);
+		const numbered = (order?.items || []).some((it: any) => it.shipmentNo != null);
+		const plan =
+			numbered && mine.length
+				? {
+						totalTonnage:
+							Math.round(mine.reduce((s: number, it: any) => s + (Number(it.weightKg) || 0), 0) * 100) / 100,
+						totalKuantitas: mine.reduce((s: number, it: any) => s + (Number(it.quantity) || 0), 0),
+						totalVolume:
+							Math.round(
+								mine.reduce(
+									(s: number, it: any) =>
+										s + (Number(it.dimP) || 0) * (Number(it.dimL) || 0) * (Number(it.dimT) || 0),
+									0
+								) * 100
+							) / 100
+					}
+				: awalKargo;
+		const recorded = (detail.podPhotos?.bongkar?.stops ?? [])[shipmentNo - 1];
+		const delivered = recorded?.verified ? recorded.actual : null;
+		return { plan, delivered };
+	}
+
 	let invoiceId = $derived(order ? `INV${String(order.idOrder).replace(/^ORM/, '')}` : '');
 	let invoiceFinalized = $derived(!!detail.invoiceFinalized);
 
@@ -647,13 +716,22 @@
 					<span class="invoice-info-icon"><span class="icon-wrap"><ClipboardList size={19} /></span></span>
 					<div>
 						<div class="invoice-info-label">Jumlah Shipment</div>
-						<div class="invoice-info-value">1</div>
+						<div class="invoice-info-value">{invoiceShipmentCount}</div>
 					</div>
 				</div>
 			</div>
 
+			<!-- One tab per shipment: each reports its own pair of points and
+			     the cargo that travelled between them. -->
 			<div class="invoice-tabs">
-				<span class="invoice-tab invoice-tab--active">Data Shipment (1)</span>
+				{#each { length: invoiceShipmentCount } as _s, i (i)}
+					<button
+						type="button"
+						class="invoice-tab"
+						class:invoice-tab--active={invoiceShipmentNo === i + 1}
+						onclick={() => (invoiceShipmentNo = i + 1)}>Data Shipment ({i + 1})</button
+					>
+				{/each}
 			</div>
 
 			<div class="invoice-card">
@@ -661,9 +739,9 @@
 					<div>
 						<div class="invoice-field-label">Lokasi</div>
 						<div class="invoice-field-value">
-							{loadingWarehouses.map((w) => (w.kota || '').toUpperCase()).join(' + ') || '-'} — {unloadingWarehouses
-								.map((w) => (w.kota || '').toUpperCase())
-								.join(' + ') || '-'}
+							{(shipmentLoadWarehouse?.kota || '').toUpperCase() || '-'} — {(
+								shipmentUnloadWarehouse?.kota || ''
+							).toUpperCase() || '-'}
 						</div>
 					</div>
 					<div>
@@ -675,40 +753,28 @@
 				</div>
 
 				<div class="invoice-field-label" style="margin-top:20px;">Loading</div>
-				{#each loadingWarehouses as w, i (`load-${i}`)}
-					<div class="invoice-field-value">
-						{#if loadingWarehouses.length > 1}Titik {i + 1} —
-						{/if}{w.alamat || '-'}
-					</div>
-				{/each}
-				{#if !loadingWarehouses.length}<div class="invoice-field-value">-</div>{/if}
+				<div class="invoice-field-value">{shipmentLoadWarehouse?.alamat || '-'}</div>
 
 				<div class="invoice-field-label" style="margin-top:16px;">Unloading</div>
-				{#each unloadingWarehouses as w, i (`unload-${i}`)}
-					<div class="invoice-field-value">
-						{#if unloadingWarehouses.length > 1}Titik {i + 1} —
-						{/if}{w.alamat || '-'}
-					</div>
-				{/each}
-				{#if !unloadingWarehouses.length}<div class="invoice-field-value">-</div>{/if}
+				<div class="invoice-field-value">{shipmentUnloadWarehouse?.alamat || '-'}</div>
 
 				<div class="invoice-two-col" style="margin-top:24px;">
 					<div>
 						<div class="invoice-section-title">
-							<span class="icon-wrap"><Camera size={14} /></span> Foto POD Loading Shipment ( 1 )
+							<span class="icon-wrap"><Camera size={14} /></span> Foto POD Loading Shipment ( {invoiceShipmentNo} )
 						</div>
 						<div class="invoice-photo-row">
 							<div class="invoice-photo-slot">
-								{#if podPhotoSrc('muat', 'suratJalan')}
-									<img src={podPhotoSrc('muat', 'suratJalan')} alt="" />
+								{#if shipmentPodPhotoSrc('muat', 'suratJalan', invoiceShipmentNo)}
+									<img src={shipmentPodPhotoSrc('muat', 'suratJalan', invoiceShipmentNo)} alt="" />
 								{:else}
 									<span>No photo</span>
 								{/if}
 								<div class="invoice-photo-caption">Fisik POD Muat</div>
 							</div>
 							<div class="invoice-photo-slot">
-								{#if podPhotoSrc('muat', 'muatan')}
-									<img src={podPhotoSrc('muat', 'muatan')} alt="" />
+								{#if shipmentPodPhotoSrc('muat', 'muatan', invoiceShipmentNo)}
+									<img src={shipmentPodPhotoSrc('muat', 'muatan', invoiceShipmentNo)} alt="" />
 								{:else}
 									<span>No photo</span>
 								{/if}
@@ -718,20 +784,20 @@
 					</div>
 					<div>
 						<div class="invoice-section-title">
-							<span class="icon-wrap"><Camera size={14} /></span> Foto POD Unloading Shipment ( 1 )
+							<span class="icon-wrap"><Camera size={14} /></span> Foto POD Unloading Shipment ( {invoiceShipmentNo} )
 						</div>
 						<div class="invoice-photo-row">
 							<div class="invoice-photo-slot">
-								{#if podPhotoSrc('bongkar', 'suratJalan')}
-									<img src={podPhotoSrc('bongkar', 'suratJalan')} alt="" />
+								{#if shipmentPodPhotoSrc('bongkar', 'suratJalan', invoiceShipmentNo)}
+									<img src={shipmentPodPhotoSrc('bongkar', 'suratJalan', invoiceShipmentNo)} alt="" />
 								{:else}
 									<span>No photo</span>
 								{/if}
 								<div class="invoice-photo-caption">Fisik POD Bongkar</div>
 							</div>
 							<div class="invoice-photo-slot">
-								{#if podPhotoSrc('bongkar', 'muatan')}
-									<img src={podPhotoSrc('bongkar', 'muatan')} alt="" />
+								{#if shipmentPodPhotoSrc('bongkar', 'muatan', invoiceShipmentNo)}
+									<img src={shipmentPodPhotoSrc('bongkar', 'muatan', invoiceShipmentNo)} alt="" />
 								{:else}
 									<span>No photo</span>
 								{/if}
@@ -753,7 +819,9 @@
 						<div class="invoice-field-value invoice-field-value--muted">{formatRp(baseRateValue)}</div>
 					</div>
 					<div class="invoice-subcard">
-						<div class="invoice-subcard-head">Kesepakatan Final</div>
+						<div class="invoice-subcard-head">
+							Kesepakatan Final{invoiceShipmentCount > 1 ? ' — Seluruh Order' : ''}
+						</div>
 						<div class="invoice-field-label">Harga Angkut ( Rp )</div>
 						<div class="invoice-field-value invoice-field-value--muted">{formatRp(baseRateValue)}</div>
 						<div class="invoice-field-label" style="margin-top:14px;">Harga Transport ( Rp )</div>
@@ -762,11 +830,45 @@
 				</div>
 
 				<div class="invoice-section-title" style="margin-top:26px;">
-					<span class="icon-wrap"><Package size={16} /></span> Detail Kargo Shipment ( 1 )
+					<span class="icon-wrap"><Package size={16} /></span> Detail Kargo Shipment ( {invoiceShipmentNo} )
 				</div>
+				<!-- This shipment's own cargo: what it was planned to carry and
+				     what was counted when it was unloaded. The agreement below
+				     is the order's — one tariff covers the whole order — so the
+				     two are shown apart rather than folded together. -->
+				{#if invoiceShipmentCount > 1}
+					<div class="invoice-subcard" style="margin-bottom:14px;">
+						<div class="invoice-subcard-head">Rincian Kargo Shipment ( {invoiceShipmentNo} )</div>
+						<div class="invoice-two-col">
+							<div>
+								<div class="invoice-field-label">Berat Plan ( Kg )</div>
+								<div class="invoice-field-value invoice-field-value--muted">
+									{kargoOfShipment(invoiceShipmentNo).plan.totalTonnage}
+								</div>
+								<div class="invoice-field-label" style="margin-top:14px;">Volume Muatan ( M³ )</div>
+								<div class="invoice-field-value invoice-field-value--muted">
+									{kargoOfShipment(invoiceShipmentNo).plan.totalVolume}
+								</div>
+							</div>
+							<div>
+								<div class="invoice-field-label">Berat Bongkar Terverifikasi ( Kg )</div>
+								<div class="invoice-field-value invoice-field-value--muted">
+									{kargoOfShipment(invoiceShipmentNo).delivered?.totalBerat ?? '—'}
+								</div>
+								<div class="invoice-field-label" style="margin-top:14px;">Kuantitas</div>
+								<div class="invoice-field-value invoice-field-value--muted">
+									{kargoOfShipment(invoiceShipmentNo).delivered?.kuantitas ??
+										kargoOfShipment(invoiceShipmentNo).plan.totalKuantitas}
+								</div>
+							</div>
+						</div>
+					</div>
+				{/if}
 				<div class="invoice-two-col">
 					<div class="invoice-subcard">
-						<div class="invoice-subcard-head">Kesepakatan Awal</div>
+						<div class="invoice-subcard-head">
+							Kesepakatan Awal{invoiceShipmentCount > 1 ? ' — Seluruh Order' : ''}
+						</div>
 						<div class="invoice-field-label">Berat Muatan ( Kg )</div>
 						<div class="invoice-field-value invoice-field-value--muted">{awalKargo.totalTonnage}</div>
 						<div class="invoice-field-label" style="margin-top:14px;">Volume Muatan ( M³ )</div>
