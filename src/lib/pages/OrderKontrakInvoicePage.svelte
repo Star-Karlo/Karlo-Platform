@@ -337,7 +337,18 @@
 							) / 100
 					}
 				: awalKargo;
-		const recorded = (detail.podPhotos?.bongkar?.stops ?? [])[shipmentNo - 1];
+		// The detail page records a stop's figures by its position within its
+		// own phase in VISIT order, which is not the shipment number once a
+		// planner reorders the route: on M1 → B2 → M2 → B1, Shipment 2's
+		// unloading is the first bongkar visited. Indexing by the shipment
+		// number would report another shipment's delivered weight here.
+		const unloadStops = (shipment?.stops ?? [])
+			.filter((st: any) => st.kind === 'unload')
+			.sort((a: any, b: any) => (a.seq ?? 0) - (b.seq ?? 0));
+		const at = unloadStops.length
+			? unloadStops.findIndex((st: any) => Number(st.shipmentNo || 1) === shipmentNo)
+			: shipmentNo - 1;
+		const recorded = at >= 0 ? (detail.podPhotos?.bongkar?.stops ?? [])[at] : null;
 		const delivered = recorded?.verified ? recorded.actual : null;
 		return { plan, delivered };
 	}

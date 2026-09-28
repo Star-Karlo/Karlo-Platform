@@ -364,6 +364,10 @@
 		const unloads = stopsOfPhase('bongkar');
 		const count = Math.max(loads.length, unloads.length);
 		if (count < 2) return null;
+		// Without numbered items there is no per-shipment plan, and the blocks
+		// would report Plan 0 for every shipment. Such an order keeps the one
+		// table, which is the honest reading of what it recorded.
+		if (!planForShipment(1)) return null;
 
 		const muatStops = phaseStops('muat');
 		const bongkarStops = phaseStops('bongkar');

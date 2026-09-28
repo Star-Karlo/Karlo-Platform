@@ -954,6 +954,14 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .muatan-compare-row--head span{font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:var(--on-surface-variant); font-weight:700; text-align:left;}
 .muatan-compare-field{font-size:13px; font-weight:700; color:var(--on-surface);}
 .muatan-compare-value{color:var(--on-surface); font-variant-numeric:tabular-nums; font-size:13px; text-align:left;}
+/* Detail Muatan, one block per shipment: each carries its own name and lane,
+   separated by a rule rather than a card — these are parts of one order. */
+.muatan-shipment + .muatan-shipment{margin-top:18px; padding-top:16px; border-top:1px solid var(--outline-variant, #e6e8ee);}
+.muatan-shipment-head{display:flex; align-items:baseline; gap:10px; margin-bottom:8px;}
+.muatan-shipment-title{font-size:14px; font-weight:700; color:var(--on-surface);}
+.muatan-shipment-rute{font-size:13px; color:var(--on-surface-variant);}
+/* Why Setuju is unavailable, said where the planner is looking. */
+.epod-blocked-hint{flex:1; font-size:13px; color:var(--on-surface-variant);}
 
 .muatan-photo-row{display:grid; grid-template-columns:repeat(4, 1fr); gap:18px; padding-top:4px;}
 .muatan-photo{display:flex; flex-direction:column; align-items:center; gap:8px; min-width:0;}
