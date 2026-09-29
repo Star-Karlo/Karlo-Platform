@@ -123,7 +123,12 @@ carries several shipments*, and the rows behind it are
 
 - **E-POD approval acts on the POD of the visit being verified**, not one POD per
   stage (`podForStop`: the newest `podHistory` entry whose `stopId` is this
-  stop's, falling back to the stage's un-stopped submission). This was the
+  stop's). A visit with no submission of its own now reports **null**, not
+  another visit's: the fallback to the stage's un-stopped submission handed
+  Muat 2 the photos Muat 1 was signed with and let a planner verify a delivery
+  the driver had not reported, so it applies only to a journey with **no stop
+  rows at all** — a two-ended trip, or an order from before PODs named a stop.
+  This was the
   blocker: the page approved one submission per stage and only once every stop
   had been ticked, so on a journey with two unloading points the second POD was
   never sent for review, its stop never closed, and the order could never reach
@@ -131,12 +136,42 @@ carries several shipments*, and the rows behind it are
   `/shipments/{id}/pod/{podId}/review` for that visit alone; the server closes
   that stop and advances the shipment when the **last** stop of the stage is
   done, so the console writes no status of its own.
+- **The dialog only ever opens on a visit whose POD is waiting.**
+  `firstVerifiableStop` returns the first visit of a phase that is not yet
+  verified **and** has a submission of its own; -1 when there is none. Moving to
+  the next unverified visit whatever its state trapped the planner in front of
+  an empty form that could not be closed — verifying Muat 1 opened Muat 2 before
+  the driver had filed anything, and the same on the unloading side. The gate
+  and `proceedFromGate` follow the same rule.
+- **The verification gate is re-armable.** It remembers **which submission** it
+  was raised for (`gatedPodId`) rather than that it was raised at all: a
+  one-shot flag meant the gate appeared once per page load, so after verifying
+  Muat 1 the planner was shown nothing more until they reloaded — with no way to
+  know there was anything to reload for. On a journey with its own stops the
+  gate is driven by **paperwork that has arrived** (`firstVerifiableStop`, then
+  that POD's `status === 'submitted'`) rather than by the order's status, which
+  on a multi-stop delivery sits on one visit while another's POD is waiting.
+  The page also **re-reads the shipment every 20 seconds** while the order is
+  live — not while a dialog is open, and it stops at
+  `pengiriman_terkonfirmasi` — so a POD filed at the second warehouse raises the
+  gate by itself. Two-ended journeys keep the one-shot, status-driven gate they
+  had (`verifikasi_pod_muat` / `verifikasi_pod_bongkar`).
+- **"OTP Bongkar Terverifikasi" appears for the first unloading point too.**
+  That point is confirmed through the **shipment's** own OTP, with no `stopId`
+  attached, so reading the stop alone found nothing and the line was missing
+  from the *Linimasa*. It falls back to `shipment.handoverVerifiedAt` for that
+  one point; later points carry their own `handoverVerifiedAt`.
 - **Plan in the modal is the stop's own shipment.** `planForShipment(stop.shipmentNo)`
   totals the order items carrying that number, so Muat 1 and Bongkar 1 both plan
   against Shipment 1. An order whose items are **not** numbered has no
-  per-shipment plan and every stop plans against the order total
-  (`totalTonnage`, `totalKuantitas`, `totalVolumeM3`), which is what it always
-  showed.
+  per-shipment plan and every stop falls back to `planFromItems`.
+- **Plan comes from the Item Details table, not the order's stored tonnage.**
+  `planFromItems` sums `weightKg` over `order.items`, and it is what *Detail
+  Muatan*'s Plan column and the E-POD dialog's fallback plan both read. The
+  table is what the planner typed and what every per-shipment figure is derived
+  from, so a total that disagrees with it is the one that is wrong. This applies
+  to **single-shipment orders too** — it is not a multi-stop rule. An order with
+  no item rows keeps the stored `totalTonnage`.
 - **Photos come from that visit's own submission.** The modal and *Foto POD*
   read `pod.photos` filtered by `docType` off the stop's own POD
   (`podPhotoSlotsForStop`, once the journey has stop rows — `verifyPerStop`).
@@ -162,9 +197,13 @@ carries several shipments*, and the rows behind it are
   headed *Shipment N* and its own lane (the two sites' names). The Muat and
   Bongkar columns stay empty until the order is at or past
   `pod_muat_terverifikasi` / `pod_bongkar_terverifikasi`, as they did before. A
-  single-shipment order keeps the one table (`cargoComparison`). The block markup
-  uses `.muatan-shipment*`, which has no rules in `revamp.css` yet — it inherits
-  the compare-row grid and reads unstyled, as does `.epod-blocked-hint`.
+  single-shipment order keeps the one table (`cargoComparison`), **and so does an
+  order whose items are not numbered**: the check was on the stop count alone,
+  so such an order rendered a block per shipment with Plan reading 0 in every
+  cell; it now falls back when there is no per-shipment plan to show
+  (dcd5b7e). `.muatan-shipment*` and `.epod-blocked-hint` were first written
+  into a component with no style block and were silently dropped; they live in
+  `revamp.css` with the rest of those pages' rules.
 - **Linimasa runs the whole cycle once per point** when the journey has more than
   two, in `seq` order, each line naming the point — *Sampai di Titik Bongkar —
   Bongkar #2 (Shipment 2)*. Setting off for a later point is stamped with the
@@ -176,7 +215,10 @@ carries several shipments*, and the rows behind it are
 - **The status badge names the first unfinished point** in visit order
   (`currentStopLabel`, e.g. `Proses Bongkar — Bongkar #2 (Shipment 2)`), on the
   E-POD header and in *Detail Permintaan*. Blank on a two-ended journey, where
-  the status refers to the delivery itself.
+  the status refers to the delivery itself. Naming the stop made the value long
+  enough to run past the edge of the E-POD card, so `.epod-info-row` wraps and
+  `.epod-info-row .badge` wraps its own text (`white-space:normal`) instead of
+  staying on one line.
 - **Control Tower lists one verification task per point** for a journey with more
   than two (`Verifikasi POD Bongkar #2 (Shipment 2)`), in visit order, in place
   of the two status-keyed tasks. A task is `done` on the stop's `finishedAt` or
@@ -184,20 +226,24 @@ carries several shipments*, and the rows behind it are
   `submitted` **and** every earlier point is done — the same order the E-POD
   modal enforces. *Finalisasi Uang Sangu* is appended either way; two-ended
   journeys keep the two status-based tasks.
-- **The invoice has a tab per shipment.** *Jumlah Shipment* is the real count
-  (`invoiceShipmentCount`, the longer of the two point lists), and the selected
-  tab reports that shipment's own lane, its two addresses, the POD photos signed
-  at its own stops (`shipmentPodPhotoSrc`, by `stopId`, falling back to the
-  phase's photos on an order with no stops) and *Rincian Kargo Shipment (N)* —
-  plan weight and volume from its items, the verified unloaded weight and the
-  quantity from the verification record. Price stays at **order** level:
-  *Kesepakatan Awal* and *Final* are labelled *— Seluruh Order* on a
-  multi-shipment invoice, because one agreement tariff covers the whole order.
-  Splitting the price per shipment is still an open product question. One caveat:
-  the delivered figures are looked up positionally,
-  `detail.podPhotos.bongkar.stops[N-1]`, which is that shipment's own row only
-  while the unloading points are visited in shipment order — the detail page
-  indexes the same array by visit order within the phase.
+- **The invoice is ONE invoice.** It was briefly split into a tab per shipment;
+  that is reversed. The agreement covering a multi-shipment order is one
+  agreement, so there is one tariff, one tax and one total, and a tab per
+  shipment implied otherwise — *Data Shipment* is a single tab again, and
+  *Kesepakatan Awal* / *Final* carry no *— Seluruh Order* qualifier because
+  there is nothing to distinguish them from. *Jumlah Shipment* is still the real
+  count (`invoiceShipmentCount`, the longer of the two point lists), and the
+  card lists every loading and unloading address as *Titik k* when there is more
+  than one. **The POD photos are the one thing split per shipment**: *Foto POD
+  Loading / Unloading Shipment ( N )* for each, read through
+  `shipmentPodPhotoSrc` — `stopOfShipment(kind, N)` finds the stop by its
+  `shipmentNo`, then the newest `podHistory` entry for that stop id, falling
+  back to the phase's photos only on an order with no stops. Finding the stop by
+  its number rather than positionally is what fixes an interleaved route: on
+  M1 → B2 → M2 → B1 Shipment 2's unloading is the *first* bongkar visited, and
+  `stops[shipmentNo - 1]` showed another shipment's paperwork. *Rincian Kargo
+  Shipment (N)* is gone with the tabs. Whether a price should ever be split per
+  shipment is still an open product question.
 
 ---
 
@@ -326,14 +372,31 @@ open.
   `components/revamp/internalOrder/wizardTypes.ts`). Step-1 and step-2 validation
   names the shipment ("Loading Point pada Shipment 2 wajib dipilih") only when
   there is more than one, so a one-shipment order reads exactly as it did before.
-- **The create call sends the items twice, and only one of the two is stored.**
-  `detail.items[]` is the wizard's own copy, in the shape the wizard holds
-  (`itemName`, P/L/T in **metres**); the rows the server keeps as `order_items`
-  go at the **top level** of the request as `items[]` — `name`, `shipmentNo`, and
-  the dimensions converted to **centimetres**, which is what the service stores
-  and derives the volume from. Until af988ef the wizard sent only the `detail`
-  copy, so internal orders had no `order_items` rows at all and nothing could
-  total one shipment's plan apart from the rest.
+- **An agreement's routes are paired into lanes the same way** (bab45a8).
+  `initialRoutes[k]` with `destinationRoutes[k]` is Shipment *k+1* on
+  `AgreementRevampFormPage`, under the shipment's own heading, added and removed
+  together by "+ Tambah Shipment" / "Hapus" (`.route-shipment-*` in
+  `revamp.css`) — never one end at a time. Two independent lists, each with its
+  own "+ Rute", said nothing about which destination belonged to which origin:
+  an agreement covering Bandung → Cakung and Bandung → Jakarta could be written
+  as four entries with no pairing, and an order placed against it had no lane to
+  be priced on. The lanes stay at **city or kecamatan** level (`level`,
+  `kota`, `kecamatan`) — the agreement names the lane, the order names the
+  warehouses on it. A single-shipment agreement shows one pair and no button,
+  and switching to one drops the extra lanes, both ends of each.
+- **The create call sends the items ONCE, on `detail`.** `detail.items[]` is the
+  wizard's own copy, in the shape the wizard holds (`itemName`, P/L/T in
+  **metres**), each line carrying its `shipmentNo` — and it is the only source
+  the console reads for a shipment's plan. The wizard **does not** send a
+  top-level `items[]` any more. This corrects what af988ef added and this file
+  previously described: `items` is a **per-company field** ("Itemised cargo"),
+  hidden by default, so sending it failed the whole order with *not enabled for
+  your company: Itemised cargo* — for every company that has not switched it on,
+  which is most of them (30039f5). The server's `order_items.shipment_no` column
+  still exists and the create path still writes it when rows are supplied; the
+  wizard simply supplies none, so an internal order has no `order_items` rows
+  and every per-shipment figure is derived from `detail.items`. Reinstating the
+  rows means enabling that field per company first, not changing the payload.
 - **There is no `totalTonnage` field on a shipment any more.** Making the input
   read-only had left `WizardShipment.totalTonnage` never written while the
   order's `weightKg` and its estimated value still read it, which on a per-kg
