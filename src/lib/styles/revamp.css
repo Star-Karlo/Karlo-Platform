@@ -1035,8 +1035,13 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .epod-card-body{padding:14px 16px;}
 .epod-card--auto{align-self:flex-start; width:360px;}
 .epod-info-grid{display:flex; flex-direction:column; gap:10px;}
-.epod-info-row{display:flex; align-items:center; justify-content:space-between; font-size:13px; color:var(--on-surface-variant);}
+/* The value can be long — a status now names its stop, "Pengecekan POD Muat
+   — Muat #1 (Shipment 1)" — so the row wraps and the badge wraps its own text
+   instead of running past the card's edge. */
+.epod-info-row{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:13px; color:var(--on-surface-variant);}
+.epod-info-row > span:first-child{flex:0 0 auto;}
 .epod-info-row b{color:var(--on-surface); font-weight:700;}
+.epod-info-row .badge{white-space:normal; text-align:left; line-height:1.35; max-width:100%; min-width:0;}
 
 .epod-verify-card{border-color:var(--primary-container); box-shadow:0 0 0 1px var(--primary-container) inset;}
 .epod-verify-layout{display:grid; grid-template-columns:180px 1fr;}
@@ -2133,11 +2138,7 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .invoice-info-value{font-size:13.5px; font-weight:700; color:var(--on-surface); margin-top:1px;}
 
 .invoice-tabs{display:flex;}
-/* A tab is a button now — one per shipment — so the browser's own button
-   styling is cleared and the tab keeps the look it had as a span. */
-.invoice-tab{padding:9px 18px; border-radius:8px 8px 0 0; font-size:12.5px; font-weight:700;
-  border:0; background:none; color:inherit; font-family:inherit; cursor:pointer;}
-.invoice-tab:not(.invoice-tab--active):hover{background:var(--surface-variant, #eef1f6);}
+.invoice-tab{padding:9px 18px; border-radius:8px 8px 0 0; font-size:12.5px; font-weight:700;}
 .invoice-tab--active{background:var(--primary); color:#fff;}
 
 .invoice-card{background:var(--surface); border:1px solid var(--outline-variant); border-radius:var(--r-lg); padding:24px 26px;}

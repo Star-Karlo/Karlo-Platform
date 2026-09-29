@@ -415,15 +415,28 @@
 		return blocks;
 	});
 
+	/** The order's plan, added up from the Item Details table rather than
+	 *  taken from the order's stored tonnage. The table is what the planner
+	 *  typed and what every per-shipment figure is derived from, so a total
+	 *  that disagrees with it is the one that is wrong. */
+	let planFromItems = $derived.by(() => {
+		const items = order?.items || [];
+		if (!items.length) {
+			return { totalBerat: order?.totalTonnage ?? 0, kuantitas: totalKuantitas, totalVolume: totalVolumeM3 };
+		}
+		const weight = items.reduce((sum: number, it: any) => sum + (Number(it.weightKg) || 0), 0);
+		return {
+			totalBerat: Math.round(weight * 100) / 100,
+			kuantitas: totalKuantitas,
+			totalVolume: totalVolumeM3
+		};
+	});
+
 	let cargoComparison = $derived.by(() => {
 		if (!order) return null;
 		const okDetail = detail;
 		const phases = [
-			{
-				key: 'plan',
-				label: 'Plan',
-				data: { totalBerat: order.totalTonnage, kuantitas: totalKuantitas, totalVolume: totalVolumeM3 } as any
-			},
+			{ key: 'plan', label: 'Plan', data: planFromItems as any },
 			{ key: 'muat', label: 'Muat', data: canShowMuatanMuat ? okDetail.muatanMuat || null : null },
 			{ key: 'bongkar', label: 'Bongkar', data: canShowMuatanBongkar ? okDetail.muatanBongkar || null : null }
 		];
@@ -556,19 +569,42 @@
 			.sort((a: any, b: any) => (a.seq ?? 0) - (b.seq ?? 0));
 	}
 
-	/** The driver's newest submission for one visit. */
+	/** The driver's newest submission for one visit, or null when that visit
+	 *  has none.
+	 *
+	 *  A visit with no submission returns null and NOT another visit's. The
+	 *  fallback below is only for a journey with no stop rows at all: falling
+	 *  back on a journey that has them handed Muat 2 the photos Muat 1 was
+	 *  signed with, and let a planner verify a delivery the driver had not
+	 *  reported. */
 	function podForStop(phaseKey: string, stopIndex: number): any | null {
 		const history: any[] = shipment?.podHistory ?? [];
 		const stop = stopsOfPhase(phaseKey)[stopIndex];
 		if (stop) {
 			// podHistory is newest first, which is the round that is waiting.
-			const own = history.filter((p) => p.stopId === stop.id);
-			if (own.length) return own[0];
+			return history.filter((p) => p.stopId === stop.id)[0] ?? null;
 		}
 		// A two-ended journey, or an order from before PODs named a stop:
 		// one submission for the stage, which is what it always had.
 		const stage = STAGE_OF_PHASE[phaseKey];
 		return history.find((p) => p.stage === stage && !p.stopId) ?? driverPod(phaseKey);
+	}
+
+	/** The first visit of a phase a planner can actually act on: not yet
+	 *  verified, and the driver has filed its POD. -1 when there is none.
+	 *
+	 *  "Not yet verified" alone is not enough. A planner sent to a visit the
+	 *  driver has not reported sees an empty dialog, and on a journey whose
+	 *  stops fall back to a shared submission would be shown the previous
+	 *  visit's paperwork. */
+	function firstVerifiableStop(phaseKey: string): number {
+		const recorded = phaseStops(phaseKey);
+		const count = Math.max(recorded.length, stopsOfPhase(phaseKey).length);
+		for (let i = 0; i < count; i++) {
+			if (recorded[i]?.verified) continue;
+			if (podForStop(phaseKey, i)) return i;
+		}
+		return -1;
 	}
 
 	/** One shipment's own plan: the items carrying its number.
@@ -658,13 +694,7 @@
 	let verifyPlanValues = $derived.by<Record<string, any>>(() => {
 		const stop = stopsOfPhase(verifyModalPhase)[verifyModalStopIndex];
 		const own = planForShipment(stop?.shipmentNo ?? null);
-		return (
-			own ?? {
-				totalBerat: order?.totalTonnage ?? 0,
-				kuantitas: totalKuantitas,
-				totalVolume: totalVolumeM3
-			}
-		);
+		return own ?? planFromItems;
 	});
 	/** The visit that has to be verified first, if any — stops are verified
 	 *  in the order the truck makes them. */
@@ -779,8 +809,13 @@
 		}
 		toast(`POD ${label} berhasil diverifikasi`);
 		closeVerifyModal();
-		const nextUnverified = newStops.findIndex((s) => !s.verified);
-		if (nextUnverified !== -1) openVerifyModal(phaseKey, nextUnverified);
+		// The next visit opens only once its own POD is in. Before that there
+		// is nothing to check, and the dialog cannot be closed — so opening it
+		// early trapped the planner in front of an empty form for a delivery
+		// the driver had not yet made. It reopens by itself when the POD
+		// arrives, through the gate below.
+		const next = firstVerifiableStop(phaseKey);
+		if (next !== -1) openVerifyModal(phaseKey, next);
 	}
 	// ------------------------------------------------------------------------
 	// POD photos come from the driver app only. The console shows them and
@@ -855,8 +890,15 @@
 	let gatePhaseLabel = $derived(gatePhase === 'muat' ? 'Muat' : 'Bongkar');
 	function proceedFromGate() {
 		gateModalOpen = false;
-		const firstUnverified = podFirstUnverifiedStop(order, gatePhase);
-		openVerifyModal(gatePhase, firstUnverified === -1 ? 0 : firstUnverified);
+		// The first visit whose POD is waiting to be checked — not merely the
+		// first unverified one, which may be a delivery still to be made.
+		const next = firstVerifiableStop(gatePhase);
+		if (next === -1) {
+			const fallback = podFirstUnverifiedStop(order, gatePhase);
+			openVerifyModal(gatePhase, fallback === -1 ? 0 : fallback);
+			return;
+		}
+		openVerifyModal(gatePhase, next);
 	}
 	/**
 	 * The "sesuai / tidak sesuai" banner above the verification dialog.
@@ -1318,7 +1360,16 @@
 
 				add(stop.arrivedAt, `Sampai di ${isLoad ? 'Titik Muat' : 'Titik Bongkar'} — ${label}`, driver, 'Driver');
 				if (!isLoad) {
-					add(stop.handoverVerifiedAt, `OTP Bongkar Terverifikasi — ${label}`, driver, 'Driver');
+					// The journey's FIRST unloading point is confirmed through
+					// the shipment's own OTP — stage-level, with no stop — so
+					// reading the stop alone showed nothing for it and the step
+					// went missing from the timeline. Later points each carry
+					// their own.
+					const firstUnload = journeyStops.find((st: any) => st.kind === 'unload');
+					const otpAt =
+						stop.handoverVerifiedAt ??
+						(firstUnload && firstUnload.id === stop.id ? shipment?.handoverVerifiedAt : null);
+					add(otpAt, `OTP Bongkar Terverifikasi — ${label}`, driver, 'Driver');
 				}
 				add(stop.startedAt, `Mulai ${isLoad ? 'Muat' : 'Bongkar'} — ${label}`, driver, 'Driver');
 				if (isLoad) {
