@@ -874,18 +874,55 @@
 	// ---------- E-POD verification gate ----------
 	let gateModalOpen = $state(false);
 	let gatePhase = $state('muat');
-	let gateShown = $state(false);
+	/** The submission the gate was last raised for. A POD, not a flag: the
+	 *  gate has to come back for the NEXT visit's paperwork, and a one-shot
+	 *  flag meant it appeared once per page load — so after verifying Muat 1
+	 *  the planner had to reload to be shown Muat 2. */
+	let gatedPodId = $state<string | null>(null);
 	$effect(() => {
 		const o = order;
 		// The banner above the dialog reads the shipment's cargo check, so
 		// the gate waits for it: opening first would show the dialog with no
 		// "sesuai / tidak sesuai" flag and never bring it back.
-		if (!o || gateShown || (o.statusCode === 'assigned' && !shipment)) return;
+		if (!o || verifyModalOpen || (o.statusCode === 'assigned' && !shipment)) return;
+
+		// A journey with its own stops is gated on paperwork that has actually
+		// arrived, whatever the order's status says: on a multi-stop delivery
+		// the status sits on one visit while another's POD is waiting.
+		const stops = shipment?.stops ?? [];
+		if (stops.length > 2) {
+			for (const phase of ['muat', 'bongkar']) {
+				const at = firstVerifiableStop(phase);
+				if (at === -1) continue;
+				const pod = podForStop(phase, at);
+				if (!pod || pod.status !== 'submitted' || pod.id === gatedPodId) continue;
+				gatePhase = phase;
+				gatedPodId = pod.id;
+				gateModalOpen = true;
+				return;
+			}
+			return;
+		}
+
+		if (gatedPodId) return; // two-ended journey: once per page, as before
 		if (o.status === 'verifikasi_pod_muat' || o.status === 'verifikasi_pod_bongkar') {
 			gatePhase = o.status === 'verifikasi_pod_muat' ? 'muat' : 'bongkar';
 			gateModalOpen = true;
 		}
-		gateShown = true;
+		gatedPodId = 'shown';
+	});
+
+	/* The driver files a POD while the planner is already looking at the
+	   order, so the page asks again every so often. Without it the gate for
+	   the next visit only appears on a reload, and the planner has no way to
+	   know there is anything to reload for. Stops once the order is done. */
+	$effect(() => {
+		const done = order?.status === 'pengiriman_terkonfirmasi';
+		if (!order || done) return;
+		const timer = setInterval(() => {
+			if (!verifyModalOpen && !gateModalOpen) loadShipment();
+		}, 20_000);
+		return () => clearInterval(timer);
 	});
 	let gatePhaseLabel = $derived(gatePhase === 'muat' ? 'Muat' : 'Bongkar');
 	function proceedFromGate() {
