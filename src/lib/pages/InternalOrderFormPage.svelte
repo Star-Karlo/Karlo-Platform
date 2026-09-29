@@ -73,14 +73,6 @@
 	}
 
 	/* ---------- Validation ---------- */
-	/** The wizard collects P, L and T in metres; order_items stores
-	 *  centimetres, and the server derives the volume from them. */
-	function metresToCm(v: unknown): string | null {
-		const n = Number(v);
-		if (!Number.isFinite(n) || n <= 0) return null;
-		return String(Math.round(n * 100 * 100) / 100);
-	}
-
 	function validateStep1() {
 		if (!wizard.estimatedLoadDate) return 'Estimated Load Schedule wajib diisi';
 		// A load cannot be scheduled for a moment that has passed: the order
@@ -207,22 +199,12 @@
 					// schedule), so an expiry on the loading day is clamped to it.
 					expiresAt: expiresAt && pickupAt && expiresAt > pickupAt ? pickupAt : expiresAt,
 					weightKg: String(totalTonnageKg(sp)),
-					// The itemised cargo, as rows rather than only as a blob on
-					// detail. Without this the order has no order_items at all,
-					// so nothing can total one shipment's plan apart from the
-					// rest, and every stop is checked against the whole order.
-					items: sp.items.map((it) => ({
-						shipmentNo: it.shipmentNo || 1,
-						name: it.itemName,
-						quantity: it.quantity === '' || it.quantity == null ? null : String(it.quantity),
-						weightKg: it.weightKg === '' || it.weightKg == null ? null : String(it.weightKg),
-						// The server stores centimetres and derives the volume;
-						// the wizard collects metres.
-						lengthCm: metresToCm(it.dimP),
-						widthCm: metresToCm(it.dimL),
-						heightCm: metresToCm(it.dimT),
-						handlingNotes: it.loadingDescription
-					})),
+					// Itemised cargo is NOT sent as rows. "items" is a field a
+					// company switches on ("Itemised cargo", hidden by default),
+					// and sending it to a company that has not enabled it fails
+					// the whole order with "not enabled for your company". The
+					// wizard's lines live on detail.items, with their shipmentNo,
+					// which is what every screen reads for a shipment's plan.
 					quantity: String(itemsShipped(sp)),
 					volumeM3: String(totalVolume(sp)),
 					detail: {
