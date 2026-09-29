@@ -850,7 +850,11 @@
 	}
 
 	async function rejectVerification() {
-		const pod = driverPod(verifyModalPhase);
+		// The submission belonging to THIS visit. Reading one POD per stage
+		// here would reject the wrong delivery's paperwork: on a journey with
+		// two drop-offs, turning down Bongkar 2 would send Bongkar 1's driver
+		// back to a warehouse they had already left.
+		const pod = podForStop(verifyModalPhase, verifyModalStopIndex);
 		if (pod && pod.status === 'submitted' && shipment) {
 			const reason = verifyNote.trim();
 			if (!reason) {
