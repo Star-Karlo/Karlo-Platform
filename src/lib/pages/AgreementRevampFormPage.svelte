@@ -140,6 +140,8 @@
 
 	let isMultiShipment = $derived(form.agreementType === 'multi-shipment');
 	function onAgreementTypeChange(val: string | string[]) {
+		// A single-shipment agreement covers one lane, so the extra ones go —
+		// both ends of each, because they are pairs.
 		if (val !== 'multi-shipment') {
 			form.initialRoutes = [form.initialRoutes[0] || newRouteEntry()];
 			form.destinationRoutes = [form.destinationRoutes[0] || newRouteEntry()];
@@ -156,19 +158,22 @@
 			form.tonaseMax = '';
 		}
 	}
-	function addInitialRoute() {
+	/* ---------- Lanes, one per shipment ----------
+	   Initial route k and destination route k are Shipment k+1 — the same
+	   pairing an order made from this agreement uses for its points. The two
+	   lists only ever change together: a lane with an origin and no
+	   destination is not a lane, and an order could not be priced against it. */
+	let routeShipmentCount = $derived(
+		Math.max(form.initialRoutes.length, form.destinationRoutes.length, 1)
+	);
+	function addShipmentRoute() {
 		form.initialRoutes.push(newRouteEntry());
-	}
-	function removeInitialRoute(i: number) {
-		if (form.initialRoutes.length <= 1) return;
-		form.initialRoutes.splice(i, 1);
-	}
-	function addDestinationRoute() {
 		form.destinationRoutes.push(newRouteEntry());
 	}
-	function removeDestinationRoute(i: number) {
-		if (form.destinationRoutes.length <= 1) return;
-		form.destinationRoutes.splice(i, 1);
+	function removeShipmentRoute(k: number) {
+		if (routeShipmentCount <= 1) return;
+		form.initialRoutes.splice(k, 1);
+		form.destinationRoutes.splice(k, 1);
 	}
 
 	function routeDisplayValue(r: AgreementRouteEntry) {
@@ -517,117 +522,75 @@
 			/>
 		</div>
 	</div>
-	<div class="two-col">
-		<div class="field">
-			<label>Initial Route <span class="req">*</span></label>
-			{#each form.initialRoutes as r, i (i)}
-				<div class="route-entry">
-					<div class="route-field-row">
-						<div class="route-field-select">
-							<FieldSelect
-								value={r.kota}
-								onchange={(v) => onRouteKotaChange(r, v)}
-								options={INDONESIAN_CITY_OPTIONS}
-								placeholder={i === 0 ? 'Cari kota/kabupaten asal...' : `Cari kota/kabupaten asal ${i + 1}...`}
-								searchable
-							/>
+	<!-- A shipment is a lane: initial route k with destination route k is
+	     Shipment k+1, the same pairing an order made from this agreement
+	     uses for its points. Kept at city or kecamatan level — the agreement
+	     names the lane, the order names the warehouses on it. -->
+	{#each { length: routeShipmentCount } as _s, k (k)}
+		{#if isMultiShipment}
+			<div class="route-shipment-head">
+				<span class="route-shipment-title">Shipment {k + 1}</span>
+				{#if routeShipmentCount > 1}
+					<button type="button" class="route-shipment-remove" onclick={() => removeShipmentRoute(k)}
+						>Hapus</button
+					>
+				{/if}
+			</div>
+		{/if}
+		<div class="two-col">
+			{#each [{ side: 'initial', label: 'Initial Route', place: 'asal' }, { side: 'destination', label: 'Destination Route', place: 'tujuan' }] as col (col.side)}
+				{@const r = (col.side === 'initial' ? form.initialRoutes : form.destinationRoutes)[k]}
+				<div class="field">
+					<label>{col.label} <span class="req">*</span></label>
+					{#if r}
+						<div class="route-entry">
+							<div class="route-field-row">
+								<div class="route-field-select">
+									<FieldSelect
+										value={r.kota}
+										onchange={(v) => onRouteKotaChange(r, v)}
+										options={INDONESIAN_CITY_OPTIONS}
+										placeholder={`Cari kota/kabupaten ${col.place}...`}
+										searchable
+									/>
+								</div>
+								<button type="button" class="btn btn-outline btn-sm" onclick={() => toggleRouteLevel(r)}>
+									{r.level === 'kecamatan' ? '− Kecamatan' : '+ Kecamatan'}
+								</button>
+							</div>
+							{#if r.level === 'kecamatan'}
+								{#if kecamatanOptionsFor(r.kota).length}
+									<FieldSelect
+										bind:value={r.kecamatan}
+										options={kecamatanOptionsFor(r.kota)}
+										placeholder={`Cari kecamatan ${col.place}...`}
+										style="margin-top:8px;"
+										searchable
+									/>
+								{:else}
+									<input
+										type="text"
+										bind:value={r.kecamatan}
+										placeholder="cth. Kecamatan Coblong"
+										style="margin-top:8px;"
+									/>
+									<span class="hint" style="display:block; margin-top:5px;"
+										>Belum ada data kecamatan untuk wilayah ini, silakan ketik manual.</span
+									>
+								{/if}
+							{/if}
 						</div>
-						<button type="button" class="btn btn-outline btn-sm" onclick={() => toggleRouteLevel(r)}>
-							{r.level === 'kecamatan' ? '− Kecamatan' : '+ Kecamatan'}
-						</button>
-						{#if form.initialRoutes.length > 1}
-							<button
-								type="button"
-								class="mini-icon-btn-del"
-								title="Hapus rute ini"
-								onclick={() => removeInitialRoute(i)}><span class="icon-wrap"><X size={15} /></span></button
-							>
-						{/if}
-					</div>
-					{#if r.level === 'kecamatan'}
-						{#if kecamatanOptionsFor(r.kota).length}
-							<FieldSelect
-								bind:value={r.kecamatan}
-								options={kecamatanOptionsFor(r.kota)}
-								placeholder="Cari kecamatan asal..."
-								style="margin-top:8px;"
-								searchable
-							/>
-						{:else}
-							<input
-								type="text"
-								bind:value={r.kecamatan}
-								placeholder="cth. Kecamatan Coblong"
-								style="margin-top:8px;"
-							/>
-							<span class="hint" style="display:block; margin-top:5px;"
-								>Belum ada data kecamatan untuk wilayah ini, silakan ketik manual.</span
-							>
-						{/if}
 					{/if}
 				</div>
 			{/each}
-			{#if isMultiShipment}
-				<button type="button" class="btn btn-outline btn-sm" onclick={addInitialRoute}>+ Rute</button>
-			{/if}
 		</div>
-		<div class="field">
-			<label>Destination Route <span class="req">*</span></label>
-			{#each form.destinationRoutes as r, i (i)}
-				<div class="route-entry">
-					<div class="route-field-row">
-						<div class="route-field-select">
-							<FieldSelect
-								value={r.kota}
-								onchange={(v) => onRouteKotaChange(r, v)}
-								options={INDONESIAN_CITY_OPTIONS}
-								placeholder={i === 0
-									? 'Cari kota/kabupaten tujuan...'
-									: `Cari kota/kabupaten tujuan ${i + 1}...`}
-								searchable
-							/>
-						</div>
-						<button type="button" class="btn btn-outline btn-sm" onclick={() => toggleRouteLevel(r)}>
-							{r.level === 'kecamatan' ? '− Kecamatan' : '+ Kecamatan'}
-						</button>
-						{#if form.destinationRoutes.length > 1}
-							<button
-								type="button"
-								class="mini-icon-btn-del"
-								title="Hapus rute ini"
-								onclick={() => removeDestinationRoute(i)}
-								><span class="icon-wrap"><X size={15} /></span></button
-							>
-						{/if}
-					</div>
-					{#if r.level === 'kecamatan'}
-						{#if kecamatanOptionsFor(r.kota).length}
-							<FieldSelect
-								bind:value={r.kecamatan}
-								options={kecamatanOptionsFor(r.kota)}
-								placeholder="Cari kecamatan tujuan..."
-								style="margin-top:8px;"
-								searchable
-							/>
-						{:else}
-							<input
-								type="text"
-								bind:value={r.kecamatan}
-								placeholder="cth. Kecamatan Coblong"
-								style="margin-top:8px;"
-							/>
-							<span class="hint" style="display:block; margin-top:5px;"
-								>Belum ada data kecamatan untuk wilayah ini, silakan ketik manual.</span
-							>
-						{/if}
-					{/if}
-				</div>
-			{/each}
-			{#if isMultiShipment}
-				<button type="button" class="btn btn-outline btn-sm" onclick={addDestinationRoute}>+ Rute</button>
-			{/if}
-		</div>
-	</div>
+	{/each}
+	<!-- Only a multi-shipment agreement covers more than one lane. -->
+	{#if isMultiShipment}
+		<button type="button" class="btn btn-outline btn-sm" style="margin-top:14px;" onclick={addShipmentRoute}
+			>+ Tambah Shipment</button
+		>
+	{/if}
 </div>
 
 <div class="card card-pad" style="margin-top:16px;">
