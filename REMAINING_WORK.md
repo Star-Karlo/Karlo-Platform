@@ -136,6 +136,12 @@ carries several shipments*, and the rows behind it are
   `/shipments/{id}/pod/{podId}/review` for that visit alone; the server closes
   that stop and advances the shipment when the **last** stop of the stage is
   done, so the console writes no status of its own.
+- **Rejecting acts on the same submission as approving** (`rejectVerification`
+  → `podForStop`, not `driverPod`). Reading one POD per stage here would turn
+  down the wrong delivery's paperwork: on a journey with two drop-offs, refusing
+  Bongkar 2 rejected Bongkar 1's POD and sent that driver back to a warehouse
+  they had already left, while Bongkar 2's own submission stayed waiting, so the
+  order could not finish either (ecc6f4a).
 - **The dialog only ever opens on a visit whose POD is waiting.**
   `firstVerifiableStop` returns the first visit of a phase that is not yet
   verified **and** has a submission of its own; -1 when there is none. Moving to
