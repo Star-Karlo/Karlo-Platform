@@ -1035,9 +1035,6 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .epod-card-body{padding:14px 16px;}
 .epod-card--auto{align-self:flex-start; width:360px;}
 .epod-info-grid{display:flex; flex-direction:column; gap:10px;}
-/* The value can be long — a status now names its stop, "Pengecekan POD Muat
-   — Muat #1 (Shipment 1)" — so the row wraps and the badge wraps its own text
-   instead of running past the card's edge. */
 /* An agreement's lanes, one per shipment: the same shape the order wizard
    uses for its points, so the two read alike. */
 .route-shipment-head{display:flex; align-items:center; justify-content:space-between; gap:12px; margin:18px 0 8px;}
@@ -1046,6 +1043,9 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .route-shipment-remove{border:0; background:none; padding:0; font:inherit; font-size:13px; font-weight:600; color:var(--error, #b3261e); cursor:pointer;}
 .route-shipment-remove:hover{text-decoration:underline;}
 
+/* The value can be long — a status now names its stop, "Pengecekan POD Muat
+   — Muat #1 (Shipment 1)" — so the row wraps and the badge wraps its own text
+   instead of running past the card's edge. */
 .epod-info-row{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:13px; color:var(--on-surface-variant);}
 .epod-info-row > span:first-child{flex:0 0 auto;}
 .epod-info-row b{color:var(--on-surface); font-weight:700;}
