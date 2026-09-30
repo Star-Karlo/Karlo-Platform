@@ -950,11 +950,33 @@
 	 * the console) does it fall back to comparing the figures already typed
 	 * against the plan.
 	 */
+	/** The visit the gate is about to open, when the journey has its own
+	 *  stops. The cargo answer belongs to that visit: the driver says sesuai
+	 *  or tidak sesuai at each point, and the shipment only carries the
+	 *  first one of each kind. */
+	let gateStop = $derived.by(() => {
+		if ((shipment?.stops ?? []).length <= 2) return null;
+		const at = firstVerifiableStop(gatePhase);
+		return at === -1 ? null : (stopsOfPhase(gatePhase)[at] ?? null);
+	});
+
 	let gateFlag = $derived.by(() => {
+		// This visit's own answer first. Reading the shipment's instead
+		// reported Muat 1's "sesuai" over the driver's "tidak sesuai" at
+		// Muat 2 — the planner was told the load was fine while the driver
+		// had said it was not.
+		if (gateStop?.cargoCheckedAt) {
+			return gateStop.cargoMatches === false ? 'tidak_sesuai' : 'sesuai';
+		}
 		const checked =
 			gatePhase === 'muat'
 				? { at: shipment?.loadingCargoCheckedAt, matches: shipment?.loadingCargoMatches }
 				: { at: shipment?.unloadingCargoCheckedAt, matches: shipment?.unloadingCargoMatches };
+		// The first visit of a kind is the one the shipment's own answer
+		// describes — the driver answered it there, and the app's copy onto
+		// the stop row is best effort. A LATER visit with no answer of its
+		// own must not borrow it: better no banner than the wrong one.
+		if (gateStop && stopsOfPhase(gatePhase)[0]?.id !== gateStop.id) return null;
 		if (checked.at) return checked.matches === false ? 'tidak_sesuai' : 'sesuai';
 		const field = gatePhase === 'muat' ? 'muatanMuat' : 'muatanBongkar';
 		const actual = detail[field];
@@ -977,7 +999,11 @@
 	});
 
 	let gateFlagNote = $derived(
-		gatePhase === 'muat' ? (shipment?.loadingCargoNote ?? '') : (shipment?.unloadingCargoNote ?? '')
+		gateStop?.cargoCheckedAt
+			? (gateStop.cargoNote ?? '')
+			: gatePhase === 'muat'
+				? (shipment?.loadingCargoNote ?? '')
+				: (shipment?.unloadingCargoNote ?? '')
 	);
 
 	// ---------- Route ----------
