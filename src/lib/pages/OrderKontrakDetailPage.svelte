@@ -698,6 +698,34 @@
 	});
 	/** The visit that has to be verified first, if any — stops are verified
 	 *  in the order the truck makes them. */
+	/** The figures counted at the OTHER end of this shipment.
+	 *
+	 *  The dialog shows Muatan beside Bongkaran so a planner can compare what
+	 *  was loaded with what arrived. On a multi-shipment order that comparison
+	 *  is only meaningful within one shipment: reading the order-level total
+	 *  put every shipment's load — 1 800 kg for two 900 kg pickups — against a
+	 *  single 1 000 kg delivery. The counterpart is the stop of the opposite
+	 *  kind carrying the same shipment number. */
+	function counterpartActual(phaseKey: string, stopIndex: number): Record<string, any> | null {
+		const mine = stopsOfPhase(phaseKey)[stopIndex];
+		if (!mine) return null;
+		const otherPhase = phaseKey === 'muat' ? 'bongkar' : 'muat';
+		const others = stopsOfPhase(otherPhase);
+		const at = others.findIndex((s: any) => Number(s.shipmentNo || 1) === Number(mine.shipmentNo || 1));
+		if (at < 0) return null;
+		const recorded = phaseStops(otherPhase)[at];
+		return recorded?.verified ? (recorded.actual ?? null) : null;
+	}
+	/** What the other end of this shipment recorded, or null while it is
+	 *  still to come. Null on a journey without its own stops, where the
+	 *  phase totals below are the answer they always were. */
+	let verifyCounterpart = $derived(
+		(shipment?.stops ?? []).length > 2
+			? counterpartActual(verifyModalPhase, verifyModalStopIndex)
+			: null
+	);
+	let verifyPerStopCounterpart = $derived((shipment?.stops ?? []).length > 2);
+
 	let verifyBlockedBy = $derived(stopAwaitingBefore(verifyModalPhase, verifyModalStopIndex));
 	let verifyStopPod = $derived(podForStop(verifyModalPhase, verifyModalStopIndex));
 	let verifyFirstSuratJalanPhoto = $derived(
@@ -2869,6 +2897,13 @@
 														/>
 														<span class="epod-verify-unit">{UNIT_BY_FIELD[f.key]}</span>
 													</span>
+												{:else if verifyPerStopCounterpart}
+													<!-- This shipment's own load, not every shipment's added up. -->
+													{#if verifyCounterpart}
+														{cargoValueNumber(verifyCounterpart[f.key])} {UNIT_BY_FIELD[f.key]}
+													{:else}
+														<span class="epod-verify-placeholder">Driver belum sampai tahap ini</span>
+													{/if}
 												{:else if detail.muatanMuat && (verifyModalPhase === 'muat' ? verifyStopVerified : isPhaseVerified('muat'))}
 													{cargoValueNumber(detail.muatanMuat[f.key])} {UNIT_BY_FIELD[f.key]}
 												{:else}
@@ -2886,6 +2921,12 @@
 														/>
 														<span class="epod-verify-unit">{UNIT_BY_FIELD[f.key]}</span>
 													</span>
+												{:else if verifyPerStopCounterpart}
+													{#if verifyCounterpart}
+														{cargoValueNumber(verifyCounterpart[f.key])} {UNIT_BY_FIELD[f.key]}
+													{:else}
+														<span class="epod-verify-placeholder">Driver belum sampai tahap ini</span>
+													{/if}
 												{:else if detail.muatanBongkar && (verifyModalPhase === 'bongkar' ? verifyStopVerified : isPhaseVerified('bongkar'))}
 													{cargoValueNumber(detail.muatanBongkar[f.key])} {UNIT_BY_FIELD[f.key]}
 												{:else}
