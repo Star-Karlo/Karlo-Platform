@@ -147,6 +147,7 @@ instance.interceptors.response.use(
 const ACTING_FOR_HEADER = 'X-Acting-For';
 
 /**
+ * TEST-HOOK: remove before real drivers use this. See TEST_HOOKS.md.
  * TEMPORARY — Mode Uji. While the order page's test switch is on, every
  * request carries X-Status-Bypass so the business service lets a company
  * Administrator (or Karlo staff) walk an order through the driver's and

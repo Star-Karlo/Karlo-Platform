@@ -1,5 +1,6 @@
 <script lang="ts">
 	/**
+	 * TEST-HOOK: remove before real drivers use this. See TEST_HOOKS.md.
 	 * TEMPORARY — Mode Uji (end-to-end testing).
 	 *
 	 * Walks an order through every status without the driver app: the
