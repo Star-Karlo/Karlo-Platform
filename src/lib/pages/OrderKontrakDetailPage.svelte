@@ -1441,6 +1441,17 @@
 				const label = stopEventLabel(stop);
 				const isLoad = stop.kind === 'load';
 				const going = isLoad ? 'Menuju Titik Muat' : 'Menuju Titik Bongkar';
+				// The first point of a kind is worked through the shipment's own
+				// statuses, and the app's copy of them onto the stop row is best
+				// effort — with geofencing on it is refused outright when the
+				// phone's fix is outside the fence. Reading the row alone left
+				// that visit with no arrival and no start on the timeline while
+				// the status had plainly moved past both.
+				const firstOfKind = journeyStops.find((st: any) => st.kind === stop.kind);
+				const mine = !!firstOfKind && firstOfKind.id === stop.id;
+				const arrivedAt = stop.arrivedAt ?? (mine ? (isLoad ? shipment?.arrivedLoadingAt : shipment?.arrivedUnloadingAt) : null);
+				const startedAt = stop.startedAt ?? (mine ? (isLoad ? shipment?.loadingStartedAt : shipment?.unloadingStartedAt) : null);
+				const cargoAt = stop.cargoCheckedAt ?? (mine ? (isLoad ? shipment?.loadingCargoCheckedAt : shipment?.unloadingCargoCheckedAt) : null);
 
 				// Setting off. The first point of the journey is the shipment's
 				// own departure; every later one is raised by the planner
@@ -1448,12 +1459,15 @@
 				// moment it happened.
 				if (i === 0) {
 					add(shipment?.startedToLoadingAt, `${going} — ${label}`, driver, 'Driver');
+				} else if (mine && !isLoad) {
+					// The first unloading point's departure is the shipment's.
+					add(shipment?.startedToUnloadingAt, `${going} — ${label}`, driver, 'Driver');
 				} else {
 					const before = podsOfStop(journeyStops[i - 1].id).filter((p: any) => p.status === 'approved');
 					add(before[before.length - 1]?.reviewedAt, `${going} — ${label}`, TRANSPORTER_NAME, 'Planner');
 				}
 
-				add(stop.arrivedAt, `Sampai di ${isLoad ? 'Titik Muat' : 'Titik Bongkar'} — ${label}`, driver, 'Driver');
+				add(arrivedAt, `Sampai di ${isLoad ? 'Titik Muat' : 'Titik Bongkar'} — ${label}`, driver, 'Driver');
 				if (!isLoad) {
 					// The journey's FIRST unloading point is confirmed through
 					// the shipment's own OTP — stage-level, with no stop — so
@@ -1466,10 +1480,10 @@
 						(firstUnload && firstUnload.id === stop.id ? shipment?.handoverVerifiedAt : null);
 					add(otpAt, `OTP Bongkar Terverifikasi — ${label}`, driver, 'Driver');
 				}
-				add(stop.startedAt, `Mulai ${isLoad ? 'Muat' : 'Bongkar'} — ${label}`, driver, 'Driver');
+				add(startedAt, `Mulai ${isLoad ? 'Muat' : 'Bongkar'} — ${label}`, driver, 'Driver');
 				if (isLoad) {
-					add(stop.cargoCheckedAt, `Verifikasi Item Muat — ${label}`, driver, 'Driver');
-					add(stop.cargoCheckedAt, `Item Muatan Telah Diverifikasi — ${label}`, driver, 'Driver');
+					add(cargoAt, `Verifikasi Item Muat — ${label}`, driver, 'Driver');
+					add(cargoAt, `Item Muatan Telah Diverifikasi — ${label}`, driver, 'Driver');
 				}
 				for (const pod of podsOfStop(stop.id)) {
 					add(pod.submittedAt, `Submit POD & Selesai ${isLoad ? 'Muat' : 'Bongkar'} — ${label}`, driver, 'Driver');
