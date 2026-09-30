@@ -121,6 +121,22 @@ screens present is `MICROSERVICES/docs/shared/BUSINESS.md` §*When the order
 carries several shipments*, and the rows behind it are
 `MICROSERVICES/docs/business/MODEL.md` §*order_stops*.
 
+**One thing to know before reading any of it: the first point of each kind is
+shipment-driven, and its stop row may never be written.** The driver app works
+that point through the shipment's own statuses and then copies them onto the
+stop row best effort — and with the order's geofencing **on** the copy is
+refused outright when the phone's fix is outside the fence. So `stop.arrivedAt`,
+`stop.startedAt` and `stop.cargoCheckedAt` can all be null at Muat 1 for a visit
+that has plainly happened. Anything on this page that reads a stop row for the
+first point of a kind therefore falls back to the shipment's own field; later
+points have nothing to fall back to, because the shipment carries one arrival,
+one start and one cargo answer per kind. Reading the row alone is what emptied
+the *Linimasa* below; reading the **shipment** where a later point was meant is
+what put Muat 1's *sesuai* on Muat 2's review. The server has the same rule at
+its POD gate — see
+`MICROSERVICES/docs/business/MODEL.md` §*order_stops* and business-service
+`README.md` §*The shipment's status follows the stops*.
+
 - **E-POD approval acts on the POD of the visit being verified**, not one POD per
   stage (`podForStop`: the newest `podHistory` entry whose `stopId` is this
   stop's). A visit with no submission of its own now reports **null**, not
@@ -178,6 +194,29 @@ carries several shipments*, and the rows behind it are
   from, so a total that disagrees with it is the one that is wrong. This applies
   to **single-shipment orders too** — it is not a multi-stop rule. An order with
   no item rows keeps the stored `totalTonnage`.
+- **The sesuai / tidak sesuai banner belongs to the visit being verified**
+  (2284b9e). `gateFlag` and `gateFlagNote` read `gateStop` — the visit
+  `firstVerifiableStop` is about to open — rather than the shipment's cargo
+  check, which carries only the **first** visit of each kind. Reading the
+  shipment showed Muat 1's *sesuai* at Muat 2 while the driver had answered
+  *tidak sesuai* there: the planner was told the load was fine on the strength
+  of a different warehouse's answer. The first visit of a kind still falls back
+  to the shipment's answer, because that is where the driver gave it and the
+  app's copy onto the row is best effort; a **later** visit with no answer of
+  its own shows **no banner at all** rather than borrowing another visit's.
+- **The E-POD dialog's opposite column is this shipment's other end, not the
+  order's total** (fa98778). The dialog puts Muatan beside Bongkaran so a
+  planner can compare what was loaded with what arrived, and that comparison
+  only means anything within one shipment: reading the order-level
+  `detail.muatanMuat` put every shipment's load — 1 800 Kg for two 900 Kg
+  pickups — against a single 1 000 Kg delivery. `counterpartActual` finds the
+  stop of the **opposite kind carrying the same `shipmentNo`**, then that
+  stop's recorded `actual` from `phaseStops` at its position within its phase,
+  and `verifyCounterpart` is what the column renders. Until that end has been
+  verified the cell reads *Driver belum sampai tahap ini*. Guarded by
+  `verifyPerStopCounterpart` (more than two stops), so a two-ended order keeps
+  the phase figures it always showed. *Detail Muatan* was already correct per
+  shipment; only the dialog was reading the total.
 - **Photos come from that visit's own submission.** The modal and *Foto POD*
   read `pod.photos` filtered by `docType` off the stop's own POD
   (`podPhotoSlotsForStop`, once the journey has stop rows — `verifyPerStop`).
@@ -215,9 +254,24 @@ carries several shipments*, and the rows behind it are
   Bongkar #2 (Shipment 2)*. Setting off for a later point is stamped with the
   planner's **approval of the previous point's POD** (`reviewedAt` of its last
   approved submission), because that approval is what raises it; the first point
-  keeps the shipment's own `startedToLoadingAt`. Every line is still a recorded
-  timestamp — no timestamp, no line. A two-ended journey keeps the
-  shipment-level lines unchanged.
+  keeps the shipment's own `startedToLoadingAt`, and the first **unloading**
+  point takes `startedToUnloadingAt` for the same reason — that departure is the
+  shipment's, not a planner's approval of the point before it. Every line is
+  still a recorded timestamp — no timestamp, no line. A two-ended journey keeps
+  the shipment-level lines unchanged.
+- **Arrival, start and the cargo check fall back to the shipment for the first
+  point of each kind** (0d91e00). Reading the stop rows alone, a journey whose
+  first point had its row refused by the geofence showed **nothing after
+  "Menuju Titik Muat"** while the status had plainly moved past the arrival, the
+  start and the item check — the most visible face of the shipment-driven first
+  point described above. `mine` marks the first stop of the kind in `seq` order
+  and `arrivedAt` / `startedAt` / `cargoAt` each fall back to
+  `arrivedLoadingAt` / `arrivedUnloadingAt`, `loadingStartedAt` /
+  `unloadingStartedAt`, `loadingCargoCheckedAt` / `unloadingCargoCheckedAt`.
+  Later points read their own rows and must: the shipment has one arrival of
+  each kind to give. The *OTP Bongkar Terverifikasi* line above already worked
+  this way, for a different reason — that code is stage-level, with no `stopId`
+  ever attached.
 - **The status badge names the first unfinished point** in visit order
   (`currentStopLabel`, e.g. `Proses Bongkar — Bongkar #2 (Shipment 2)`), on the
   E-POD header and in *Detail Permintaan*. Blank on a two-ended journey, where
