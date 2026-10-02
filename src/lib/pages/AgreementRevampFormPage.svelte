@@ -23,6 +23,8 @@
 	import { kecamatanOptionsFor } from '$lib/revamp/kecamatanData.js';
 	import { agreementTypeOptions } from '$lib/revamp/agreementType.js';
 	import { fieldConfigActions, isEnabled, type FieldConfig } from '$lib/stores/fieldconfig';
+	import { computeUangSangu, seedTripAllowance } from '$lib/revamp/uangSangu.js';
+	import { formatIDR } from '$lib/revamp/currency.js';
 	import WarehouseSearchField from '$lib/components/revamp/WarehouseSearchField.svelte';
 	import { toAgreementRow, type AgreementRow, type AgreementRouteEntry } from '$lib/revamp/agreementView';
 	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
@@ -186,6 +188,120 @@
 		unloadingPoints.splice(k, 1);
 	}
 
+	/* ---------- Several customers under one contract ----------
+	   The contract's own customer is the first; these are the others. Each
+	   carries its own lanes, because the whole point is that they are
+	   different customers with different warehouses, and its own cargo.
+
+	   An order placed against such a contract covers all of them at once —
+	   one order, one truck, several customers' goods — which is why the
+	   customers live on the contract rather than each having their own. */
+	type ExtraCustomer = {
+		customerId: string;
+		customerName: string;
+		cargoTypeId: string;
+		cargoItemId: string;
+		loadingPoints: string[];
+		unloadingPoints: string[];
+	};
+	function newExtraCustomer(): ExtraCustomer {
+		return {
+			customerId: '',
+			customerName: '',
+			cargoTypeId: '',
+			cargoItemId: '',
+			loadingPoints: [''],
+			unloadingPoints: ['']
+		};
+	}
+	let extraCustomers = $state<ExtraCustomer[]>([]);
+	/** How one agreed price is divided between those customers. By tonnage is
+	 *  the default because it is the one that survives an uneven load. */
+	let billingSplit = $state('proportional');
+	const BILLING_SPLIT_OPTIONS = [
+		{ value: 'proportional', label: 'Proporsional (berdasarkan tonase)' },
+		{ value: 'equal', label: 'Rata (dibagi sama rata)' }
+	];
+	let isMultiCustomer = $derived(form.agreementType === 'multi-customer');
+	function addExtraCustomer() {
+		extraCustomers.push(newExtraCustomer());
+	}
+	function removeExtraCustomer(i: number) {
+		extraCustomers.splice(i, 1);
+	}
+	function addExtraLane(c: ExtraCustomer) {
+		c.loadingPoints.push('');
+		c.unloadingPoints.push('');
+	}
+	function removeExtraLane(c: ExtraCustomer, k: number) {
+		if (c.loadingPoints.length <= 1) return;
+		c.loadingPoints.splice(k, 1);
+		c.unloadingPoints.splice(k, 1);
+	}
+	/** Switching away from Multi Customer drops the extra customers: a
+	 *  contract that is not multi-customer has exactly one. */
+	$effect(() => {
+		if (!isMultiCustomer && extraCustomers.length) extraCustomers = [];
+	});
+
+	let agreementFields = $state<FieldConfig[] | null>(null);
+	let lanesByWarehouse = $derived(isEnabled(agreementFields, 'lanes.loadingPoints'));
+	let multiCustomerEnabled = $derived(isEnabled(agreementFields, 'multiCustomers'));
+	let typeOptions = $derived(agreementTypeOptions(multiCustomerEnabled));
+
+	/* ---------- The allowance this contract agrees ----------
+	   A contract may fix the driver's allowance instead of leaving it to each
+	   order: one figure for the lane, split into what is paid before leaving
+	   and what follows reconciliation.
+
+	   Computed by the SAME function an order uses, fed the distance between
+	   the two warehouses named above. One computation, so the figure agreed
+	   here and the figure an order would have worked out cannot drift apart
+	   — which matters, because the whole point is that the order stops
+	   computing and reports this instead. */
+	let tripAllowance = $state<any>(seedTripAllowance());
+	let laneKm = $state(0);
+	let laneHours = $state(0);
+	let allowanceUpfrontPercent = $state(60);
+	let allowanceEnabled = $derived(isEnabled(agreementFields, 'allowance.upfrontPercent'));
+
+	let allowanceTotal = $derived.by(() => {
+		if (!laneKm) return 0;
+		const synthetic = { detail: { tripEstimate: { jarakKm: laneKm, etaJam: laneHours } } };
+		return Math.round(computeUangSangu(synthetic, tripAllowance).subtotal);
+	});
+	let allowanceUpfront = $derived(Math.round((allowanceTotal * (Number(allowanceUpfrontPercent) || 0)) / 100));
+	let allowanceFinal = $derived(allowanceTotal - allowanceUpfront);
+
+	/** Distance and time for the contract's first lane, from the real road
+	 *  route between its two warehouses. Re-asked whenever either end moves. */
+	$effect(() => {
+		const from = loadingPoints[0];
+		const to = unloadingPoints[0];
+		if (!allowanceEnabled || !from || !to) {
+			laneKm = 0;
+			laneHours = 0;
+			return;
+		}
+		const a = warehouses.find((w: any) => w.id === from);
+		const b = warehouses.find((w: any) => w.id === to);
+		const pointOf = (w: any) =>
+			w && Number(w.longitude) && Number(w.latitude) ? [Number(w.longitude), Number(w.latitude)] : null;
+		const pa = pointOf(a);
+		const pb = pointOf(b);
+		if (!pa || !pb) return;
+		api
+			.post(ENDPOINTS.routing.route, { points: [pa, pb], profile: 'truck', includeTolls: false })
+			.then((r) => {
+				const route = r.data?.data?.route ?? r.data?.data ?? {};
+				laneKm = Math.round(((Number(route.distanceMeters) || 0) / 1000) * 10) / 10;
+				laneHours = Math.round(((Number(route.durationSeconds) || 0) / 3600) * 10) / 10;
+			})
+			.catch(() => {
+				/* no route: the card says the distance is not known yet */
+			});
+	});
+
 	let routeShipmentCount = $derived(
 		Math.max(form.initialRoutes.length, form.destinationRoutes.length, 1)
 	);
@@ -239,6 +355,22 @@
 		form.agreementType = a.agreementType || '';
 		// Prefer the initialRoutes/destinationRoutes arrays; fall back to the
 		// flat kotaAsal/kotaTujuan fields for agreements saved without them.
+		if (Array.isArray(a.multiCustomers) && a.multiCustomers.length) {
+			extraCustomers = a.multiCustomers.map((c: any) => ({
+				customerId: c.customerId ?? '',
+				customerName: c.customerName ?? '',
+				cargoTypeId: c.cargoTypeId ?? '',
+				cargoItemId: c.cargoItemId ?? '',
+				loadingPoints: Array.isArray(c.loadingPoints) && c.loadingPoints.length ? [...c.loadingPoints] : [''],
+				unloadingPoints:
+					Array.isArray(c.unloadingPoints) && c.unloadingPoints.length ? [...c.unloadingPoints] : ['']
+			}));
+		}
+		if (typeof a.billingSplit === 'string') billingSplit = a.billingSplit;
+		const savedAllowance = a.allowance as { upfrontPercent?: number } | undefined;
+		if (savedAllowance?.upfrontPercent != null) {
+			allowanceUpfrontPercent = Number(savedAllowance.upfrontPercent);
+		}
 		if (Array.isArray(a.loadingPoints) && a.loadingPoints.length) {
 			loadingPoints = [...a.loadingPoints];
 			unloadingPoints = Array.isArray(a.unloadingPoints) ? [...a.unloadingPoints] : [];
@@ -298,10 +430,6 @@
 	   from it cannot produce a submission the server then refuses. A company
 	   that has configured nothing sees exactly the form it saw before: every
 	   field below is hidden by default. */
-	let agreementFields = $state<FieldConfig[] | null>(null);
-	let lanesByWarehouse = $derived(isEnabled(agreementFields, 'lanes.loadingPoints'));
-	let multiCustomerEnabled = $derived(isEnabled(agreementFields, 'multiCustomers'));
-	let typeOptions = $derived(agreementTypeOptions(multiCustomerEnabled));
 
 	onMount(async () => {
 		void fieldConfigActions.load('agreement').then(async (f) => {
@@ -414,6 +542,21 @@
 	function validate() {
 		if (!form.customerId) return 'Customer Name wajib dipilih';
 		if (!form.agreementType) return 'Type Agreement wajib dipilih';
+		if (multiCustomerEnabled && isMultiCustomer) {
+			if (!extraCustomers.length) {
+				return 'Multi Customer perlu minimal satu customer tambahan — atau ganti Type Agreement';
+			}
+			for (const [i, c] of extraCustomers.entries()) {
+				const at = ` pada Customer ${i + 2}`;
+				if (!c.customerName) return `Customer Name${at} wajib dipilih`;
+				for (let k = 0; k < c.loadingPoints.length; k++) {
+					const lane = c.loadingPoints.length > 1 ? ` Shipment ${k + 1}` : '';
+					if (!c.loadingPoints[k]) return `Loading Point${lane}${at} wajib dipilih`;
+					if (!c.unloadingPoints[k]) return `Unloading Point${lane}${at} wajib dipilih`;
+				}
+			}
+			if (!billingSplit) return 'Pembagian Tagihan wajib dipilih';
+		}
 		if (lanesByWarehouse) {
 			// The city lanes are not on the form for this company, so holding
 			// the contract to them would refuse it for a field nobody can see.
@@ -459,6 +602,35 @@
 					? {
 							loadingPoints: loadingPoints.filter(Boolean),
 							unloadingPoints: unloadingPoints.filter(Boolean)
+						}
+					: {}),
+				// The allowance the contract agrees, stored as the three figures
+				// rather than the percentage alone: amending the percentage
+				// later must not silently restate what was already paid.
+				...(allowanceEnabled && allowanceTotal > 0
+					? {
+							allowance: {
+								total: allowanceTotal,
+								upfrontPercent: Number(allowanceUpfrontPercent) || 0,
+								upfront: allowanceUpfront,
+								final: allowanceFinal
+							}
+						}
+					: {}),
+				// The other customers this contract covers, and how one agreed
+				// price is divided between them. Absent unless the contract
+				// says it covers several.
+				...(multiCustomerEnabled && isMultiCustomer
+					? {
+							multiCustomers: extraCustomers.map((c) => ({
+								customerId: c.customerId,
+								customerName: c.customerName,
+								cargoTypeId: c.cargoTypeId,
+								cargoItemId: c.cargoItemId,
+								loadingPoints: c.loadingPoints.filter(Boolean),
+								unloadingPoints: c.unloadingPoints.filter(Boolean)
+							})),
+							billingSplit
 						}
 					: {}),
 				initialRoutes: form.initialRoutes.map((r) => ({
@@ -702,6 +874,118 @@
 		{/if}
 	{/if}
 </div>
+
+<!-- The other customers this contract covers. Only for a contract that says
+     it covers several, and only where the company has that enabled. -->
+<!-- The allowance this contract agrees, instead of each order working one
+     out. Computed by the same function an order uses, from the real road
+     distance between the two warehouses named above, so the figure agreed
+     here and the figure it replaces cannot drift apart. -->
+{#if allowanceEnabled && lanesByWarehouse}
+	<div class="card card-pad" style="margin-top:16px;">
+		<div class="route-shipment-head">
+			<span class="route-shipment-title">Uang Sangu Driver</span>
+			{#if laneKm}<span class="hint">{laneKm} km · ETA {laneHours} jam</span>{/if}
+		</div>
+		{#if !laneKm}
+			<p class="hint" style="margin:0;">
+				Pilih Loading Point dan Unloading Point terlebih dahulu — jarak dihitung dari rute jalan antara keduanya.
+			</p>
+		{:else}
+			<div class="two-col">
+				<div class="field">
+					<label>Total Uang Sangu</label>
+					<input type="text" readonly value={formatIDR(allowanceTotal)} />
+				</div>
+				<div class="field">
+					<label>Uang Sangu Driver Awal (%)</label>
+					<input type="number" min="0" max="100" bind:value={allowanceUpfrontPercent} />
+				</div>
+			</div>
+			<div class="two-col" style="margin-bottom:0;">
+				<div class="field" style="margin-bottom:0;">
+					<label>Uang Sangu Awal</label>
+					<input type="text" readonly value={formatIDR(allowanceUpfront)} />
+				</div>
+				<div class="field" style="margin-bottom:0;">
+					<label>Uang Sangu Akhir</label>
+					<input type="text" readonly value={formatIDR(allowanceFinal)} />
+				</div>
+			</div>
+		{/if}
+	</div>
+{/if}
+
+{#if multiCustomerEnabled && isMultiCustomer}
+	{#each extraCustomers as c, i (i)}
+		<div class="card card-pad" style="margin-top:16px;">
+			<div class="route-shipment-head">
+				<span class="route-shipment-title">Customer {i + 2}</span>
+				<button type="button" class="route-shipment-remove" onclick={() => removeExtraCustomer(i)}>Hapus</button>
+			</div>
+			<div class="two-col">
+				<div class="field">
+					<label>Customer Name <span class="req">*</span></label>
+					<FieldSelect
+						bind:value={c.customerName}
+						options={customers.map((cu: any) => ({ value: cu.name, label: cu.name }))}
+						placeholder="Pilih customer"
+						searchable
+					/>
+				</div>
+				<div class="field">
+					<label>Cargo Item</label>
+					<input type="text" bind:value={c.cargoItemId} placeholder="cth. Air Mineral Galon" />
+				</div>
+			</div>
+
+			{#each { length: Math.max(c.loadingPoints.length, 1) } as _l, k (k)}
+				<div class="route-shipment-head">
+					<span class="route-shipment-title">Shipment {k + 1}</span>
+					{#if c.loadingPoints.length > 1}
+						<button type="button" class="route-shipment-remove" onclick={() => removeExtraLane(c, k)}
+							>Hapus</button
+						>
+					{/if}
+				</div>
+				<div class="two-col">
+					<div class="field">
+						<label>Loading Point <span class="req">*</span></label>
+						<WarehouseSearchField
+							bind:value={c.loadingPoints[k]}
+							{warehouses}
+							placeholder="Cari alamat atau nama warehouse..."
+						/>
+					</div>
+					<div class="field">
+						<label>Unloading Point <span class="req">*</span></label>
+						<WarehouseSearchField
+							bind:value={c.unloadingPoints[k]}
+							{warehouses}
+							placeholder="Cari alamat atau nama warehouse..."
+						/>
+					</div>
+				</div>
+			{/each}
+			<button type="button" class="btn btn-outline btn-sm" onclick={() => addExtraLane(c)}
+				>+ Tambah Shipment</button
+			>
+		</div>
+	{/each}
+	<button type="button" class="btn btn-outline btn-sm" style="margin-top:16px;" onclick={addExtraCustomer}
+		>+ Tambah Customer</button
+	>
+	<div class="card card-pad" style="margin-top:16px;">
+		<div class="field" style="margin-bottom:0;">
+			<label>Pembagian Tagihan <span class="req">*</span></label>
+			<FieldSelect bind:value={billingSplit} options={BILLING_SPLIT_OPTIONS} placeholder="Pilih pembagian" />
+			<span class="hint" style="display:block; margin-top:6px;"
+				>Bagaimana satu harga agreement dibagi ke invoice tiap customer. Disimpan pada agreement; pemecahan
+				invoice-nya belum dijalankan.</span
+			>
+		</div>
+	</div>
+{/if}
 
 <div class="card card-pad" style="margin-top:16px;">
 	<div class="two-col">

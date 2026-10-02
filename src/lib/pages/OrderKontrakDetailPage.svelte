@@ -37,6 +37,7 @@
 	import { computeUangSangu, computeOrderKontrakRecon, reconStatusLabel } from '$lib/revamp/uangSangu.js';
 	import { statusLabel, statusBadgeClass, atOrPassed, STATUS_SEQUENCE } from '$lib/revamp/spotOrderStatus.js';
 	import { formatIDR, formatThousands, parseThousands } from '$lib/revamp/currency.js';
+	import { seedTripAllowance } from '$lib/revamp/uangSangu.js';
 	import { formatTimestampLabel } from '$lib/revamp/date.js';
 	import { totalRouteKm, haversineKm } from '$lib/revamp/geo.js';
 	import { coordsForCity } from '$lib/revamp/idCityCoords.js';
@@ -67,27 +68,6 @@
 
 	let TRANSPORTER_NAME = $derived(companyName || TRANSPORTER_NAME_FALLBACK);
 
-	function seedTripAllowance() {
-		return {
-			fuel: {
-				method: 'ratio',
-				pricePerLiter: 6800,
-				ratioByTruckType: {
-					'Trailer Flatbed 45 ft': 6,
-					'Tronton Box': 5,
-					'CDD Box': 7,
-					'Fuso Box': 6,
-					'Trailer Container 20ft': 5.5,
-					'Trailer Container 40ft': 5,
-					'Double Engkel': 8,
-					'Trailer Wingbox 45ft': 5.5
-				},
-				costPerKm: 2500
-			},
-			meal: { nominalPerDay: 100000, method: 'eta', kmPerDay: 300 },
-			lodging: { nominalPerNight: 100000 }
-		};
-	}
 
 	function toProtoWarehouse(w: any) {
 		if (!w) return null;
@@ -306,6 +286,19 @@
 	});
 
 	let shipmentType = $derived(order ? shipmentTypeLabel(order) : '');
+	/** The customers this order carries for, in shipment order and each named
+	 *  once. One name — the ordinary case — renders as it always did. */
+	let orderCustomers = $derived.by<string[]>(() => {
+		const names: string[] = detail.shipmentCustomers ?? [];
+		const seen = new Set<string>();
+		const out: string[] = [];
+		for (const n of names) {
+			if (!n || seen.has(n)) continue;
+			seen.add(n);
+			out.push(n);
+		}
+		return out;
+	});
 	let ltlSiblingOrders = $derived(
 		siblingOrders.map((o: any) => ({
 			id: o.id,
@@ -1135,8 +1128,27 @@
 		orderForUangSangu ? computeUangSangu(orderForUangSangu, tripAllowance) : null
 	);
 
+	/* ---------- An allowance the contract already agreed ----------
+	   Most contracts leave the allowance to the order, and the figures above
+	   are worked out from this trip. Some fix it on the contract: one figure
+	   for the lane, split into what the driver is paid before leaving and
+	   what follows reconciliation. The server decides which applies — the
+	   same answer that refuses a per-order override — so the card asks it
+	   rather than working it out again here and risking a different answer. */
+	let allowanceSnapshot = $state<any | null>(null);
+	$effect(() => {
+		const id = order?.id;
+		if (!id) return;
+		api
+			.get(ENDPOINTS.orders.allowance(id))
+			.then((r) => (allowanceSnapshot = r.data?.data?.snapshot ?? null))
+			.catch(() => {
+				/* no snapshot: the card computes from the trip, as before */
+			});
+	});
+
 	let uangSanguFinalized = $derived(!!detail.uangSanguFinalized);
-	let canEditPreTripEstimate = $derived(!uangSanguFinalized);
+	let canEditPreTripEstimate = $derived(!uangSanguFinalized && !allowanceSnapshot);
 	let canFinalizeUangSangu = $derived(!!order?.assignedTruckPlate && !uangSanguFinalized);
 	let sanguEditMode = $state(false);
 	let showSanguEdit = $derived(canEditPreTripEstimate && sanguEditMode);
@@ -1161,7 +1173,27 @@
 
 	// ---------- Rekonsiliasi Post-Trip ----------
 	let postTripRecon = $derived<any>(
-		order ? computeOrderKontrakRecon(order, tripAllowance, uangSangu?.uangMakan.value ?? 0) : null
+		// A contract that fixed the allowance also fixed what follows the
+		// trip: one closing share, not an itemised reckoning of nights away
+		// and meals. Shaped like the itemised one so the card and its
+		// finalise dialog need no second version.
+		allowanceSnapshot
+			? {
+					components: [
+						{
+							key: 'uangSanguAkhir',
+							label: 'Uang Sangu Akhir',
+							formula: `Proporsi akhir ${allowanceSnapshot.upfrontPercent ? 100 - Number(allowanceSnapshot.upfrontPercent) : ''}% dari total Uang Sangu pada agreement`,
+							value: Number(allowanceSnapshot.final),
+							editable: false,
+							status: null
+						}
+					],
+					total: Number(allowanceSnapshot.final)
+				}
+			: order
+				? computeOrderKontrakRecon(order, tripAllowance, uangSangu?.uangMakan.value ?? 0)
+				: null
 	);
 
 	let reconModalOpen = $state(false);
@@ -1767,15 +1799,31 @@
 			<div>
 				<div class="shipper-block shipper-block--row">
 					<div class="shipper-block-title">Shipper</div>
-					<div class="shipper-block-id">
-						<div class="shipper-logo">
-							{initials(order.shipperName)}
-							<span class="verified-dot">&#10003;</span>
+					<!-- One truck, several customers: naming them on one line
+					     joined by "+" reads as one company with an odd name.
+					     Each gets its own row, labelled with the shipment it
+					     owns, and the single logo goes because there is no one
+					     shipper to show. -->
+					{#if orderCustomers.length > 1}
+						<div class="shipper-block-customers">
+							{#each orderCustomers as name, i (i)}
+								<div class="shipper-block-customer">
+									<span class="shipper-block-name">{name}</span>
+									<span class="shipper-block-customer-tag">Customer {i + 1}</span>
+								</div>
+							{/each}
 						</div>
-						<div>
-							<div class="shipper-block-name">{order.shipperName}</div>
+					{:else}
+						<div class="shipper-block-id">
+							<div class="shipper-logo">
+								{initials(order.shipperName)}
+								<span class="verified-dot">&#10003;</span>
+							</div>
+							<div>
+								<div class="shipper-block-name">{order.shipperName}</div>
+							</div>
 						</div>
-					</div>
+					{/if}
 				</div>
 
 				<!-- Informasi Pengiriman -->
@@ -2302,6 +2350,29 @@
 							<span class="chev"><span class="icon-wrap"><ChevronDown size={14} /></span></span>
 						</div>
 						<div class="detail-section-body" style:display={sectionOpen.sangu ? undefined : 'none'}>
+							{#if allowanceSnapshot}
+								<!-- The contract fixed it, so there is one figure and
+								     nothing per order to revise. The agreement is named
+								     because the planner's first question about a number
+								     they cannot edit is where it came from. -->
+								<div class="sangu-row">
+									<div class="sangu-row-body">
+										<div class="sangu-row-label">Uang Sangu Pre-Trip</div>
+										<div class="sangu-row-formula">
+											Proporsi awal {allowanceSnapshot.upfrontPercent}% dari total Uang Sangu pada agreement
+											{allowanceSnapshot.agreementNumber}
+										</div>
+									</div>
+									<div class="sangu-row-value">{formatIDR(Number(allowanceSnapshot.upfront))}</div>
+								</div>
+								<div class="sangu-total-row">
+									<div class="sangu-row-body">
+										<div class="sangu-row-label">Subtotal Uang Sangu Pre-Trip</div>
+										<div class="sangu-row-formula">Pembayaran awal tetap ke driver</div>
+									</div>
+									<div class="sangu-total-value">{formatIDR(Number(allowanceSnapshot.upfront))}</div>
+								</div>
+							{:else}
 							{#each [{ key: 'menujuMuat', label: 'Biaya Perjalanan Menuju Lokasi Muat' }, { key: 'bbm', label: 'Biaya BBM' }, { key: 'tol', label: 'Biaya Tol' }, { key: 'uangMakan', label: 'Uang Makan' }] as row (row.key)}
 								<div
 									class="sangu-row"
@@ -2481,7 +2552,11 @@
 										{/if}
 									</div>
 									<div class="sangu-recon-actions-right">
-										{#if !sanguEditMode}
+										<!-- Nothing to update when the contract fixed the
+										     figure; the server refuses an override anyway,
+										     so offering the button would only produce an
+										     error the planner cannot act on. -->
+										{#if !sanguEditMode && !allowanceSnapshot}
 											<button class="btn btn-primary" onclick={openSanguEdit}>
 												<span class="icon-wrap"><Pencil size={16} /></span> Update Uang Sangu
 											</button>
@@ -2490,6 +2565,7 @@
 										{/if}
 									</div>
 								</div>
+							{/if}
 							{/if}
 						</div>
 					</div>

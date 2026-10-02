@@ -163,17 +163,73 @@
 		return Number.isNaN(d.getTime()) ? null : d.toISOString();
 	}
 
+	/** A contract covering several customers produces ONE order.
+	 *
+	 *  The cards are how the planner enters it — one per customer, because
+	 *  each has its own warehouses — but what travels is one truck making one
+	 *  journey, so it is one order. Splitting it per customer would produce
+	 *  several orders nobody asked for, each needing its own truck.
+	 *
+	 *  The cards are merged in the order they appear: their points
+	 *  concatenated, their items renumbered along the way, and each shipment
+	 *  recording which customer's goods it carries. */
+	function mergedForOneOrder(cards: typeof wizard.shipments) {
+		const loadingPoints: string[] = [];
+		const unloadingPoints: string[] = [];
+		const loadingPics: any[] = [];
+		const unloadingPics: any[] = [];
+		const shipmentCustomers: string[] = [];
+		const items: any[] = [];
+
+		for (const card of cards) {
+			const pairs = Math.max(card.loadingPoints.length, card.unloadingPoints.length, 1);
+			for (let k = 0; k < pairs; k++) {
+				// The number this shipment takes in the merged order, which is
+				// what the items, the stops and the POD all key on.
+				const shipmentNo = loadingPoints.length + 1;
+				loadingPoints.push(card.loadingPoints[k] ?? '');
+				unloadingPoints.push(card.unloadingPoints[k] ?? '');
+				loadingPics.push(card.loadingPics[k] ?? null);
+				unloadingPics.push(card.unloadingPics[k] ?? null);
+				shipmentCustomers.push(card.customerNama);
+				for (const it of card.items.filter((i) => (i.shipmentNo || 1) === k + 1)) {
+					items.push({ ...it, shipmentNo });
+				}
+			}
+		}
+		return { loadingPoints, unloadingPoints, loadingPics, unloadingPics, shipmentCustomers, items };
+	}
+
 	async function submitOrder() {
 		if (submitting) return;
 		submitting = true;
 		try {
-			for (const sp of wizard.shipments) {
+			// One order per card, except for a contract covering several
+			// customers: there, every card is one customer's part of the same
+			// journey.
+			const first = wizard.shipments[0];
+			const oneOrder = first?.agreementType === 'multi-customer' && wizard.shipments.length > 1;
+			const blocks = oneOrder ? [first] : wizard.shipments;
+			const merged = oneOrder ? mergedForOneOrder(wizard.shipments) : null;
+
+			for (const sp of blocks) {
 				const agreement = agreementFor(agreements, sp);
 				const agreementDetail = agreement?.detail ?? {};
 				const customer = customers.find((c) => c.name === sp.customerNama);
-				const loadingNames = sp.loadingPoints.map(warehouseName).join(' + ');
-				const unloadingNames = sp.unloadingPoints.map(warehouseName).join(' + ');
-				const items = sp.items.map((it) => ({
+				// The merged journey when several customers share this order,
+				// otherwise this card's own.
+				const loadingPointsOut = merged?.loadingPoints ?? sp.loadingPoints;
+				const unloadingPointsOut = merged?.unloadingPoints ?? sp.unloadingPoints;
+				const loadingPicsOut = merged?.loadingPics ?? sp.loadingPics;
+				const unloadingPicsOut = merged?.unloadingPics ?? sp.unloadingPics;
+				const loadingNames = loadingPointsOut.map(warehouseName).join(' + ');
+				const unloadingNames = unloadingPointsOut.map(warehouseName).join(' + ');
+				// Weight, quantity and volume cover the whole order, so on a
+				// merged one they are every customer's items, not the first
+				// card's. Reading the card would have priced a two-customer
+				// order as though only one of them were shipping.
+				const totalsOf = merged ? { ...sp, items: merged.items } : sp;
+				const items = (merged?.items ?? sp.items).map((it) => ({
 					// Which shipment's goods these are — the server pairs a
 					// stop's plan to its items by this number.
 					shipmentNo: it.shipmentNo || 1,
@@ -191,29 +247,29 @@
 					customerCompanyId: customer?.id ?? agreement?.shipperCompanyId,
 					agreementId: sp.agreementId,
 					orderKind: 'standard',
-					originWarehouseId: sp.loadingPoints[0],
-					destinationWarehouseId: sp.unloadingPoints[sp.unloadingPoints.length - 1],
+					originWarehouseId: loadingPointsOut[0],
+					destinationWarehouseId: unloadingPointsOut[unloadingPointsOut.length - 1],
 					pickupAt,
 					// The service refuses an expiry later than the loading time (an
 					// order that may be actioned after the truck was due is not a
 					// schedule), so an expiry on the loading day is clamped to it.
 					expiresAt: expiresAt && pickupAt && expiresAt > pickupAt ? pickupAt : expiresAt,
-					weightKg: String(totalTonnageKg(sp)),
+					weightKg: String(totalTonnageKg(totalsOf)),
 					// Itemised cargo is NOT sent as rows. "items" is a field a
 					// company switches on ("Itemised cargo", hidden by default),
 					// and sending it to a company that has not enabled it fails
 					// the whole order with "not enabled for your company". The
 					// wizard's lines live on detail.items, with their shipmentNo,
 					// which is what every screen reads for a shipment's plan.
-					quantity: String(itemsShipped(sp)),
-					volumeM3: String(totalVolume(sp)),
+					quantity: String(itemsShipped(totalsOf)),
+					volumeM3: String(totalVolume(totalsOf)),
 					detail: {
 						internalOrder: true,
 						shipperName: sp.customerNama,
 						rute: `${loadingNames} — ${unloadingNames}`,
 						tanggalPickup: formatDateTimeLabel(wizard.estimatedLoadDate, wizard.estimatedLoadTime),
 						nilai: estimatedOrderValue(agreement ? agreementDetail : null, {
-							totalTonnage: totalTonnageKg(sp)
+							totalTonnage: totalTonnageKg(totalsOf)
 						}),
 						muatan: agreementDetail.namaBarang || '-',
 						orderExpirationDate: wizard.orderExpirationDate,
@@ -221,16 +277,20 @@
 						transporterName,
 						fleetDescription: sp.fleetDescription,
 						truckOptions: [...(sp.truckOptions ?? [])],
-						loadingPoints: [...sp.loadingPoints],
-						unloadingPoints: [...sp.unloadingPoints],
+						loadingPoints: [...loadingPointsOut],
+						unloadingPoints: [...unloadingPointsOut],
+						// Which customer's goods each shipment carries. Absent
+						// on an order with a single customer, where the order
+						// already says whose it is.
+						...(merged ? { shipmentCustomers: [...merged.shipmentCustomers] } : {}),
 						// Who answers at each point, and the two K-Trip reads: the
 						// loading PIC (first point) and the unloading PIC (last).
-						loadingPics: sp.loadingPoints.map((wid, k) => ({ warehouseId: wid, ...(sp.loadingPics[k] ?? { name: '', phone: '' }) })),
-						unloadingPics: sp.unloadingPoints.map((wid, k) => ({ warehouseId: wid, ...(sp.unloadingPics[k] ?? { name: '', phone: '' }) })),
-						loadingPic: sp.loadingPics[0] ?? null,
-						unloadingPic: sp.unloadingPics[sp.unloadingPics.length - 1] ?? null,
+						loadingPics: loadingPointsOut.map((wid, k) => ({ warehouseId: wid, ...(loadingPicsOut[k] ?? { name: '', phone: '' }) })),
+						unloadingPics: unloadingPointsOut.map((wid, k) => ({ warehouseId: wid, ...(unloadingPicsOut[k] ?? { name: '', phone: '' }) })),
+						loadingPic: loadingPicsOut[0] ?? null,
+						unloadingPic: unloadingPicsOut[unloadingPicsOut.length - 1] ?? null,
 						items,
-						totalTonnage: totalTonnageKg(sp),
+						totalTonnage: totalTonnageKg(totalsOf),
 						additionalNeeds: [...sp.additionalNeeds],
 						description: sp.description,
 						warehouseLabel: sp.warehouseLabel,

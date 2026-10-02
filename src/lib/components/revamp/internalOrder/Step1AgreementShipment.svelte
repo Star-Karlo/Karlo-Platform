@@ -10,6 +10,7 @@
 		allowsManyShipments,
 		defaultPicOf,
 		newItem,
+		newShipment,
 		shipmentCount,
 		type Customer,
 		type PointPic,
@@ -79,6 +80,62 @@
 		// items behind pointing at a shipment that no longer exists.
 		sp.agreementType = a.agreementType ?? d.agreementType ?? '';
 		if (!allowsManyShipments(sp)) keepOnlyFirstShipment(sp);
+		applyAgreementPoints(sp, d);
+		rebuildCustomerCards(agreementTargetIndex, a, d);
+	}
+
+	/* ---------- What the contract already decided ----------
+	   A contract that names its warehouses has already chosen this order's
+	   points, and how many shipments it carries. Filling them in is not a
+	   different flow: the fields are the same searches as always, and a
+	   planner may still look one up again or replace it. A contract priced
+	   city to city names no warehouses, so nothing is filled and the planner
+	   picks them as before. */
+	function applyAgreementPoints(sp: WizardShipment, detail: any) {
+		const loads: string[] = Array.isArray(detail.loadingPoints) ? detail.loadingPoints.filter(Boolean) : [];
+		const unloads: string[] = Array.isArray(detail.unloadingPoints) ? detail.unloadingPoints.filter(Boolean) : [];
+		if (!loads.length && !unloads.length) return;
+
+		const pairs = Math.max(loads.length, unloads.length, 1);
+		sp.loadingPoints = Array.from({ length: pairs }, (_, k) => loads[k] ?? '');
+		sp.unloadingPoints = Array.from({ length: pairs }, (_, k) => unloads[k] ?? '');
+		sp.loadingPics = Array.from({ length: pairs }, (_, k) => sp.loadingPics[k] ?? null);
+		sp.unloadingPics = Array.from({ length: pairs }, (_, k) => sp.unloadingPics[k] ?? null);
+		// Every shipment needs a row to enter its items against.
+		for (let n = 1; n <= pairs; n++) {
+			if (!sp.items.some((it) => (it.shipmentNo || 1) === n)) sp.items.push(newItem(n));
+		}
+		sp.items = sp.items.filter((it) => (it.shipmentNo || 1) <= pairs);
+		// Each point proposes its warehouse's own PIC, as choosing one by
+		// hand would.
+		for (let k = 0; k < pairs; k++) {
+			if (sp.loadingPoints[k]) onPointChosen(wizard.shipments.indexOf(sp), 'loadingPoints', k, sp.loadingPoints[k]);
+			if (sp.unloadingPoints[k]) onPointChosen(wizard.shipments.indexOf(sp), 'unloadingPoints', k, sp.unloadingPoints[k]);
+		}
+	}
+
+	/** A contract covering several customers brings the others with it: one
+	 *  card each, filled from the contract, their customer and agreement
+	 *  fixed because the contract is what decided them. */
+	function rebuildCustomerCards(atIndex: number, agreement: any, detail: any) {
+		const extras: any[] = Array.isArray(detail.multiCustomers) ? detail.multiCustomers : [];
+		// Cards built from a previous choice go, whatever the new one is.
+		wizard.shipments = wizard.shipments.filter((s, i) => i <= atIndex || !s.fromAgreementCustomer);
+		if (!extras.length) return;
+
+		const built = extras.map((c) => {
+			const card = newShipment();
+			card.customerNama = c.customerName ?? '';
+			card.agreementId = agreement.id;
+			card.agreementLabel = `${agreement.agreementNumber} — ${detail.kotaAsal} - ${detail.kotaTujuan}`;
+			card.agreementType = agreement.agreementType ?? detail.agreementType ?? '';
+			card.agreementTruckTypes = Array.isArray(detail.truckTypeMatrix) ? detail.truckTypeMatrix : [];
+			// Fixed: the contract decided who this is and under what terms.
+			card.fromAgreementCustomer = true;
+			applyAgreementPoints(card, c);
+			return card;
+		});
+		wizard.shipments.splice(atIndex + 1, 0, ...built);
 	}
 
 	/* ---------- Shipments: one pair of points each ----------
@@ -277,24 +334,36 @@
 			<div class="two-col">
 				<div class="field">
 					<label>Customer <span class="req">*</span></label>
-					<FieldSelect
-						bind:value={sp.customerNama}
-						options={customerOptions}
-						placeholder="Pilih customer"
-						onchange={() => onCustomerChange(i)}
-					/>
+					<!-- A card the contract brought with it states its customer
+					     rather than offering a choice: the contract decided it,
+					     and changing it here would describe a customer the
+					     contract does not cover. -->
+					{#if sp.fromAgreementCustomer}
+						<input type="text" readonly value={sp.customerNama} />
+					{:else}
+						<FieldSelect
+							bind:value={sp.customerNama}
+							options={customerOptions}
+							placeholder="Pilih customer"
+							onchange={() => onCustomerChange(i)}
+						/>
+					{/if}
 				</div>
 				<div class="field">
 					<label>Agreement <span class="req">*</span></label>
-					<button
-						type="button"
-						class="btn btn-outline agreement-select-btn"
-						disabled={!sp.customerNama}
-						title={sp.agreementLabel || (!sp.customerNama ? 'Pilih customer terlebih dahulu' : '')}
-						onclick={() => openAgreementPicker(i)}
-					>
-						<span class="agreement-select-btn-label">{sp.agreementLabel || 'Select Agreement'}</span>
-					</button>
+					{#if sp.fromAgreementCustomer}
+						<input type="text" readonly value={sp.agreementLabel} />
+					{:else}
+						<button
+							type="button"
+							class="btn btn-outline agreement-select-btn"
+							disabled={!sp.customerNama}
+							title={sp.agreementLabel || (!sp.customerNama ? 'Pilih customer terlebih dahulu' : '')}
+							onclick={() => openAgreementPicker(i)}
+						>
+							<span class="agreement-select-btn-label">{sp.agreementLabel || 'Select Agreement'}</span>
+						</button>
+					{/if}
 				</div>
 			</div>
 
