@@ -36,9 +36,15 @@ export type WizardShipment = {
 	truckOptions: string[];
 	/** The picked agreement's truck-type matrix — what truckOptions may be chosen from. */
 	agreementTruckTypes: string[];
-	/** "single-shipment" or "multi-shipment", from the agreement. It decides
-	 *  whether this order may carry more than one shipment at all. */
+	/** "single-shipment", "multi-shipment" or "multi-customer", from the
+	 *  agreement. It decides whether this order may carry more than one
+	 *  shipment at all. */
 	agreementType: string;
+	/** True for a card the contract brought with it — one of the other
+	 *  customers a multi-customer contract covers. Its customer and agreement
+	 *  are fixed, because the contract is what decided them, and it is
+	 *  rebuilt rather than edited when the agreement changes. */
+	fromAgreementCustomer?: boolean;
 	expanded: boolean;
 	items: WizardItem[];
 	additionalNeeds: string[];
@@ -98,6 +104,7 @@ export function newShipment(): WizardShipment {
 		truckOptions: [],
 		agreementTruckTypes: [],
 		agreementType: '',
+		fromAgreementCustomer: false,
 		expanded: true,
 		items: [newItem(1)],
 		additionalNeeds: [],
