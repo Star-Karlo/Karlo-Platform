@@ -305,6 +305,135 @@ its POD gate — see
   Shipment (N)* is gone with the tabs. Whether a price should ever be split per
   shipment is still an open product question.
 
+### A contract that names its warehouses, covers several customers, and agrees the allowance
+
+**There is no MAST mode, and that is why this is shaped the way it is.** MAST is
+a **company**. Every row in the rebuild is already company-scoped, so the legacy
+app's `mast_` collection prefix — a parallel set of documents for one customer —
+has no equivalent here and needs none. Per-customer differences are **data**:
+which fields that company has enabled, and what its contracts say. No page asks
+which company an order belongs to, and nothing below is a second flow. Every
+field involved is **hidden by default**, and nothing is enabled in production, so
+this changes nothing for any company — MAST included — until someone switches
+the fields on.
+
+- **The agreement form reads the field configuration now** (b156a07).
+  `AgreementRevampFormPage` calls `fieldConfigActions.load('agreement')` — the
+  same `stores/fieldconfig` the configurator already used. **Correcting what was
+  implied before: that seam is not wired everywhere.** Its only readers are
+  `FormConfigPage` (the configurator itself, `/s` `/t` `/a`), `OrderFormPage`
+  (the generic order form) and `AgreementFormPage` — the older agreement form,
+  mounted under `/s` alone. The **revamp** agreement form, which is the one a
+  contract is actually written on, ignored it, so a company could turn a field
+  on and see no change on the form that mattered. That is what this fixed, and
+  `InternalOrderFormPage` **still does not read it**: the wizard follows the
+  contract, not the configuration. `isEnabled` is `requirement !== 'hidden'`,
+  and a failed load returns `[]`, so every field below stays off when the answer
+  cannot be fetched.
+- **Lanes may be named by warehouse instead of by city**
+  (`lanes.loadingPoints`). When on, the city lanes are replaced on the form by
+  two `WarehouseSearchField`s per shipment, paired exactly as everything else is:
+  `loadingPoints[k]` with `unloadingPoints[k]` is Shipment *k+1*, added and
+  removed together, which is the same pairing an order's points use. The
+  warehouse list is fetched **only** when the field is on. Validation follows the
+  form — holding the contract to city lanes that are not on the screen would
+  refuse it for a field nobody can see. Two things not to misread: the rate rows
+  are still built from the **city** lists (`agreement_rates`' warehouse columns
+  are stored and never matched), so the named warehouses price nothing — what
+  they do is fill the order in; and the whole submit payload is sent as
+  `detail`, so these land on `agreements.detail.loadingPoints` /
+  `.unloadingPoints`.
+- **Multi Customer is a third agreement type, offered only where the company has
+  additional customers enabled** (`multiCustomers`, `agreementTypeOptions`) —
+  for everyone else an order belongs to one customer and the choice would be a
+  dead end. Each extra customer is a card of its own with its own customer name,
+  cargo item and its own lanes (*Customer 2* upward; the contract's own customer
+  is the first). Validation names both the customer and the lane — *Loading Point
+  Shipment 2 pada Customer 3 wajib dipilih* points at one field rather than at
+  the form. Choosing another type drops the extra customers, because a contract
+  that is not multi-customer has exactly one. *Pembagian Tagihan* (`billingSplit`,
+  proportional by tonnage or equal) is **stored and shown but not acted on** —
+  the hint under the field says so rather than implying the money already
+  follows it. Invoice splitting is not implemented, which is the open question
+  noted above about splitting a price per shipment.
+- **The contract can compute and agree the driver's allowance** (6b483d2). Shown
+  only where `allowance.upfrontPercent` is enabled **and** lanes are priced by
+  warehouse — without two warehouses there is no distance to compute from, and
+  the card says so instead of showing zero. The distance is the real road route:
+  `POST /routing/route` with the two warehouses' `[lon, lat]`, profile `truck`,
+  giving `laneKm` and `laneHours`. The total is then
+  `computeUangSangu({ detail: { tripEstimate: { jarakKm, etaJam } } },
+  seedTripAllowance())` — the **same function the order uses**, so the figure a
+  contract fixes and the figure it replaces cannot drift apart, which is the
+  whole point of fixing it. The planner sets the upfront percentage; all three
+  figures are stored (`detail.allowance.total / upfrontPercent / upfront /
+  final`), not the percentage alone, so amending the percentage later cannot
+  restate what was already paid. `seedTripAllowance` moved out of
+  `OrderKontrakDetailPage` into `src/lib/revamp/uangSangu.js` for the same
+  reason — two copies of the fuel ratios would have been two answers. Note that
+  `/routing/route` is guarded by `order.read`, so someone who may write
+  contracts but not read orders gets no distance and sees the card's "pick the
+  two points first" state.
+- **The order wizard fills the points in from the contract** (1eba6a3).
+  `applyAgreementPoints` reads `detail.loadingPoints` / `.unloadingPoints` off
+  the chosen agreement, sizes the point, PIC and item lists to the number of
+  lanes, and runs each point through `onPointChosen` so it proposes its
+  warehouse's own PIC exactly as picking one by hand would. This is **not** a
+  second flow: the fields are the same warehouse searches, a planner may look one
+  up again or replace it, and a contract priced city to city names no warehouses
+  so nothing is filled. One wrinkle: `allowsManyShipments` is still true only for
+  `multi-shipment`, so on a `multi-customer` card the planner cannot add a lane
+  by hand ("+ Tambah Shipment" is not offered) although lanes the contract names
+  are prefilled and do render.
+- **A multi-customer contract brings the other customers with it, as cards.**
+  `rebuildCustomerCards` inserts one card per `detail.multiCustomers[]` entry
+  after the one whose agreement was chosen, filled from that customer's own
+  lanes, with `fromAgreementCustomer: true` — its Customer and Agreement render
+  as read-only inputs rather than a select and a picker, because the contract
+  decided them and choosing differently here would describe a customer the
+  contract does not cover. Cards from a previous choice are dropped whatever the
+  new one is: they are rebuilt, never edited.
+- **Those cards produce ONE order** (`mergedForOneOrder` in
+  `InternalOrderFormPage`). The cards are how a planner enters it — each
+  customer has its own warehouses — but what travels is one truck making one
+  journey. Splitting per customer would produce several orders nobody asked for,
+  each wanting its own truck. Merged in card order: points concatenated, items
+  renumbered **globally** (`shipmentNo` is the position in the merged list, which
+  is what the stops, the plan and the POD all key on), `detail.shipmentCustomers[]`
+  recording whose goods each shipment carries, `originWarehouseId` the first
+  loading point and `destinationWarehouseId` the last unloading one. The order's
+  `weightKg`, `quantity`, `volumeM3`, `detail.totalTonnage` and `detail.nilai`
+  are computed over the **merged** items — reading the first card would have
+  priced a two-customer order as though only one of them were shipping. The merge
+  runs only when `shipments[0].agreementType === 'multi-customer'` and there is
+  more than one card; otherwise it is still one order per card, unchanged.
+- **The order detail names every customer** (1256528). `shipmentTypeLabel`
+  returns *Multi Customer* when the order's own `shipmentCustomers` (top level or
+  `detail`) holds more than one distinct name — checked after the LTL flag and
+  **before** the point counts, and read from the **order**, not the agreement,
+  because an agreement may cover several customers and an order placed under it
+  still name only one. What the badge describes is the order. The *Shipper* block
+  then renders one row per distinct customer in shipment order, each with a
+  *Customer N* tag (`.shipper-block-customer*` in `revamp.css`), and the single
+  logo goes: there is no one shipper to show a mark of verification for. One
+  customer renders exactly as before, logo and all.
+- **The allowance card asks the server which rule applies** (567cf01). Where a
+  contract agreed the allowance, the card shows its two figures — one line before
+  the trip, one after — instead of an itemised reckoning of fuel, tolls and meals
+  that would arrive at a different number. It does not decide this itself: an
+  effect reads `GET /orders/{id}/allowance` and takes `data.snapshot`, which is
+  the same answer that refuses a per-order override server-side, so the screen
+  and the server cannot disagree about whether a figure is editable.
+  `canEditPreTripEstimate` is false under a snapshot and *Update Uang Sangu* is
+  hidden — offering it would only produce an error the planner cannot act on.
+  Reconciliation becomes the contract's closing share shaped like the itemised
+  one (one component, `editable: false`, which is what hides the pencil) so the
+  card and its finalise dialog need no second version. The call is gated by
+  `order.allowance.read`; a failure is caught and leaves the card computing from
+  the trip, as before — so a planner without that permission sees the computed
+  figures even under a contract that fixed them. An order whose contract agreed
+  nothing is untouched.
+
 ---
 
 ## 4. What is still missing
@@ -466,3 +595,11 @@ open.
   of every item of every shipment. Note that orders read back still carry a
   `detail.totalTonnage`, which is what `orderPricing.js`, `financeData.ts` and
   the Planner page take; the wizard writes it, nothing types it.
+- **Two newer `detail` keys, both written by the console and read by nobody on
+  the server.** `agreements.detail.allowance` — `{total, upfrontPercent,
+  upfront, final}` — is the one exception: the business service reads it and
+  reports it in place of an order's own figure. `agreements.detail.loadingPoints`
+  / `.unloadingPoints`, `.multiCustomers[]` and `.billingSplit`, and the order's
+  `detail.shipmentCustomers[]`, are all read back by the console only. See §*A
+  contract that names its warehouses…* above, and
+  `MICROSERVICES/docs/business/MODEL.md` §*There is no MAST mode*.
