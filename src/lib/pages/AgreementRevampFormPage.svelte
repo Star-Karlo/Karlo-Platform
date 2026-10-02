@@ -23,6 +23,8 @@
 	import { kecamatanOptionsFor } from '$lib/revamp/kecamatanData.js';
 	import { agreementTypeOptions } from '$lib/revamp/agreementType.js';
 	import { fieldConfigActions, isEnabled, type FieldConfig } from '$lib/stores/fieldconfig';
+	import { computeUangSangu, seedTripAllowance } from '$lib/revamp/uangSangu.js';
+	import { formatIDR } from '$lib/revamp/currency.js';
 	import WarehouseSearchField from '$lib/components/revamp/WarehouseSearchField.svelte';
 	import { toAgreementRow, type AgreementRow, type AgreementRouteEntry } from '$lib/revamp/agreementView';
 	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
@@ -242,6 +244,64 @@
 		if (!isMultiCustomer && extraCustomers.length) extraCustomers = [];
 	});
 
+	let agreementFields = $state<FieldConfig[] | null>(null);
+	let lanesByWarehouse = $derived(isEnabled(agreementFields, 'lanes.loadingPoints'));
+	let multiCustomerEnabled = $derived(isEnabled(agreementFields, 'multiCustomers'));
+	let typeOptions = $derived(agreementTypeOptions(multiCustomerEnabled));
+
+	/* ---------- The allowance this contract agrees ----------
+	   A contract may fix the driver's allowance instead of leaving it to each
+	   order: one figure for the lane, split into what is paid before leaving
+	   and what follows reconciliation.
+
+	   Computed by the SAME function an order uses, fed the distance between
+	   the two warehouses named above. One computation, so the figure agreed
+	   here and the figure an order would have worked out cannot drift apart
+	   — which matters, because the whole point is that the order stops
+	   computing and reports this instead. */
+	let tripAllowance = $state<any>(seedTripAllowance());
+	let laneKm = $state(0);
+	let laneHours = $state(0);
+	let allowanceUpfrontPercent = $state(60);
+	let allowanceEnabled = $derived(isEnabled(agreementFields, 'allowance.upfrontPercent'));
+
+	let allowanceTotal = $derived.by(() => {
+		if (!laneKm) return 0;
+		const synthetic = { detail: { tripEstimate: { jarakKm: laneKm, etaJam: laneHours } } };
+		return Math.round(computeUangSangu(synthetic, tripAllowance).subtotal);
+	});
+	let allowanceUpfront = $derived(Math.round((allowanceTotal * (Number(allowanceUpfrontPercent) || 0)) / 100));
+	let allowanceFinal = $derived(allowanceTotal - allowanceUpfront);
+
+	/** Distance and time for the contract's first lane, from the real road
+	 *  route between its two warehouses. Re-asked whenever either end moves. */
+	$effect(() => {
+		const from = loadingPoints[0];
+		const to = unloadingPoints[0];
+		if (!allowanceEnabled || !from || !to) {
+			laneKm = 0;
+			laneHours = 0;
+			return;
+		}
+		const a = warehouses.find((w: any) => w.id === from);
+		const b = warehouses.find((w: any) => w.id === to);
+		const pointOf = (w: any) =>
+			w && Number(w.longitude) && Number(w.latitude) ? [Number(w.longitude), Number(w.latitude)] : null;
+		const pa = pointOf(a);
+		const pb = pointOf(b);
+		if (!pa || !pb) return;
+		api
+			.post(ENDPOINTS.routing.route, { points: [pa, pb], profile: 'truck', includeTolls: false })
+			.then((r) => {
+				const route = r.data?.data?.route ?? r.data?.data ?? {};
+				laneKm = Math.round(((Number(route.distanceMeters) || 0) / 1000) * 10) / 10;
+				laneHours = Math.round(((Number(route.durationSeconds) || 0) / 3600) * 10) / 10;
+			})
+			.catch(() => {
+				/* no route: the card says the distance is not known yet */
+			});
+	});
+
 	let routeShipmentCount = $derived(
 		Math.max(form.initialRoutes.length, form.destinationRoutes.length, 1)
 	);
@@ -307,6 +367,10 @@
 			}));
 		}
 		if (typeof a.billingSplit === 'string') billingSplit = a.billingSplit;
+		const savedAllowance = a.allowance as { upfrontPercent?: number } | undefined;
+		if (savedAllowance?.upfrontPercent != null) {
+			allowanceUpfrontPercent = Number(savedAllowance.upfrontPercent);
+		}
 		if (Array.isArray(a.loadingPoints) && a.loadingPoints.length) {
 			loadingPoints = [...a.loadingPoints];
 			unloadingPoints = Array.isArray(a.unloadingPoints) ? [...a.unloadingPoints] : [];
@@ -366,10 +430,6 @@
 	   from it cannot produce a submission the server then refuses. A company
 	   that has configured nothing sees exactly the form it saw before: every
 	   field below is hidden by default. */
-	let agreementFields = $state<FieldConfig[] | null>(null);
-	let lanesByWarehouse = $derived(isEnabled(agreementFields, 'lanes.loadingPoints'));
-	let multiCustomerEnabled = $derived(isEnabled(agreementFields, 'multiCustomers'));
-	let typeOptions = $derived(agreementTypeOptions(multiCustomerEnabled));
 
 	onMount(async () => {
 		void fieldConfigActions.load('agreement').then(async (f) => {
@@ -542,6 +602,19 @@
 					? {
 							loadingPoints: loadingPoints.filter(Boolean),
 							unloadingPoints: unloadingPoints.filter(Boolean)
+						}
+					: {}),
+				// The allowance the contract agrees, stored as the three figures
+				// rather than the percentage alone: amending the percentage
+				// later must not silently restate what was already paid.
+				...(allowanceEnabled && allowanceTotal > 0
+					? {
+							allowance: {
+								total: allowanceTotal,
+								upfrontPercent: Number(allowanceUpfrontPercent) || 0,
+								upfront: allowanceUpfront,
+								final: allowanceFinal
+							}
 						}
 					: {}),
 				// The other customers this contract covers, and how one agreed
@@ -804,6 +877,45 @@
 
 <!-- The other customers this contract covers. Only for a contract that says
      it covers several, and only where the company has that enabled. -->
+<!-- The allowance this contract agrees, instead of each order working one
+     out. Computed by the same function an order uses, from the real road
+     distance between the two warehouses named above, so the figure agreed
+     here and the figure it replaces cannot drift apart. -->
+{#if allowanceEnabled && lanesByWarehouse}
+	<div class="card card-pad" style="margin-top:16px;">
+		<div class="route-shipment-head">
+			<span class="route-shipment-title">Uang Sangu Driver</span>
+			{#if laneKm}<span class="hint">{laneKm} km · ETA {laneHours} jam</span>{/if}
+		</div>
+		{#if !laneKm}
+			<p class="hint" style="margin:0;">
+				Pilih Loading Point dan Unloading Point terlebih dahulu — jarak dihitung dari rute jalan antara keduanya.
+			</p>
+		{:else}
+			<div class="two-col">
+				<div class="field">
+					<label>Total Uang Sangu</label>
+					<input type="text" readonly value={formatIDR(allowanceTotal)} />
+				</div>
+				<div class="field">
+					<label>Uang Sangu Driver Awal (%)</label>
+					<input type="number" min="0" max="100" bind:value={allowanceUpfrontPercent} />
+				</div>
+			</div>
+			<div class="two-col" style="margin-bottom:0;">
+				<div class="field" style="margin-bottom:0;">
+					<label>Uang Sangu Awal</label>
+					<input type="text" readonly value={formatIDR(allowanceUpfront)} />
+				</div>
+				<div class="field" style="margin-bottom:0;">
+					<label>Uang Sangu Akhir</label>
+					<input type="text" readonly value={formatIDR(allowanceFinal)} />
+				</div>
+			</div>
+		{/if}
+	</div>
+{/if}
+
 {#if multiCustomerEnabled && isMultiCustomer}
 	{#each extraCustomers as c, i (i)}
 		<div class="card card-pad" style="margin-top:16px;">

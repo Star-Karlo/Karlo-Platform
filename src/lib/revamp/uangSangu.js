@@ -17,6 +17,36 @@ function averageRatio(ratioByTruckType) {
  * applies when this order's route is flagged as passing through a port
  * (port-to-port) crossing.
  */
+/**
+ * The Trip Allowance defaults, used until a company has configured its own.
+ *
+ * Lives beside the computation it feeds so the two cannot drift: an agreement
+ * agreeing an allowance and an order working one out must start from the same
+ * fuel ratios and meal rate, or the figure the contract fixes would differ
+ * from the figure it replaces.
+ */
+export function seedTripAllowance() {
+  return {
+    fuel: {
+      method: 'ratio',
+      pricePerLiter: 6800,
+      ratioByTruckType: {
+        'Trailer Flatbed 45 ft': 6,
+        'Tronton Box': 5,
+        'CDD Box': 7,
+        'Fuso Box': 6,
+        'Trailer Container 20ft': 5.5,
+        'Trailer Container 40ft': 5,
+        'Double Engkel': 8,
+        'Trailer Wingbox 45ft': 5.5,
+      },
+      costPerKm: 2500,
+    },
+    meal: { nominalPerDay: 100000, method: 'eta', kmPerDay: 300 },
+    lodging: { nominalPerNight: 100000 },
+  }
+}
+
 export function computeUangSangu(order, tripAllowance) {
   const est = order?.detail?.tripEstimate || {}
   const jarakKm = Number(est.jarakKm) || 0

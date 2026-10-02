@@ -37,6 +37,7 @@
 	import { computeUangSangu, computeOrderKontrakRecon, reconStatusLabel } from '$lib/revamp/uangSangu.js';
 	import { statusLabel, statusBadgeClass, atOrPassed, STATUS_SEQUENCE } from '$lib/revamp/spotOrderStatus.js';
 	import { formatIDR, formatThousands, parseThousands } from '$lib/revamp/currency.js';
+	import { seedTripAllowance } from '$lib/revamp/uangSangu.js';
 	import { formatTimestampLabel } from '$lib/revamp/date.js';
 	import { totalRouteKm, haversineKm } from '$lib/revamp/geo.js';
 	import { coordsForCity } from '$lib/revamp/idCityCoords.js';
@@ -67,27 +68,6 @@
 
 	let TRANSPORTER_NAME = $derived(companyName || TRANSPORTER_NAME_FALLBACK);
 
-	function seedTripAllowance() {
-		return {
-			fuel: {
-				method: 'ratio',
-				pricePerLiter: 6800,
-				ratioByTruckType: {
-					'Trailer Flatbed 45 ft': 6,
-					'Tronton Box': 5,
-					'CDD Box': 7,
-					'Fuso Box': 6,
-					'Trailer Container 20ft': 5.5,
-					'Trailer Container 40ft': 5,
-					'Double Engkel': 8,
-					'Trailer Wingbox 45ft': 5.5
-				},
-				costPerKm: 2500
-			},
-			meal: { nominalPerDay: 100000, method: 'eta', kmPerDay: 300 },
-			lodging: { nominalPerNight: 100000 }
-		};
-	}
 
 	function toProtoWarehouse(w: any) {
 		if (!w) return null;
