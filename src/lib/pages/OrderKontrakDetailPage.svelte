@@ -1135,8 +1135,27 @@
 		orderForUangSangu ? computeUangSangu(orderForUangSangu, tripAllowance) : null
 	);
 
+	/* ---------- An allowance the contract already agreed ----------
+	   Most contracts leave the allowance to the order, and the figures above
+	   are worked out from this trip. Some fix it on the contract: one figure
+	   for the lane, split into what the driver is paid before leaving and
+	   what follows reconciliation. The server decides which applies — the
+	   same answer that refuses a per-order override — so the card asks it
+	   rather than working it out again here and risking a different answer. */
+	let allowanceSnapshot = $state<any | null>(null);
+	$effect(() => {
+		const id = order?.id;
+		if (!id) return;
+		api
+			.get(ENDPOINTS.orders.allowance(id))
+			.then((r) => (allowanceSnapshot = r.data?.data?.snapshot ?? null))
+			.catch(() => {
+				/* no snapshot: the card computes from the trip, as before */
+			});
+	});
+
 	let uangSanguFinalized = $derived(!!detail.uangSanguFinalized);
-	let canEditPreTripEstimate = $derived(!uangSanguFinalized);
+	let canEditPreTripEstimate = $derived(!uangSanguFinalized && !allowanceSnapshot);
 	let canFinalizeUangSangu = $derived(!!order?.assignedTruckPlate && !uangSanguFinalized);
 	let sanguEditMode = $state(false);
 	let showSanguEdit = $derived(canEditPreTripEstimate && sanguEditMode);
@@ -1161,7 +1180,27 @@
 
 	// ---------- Rekonsiliasi Post-Trip ----------
 	let postTripRecon = $derived<any>(
-		order ? computeOrderKontrakRecon(order, tripAllowance, uangSangu?.uangMakan.value ?? 0) : null
+		// A contract that fixed the allowance also fixed what follows the
+		// trip: one closing share, not an itemised reckoning of nights away
+		// and meals. Shaped like the itemised one so the card and its
+		// finalise dialog need no second version.
+		allowanceSnapshot
+			? {
+					components: [
+						{
+							key: 'uangSanguAkhir',
+							label: 'Uang Sangu Akhir',
+							formula: `Proporsi akhir ${allowanceSnapshot.upfrontPercent ? 100 - Number(allowanceSnapshot.upfrontPercent) : ''}% dari total Uang Sangu pada agreement`,
+							value: Number(allowanceSnapshot.final),
+							editable: false,
+							status: null
+						}
+					],
+					total: Number(allowanceSnapshot.final)
+				}
+			: order
+				? computeOrderKontrakRecon(order, tripAllowance, uangSangu?.uangMakan.value ?? 0)
+				: null
 	);
 
 	let reconModalOpen = $state(false);
@@ -2302,6 +2341,29 @@
 							<span class="chev"><span class="icon-wrap"><ChevronDown size={14} /></span></span>
 						</div>
 						<div class="detail-section-body" style:display={sectionOpen.sangu ? undefined : 'none'}>
+							{#if allowanceSnapshot}
+								<!-- The contract fixed it, so there is one figure and
+								     nothing per order to revise. The agreement is named
+								     because the planner's first question about a number
+								     they cannot edit is where it came from. -->
+								<div class="sangu-row">
+									<div class="sangu-row-body">
+										<div class="sangu-row-label">Uang Sangu Pre-Trip</div>
+										<div class="sangu-row-formula">
+											Proporsi awal {allowanceSnapshot.upfrontPercent}% dari total Uang Sangu pada agreement
+											{allowanceSnapshot.agreementNumber}
+										</div>
+									</div>
+									<div class="sangu-row-value">{formatIDR(Number(allowanceSnapshot.upfront))}</div>
+								</div>
+								<div class="sangu-total-row">
+									<div class="sangu-row-body">
+										<div class="sangu-row-label">Subtotal Uang Sangu Pre-Trip</div>
+										<div class="sangu-row-formula">Pembayaran awal tetap ke driver</div>
+									</div>
+									<div class="sangu-total-value">{formatIDR(Number(allowanceSnapshot.upfront))}</div>
+								</div>
+							{:else}
 							{#each [{ key: 'menujuMuat', label: 'Biaya Perjalanan Menuju Lokasi Muat' }, { key: 'bbm', label: 'Biaya BBM' }, { key: 'tol', label: 'Biaya Tol' }, { key: 'uangMakan', label: 'Uang Makan' }] as row (row.key)}
 								<div
 									class="sangu-row"
@@ -2481,7 +2543,11 @@
 										{/if}
 									</div>
 									<div class="sangu-recon-actions-right">
-										{#if !sanguEditMode}
+										<!-- Nothing to update when the contract fixed the
+										     figure; the server refuses an override anyway,
+										     so offering the button would only produce an
+										     error the planner cannot act on. -->
+										{#if !sanguEditMode && !allowanceSnapshot}
 											<button class="btn btn-primary" onclick={openSanguEdit}>
 												<span class="icon-wrap"><Pencil size={16} /></span> Update Uang Sangu
 											</button>
@@ -2490,6 +2556,7 @@
 										{/if}
 									</div>
 								</div>
+							{/if}
 							{/if}
 						</div>
 					</div>
