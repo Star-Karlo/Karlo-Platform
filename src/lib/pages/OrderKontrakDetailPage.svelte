@@ -306,6 +306,19 @@
 	});
 
 	let shipmentType = $derived(order ? shipmentTypeLabel(order) : '');
+	/** The customers this order carries for, in shipment order and each named
+	 *  once. One name — the ordinary case — renders as it always did. */
+	let orderCustomers = $derived.by<string[]>(() => {
+		const names: string[] = detail.shipmentCustomers ?? [];
+		const seen = new Set<string>();
+		const out: string[] = [];
+		for (const n of names) {
+			if (!n || seen.has(n)) continue;
+			seen.add(n);
+			out.push(n);
+		}
+		return out;
+	});
 	let ltlSiblingOrders = $derived(
 		siblingOrders.map((o: any) => ({
 			id: o.id,
@@ -1806,15 +1819,31 @@
 			<div>
 				<div class="shipper-block shipper-block--row">
 					<div class="shipper-block-title">Shipper</div>
-					<div class="shipper-block-id">
-						<div class="shipper-logo">
-							{initials(order.shipperName)}
-							<span class="verified-dot">&#10003;</span>
+					<!-- One truck, several customers: naming them on one line
+					     joined by "+" reads as one company with an odd name.
+					     Each gets its own row, labelled with the shipment it
+					     owns, and the single logo goes because there is no one
+					     shipper to show. -->
+					{#if orderCustomers.length > 1}
+						<div class="shipper-block-customers">
+							{#each orderCustomers as name, i (i)}
+								<div class="shipper-block-customer">
+									<span class="shipper-block-name">{name}</span>
+									<span class="shipper-block-customer-tag">Customer {i + 1}</span>
+								</div>
+							{/each}
 						</div>
-						<div>
-							<div class="shipper-block-name">{order.shipperName}</div>
+					{:else}
+						<div class="shipper-block-id">
+							<div class="shipper-logo">
+								{initials(order.shipperName)}
+								<span class="verified-dot">&#10003;</span>
+							</div>
+							<div>
+								<div class="shipper-block-name">{order.shipperName}</div>
+							</div>
 						</div>
-					</div>
+					{/if}
 				</div>
 
 				<!-- Informasi Pengiriman -->

@@ -16,6 +16,12 @@
 // has no multi-point model at all, so it's always Single unless flagged LTL.
 export function shipmentTypeLabel(o) {
   if (o.detail?.isLtl) return 'LTL'
+  // Several customers' goods on one truck. Read from the order's own record
+  // of whose each shipment is, not from the agreement, because the order is
+  // what was actually placed — an agreement may cover several customers and
+  // an order under it still name only one.
+  const customers = o.shipmentCustomers || o.detail?.shipmentCustomers || []
+  if (new Set(customers.filter(Boolean)).size > 1) return 'Multi Customer'
   const loadCount = (o.loadingPoints || []).length
   const unloadCount = (o.unloadingPoints || []).length
   if (loadCount > 1 || unloadCount > 1) return 'Multi Shipment'
