@@ -21,7 +21,9 @@
 	import { PAYMENT_TYPE_OPTIONS, INCOME_TAX_OPTIONS } from '$lib/revamp/paymentType.js';
 	import { INDONESIAN_CITY_OPTIONS } from '$lib/revamp/indonesianCities.js';
 	import { kecamatanOptionsFor } from '$lib/revamp/kecamatanData.js';
-	import { AGREEMENT_TYPE_OPTIONS } from '$lib/revamp/agreementType.js';
+	import { agreementTypeOptions } from '$lib/revamp/agreementType.js';
+	import { fieldConfigActions, isEnabled, type FieldConfig } from '$lib/stores/fieldconfig';
+	import WarehouseSearchField from '$lib/components/revamp/WarehouseSearchField.svelte';
 	import { toAgreementRow, type AgreementRow, type AgreementRouteEntry } from '$lib/revamp/agreementView';
 	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
 	import TruckTypeMatrixRevamp from '$lib/components/revamp/TruckTypeMatrixRevamp.svelte';
@@ -163,6 +165,27 @@
 	   pairing an order made from this agreement uses for its points. The two
 	   lists only ever change together: a lane with an origin and no
 	   destination is not a lane, and an order could not be priced against it. */
+	/* ---------- Lanes named by warehouse ----------
+	   A contract may price the two buildings rather than the two cities. Same
+	   pairing as the city lanes and as an order's points: index k of each
+	   list is Shipment k+1, added and removed together. Stored on the
+	   agreement's detail, which is where the configurable fields live. */
+	let loadingPoints = $state<string[]>(['']);
+	let unloadingPoints = $state<string[]>(['']);
+	let warehouses = $state<any[]>([]);
+	let warehouseLaneCount = $derived(
+		Math.max(loadingPoints.length, unloadingPoints.length, 1)
+	);
+	function addWarehouseLane() {
+		loadingPoints.push('');
+		unloadingPoints.push('');
+	}
+	function removeWarehouseLane(k: number) {
+		if (warehouseLaneCount <= 1) return;
+		loadingPoints.splice(k, 1);
+		unloadingPoints.splice(k, 1);
+	}
+
 	let routeShipmentCount = $derived(
 		Math.max(form.initialRoutes.length, form.destinationRoutes.length, 1)
 	);
@@ -216,6 +239,13 @@
 		form.agreementType = a.agreementType || '';
 		// Prefer the initialRoutes/destinationRoutes arrays; fall back to the
 		// flat kotaAsal/kotaTujuan fields for agreements saved without them.
+		if (Array.isArray(a.loadingPoints) && a.loadingPoints.length) {
+			loadingPoints = [...a.loadingPoints];
+			unloadingPoints = Array.isArray(a.unloadingPoints) ? [...a.unloadingPoints] : [];
+			// The two are a pair, and a contract saved with an uneven number
+			// would otherwise lose its last lane's other end.
+			while (unloadingPoints.length < loadingPoints.length) unloadingPoints.push('');
+		}
 		form.initialRoutes = a.initialRoutes?.length
 			? a.initialRoutes.map((r) => ({
 					kota: r.kota || '',
@@ -263,7 +293,29 @@
 		hargaDisplay = a.tarif ? formatThousands(String(a.tarif)) : '';
 	}
 
+	/* ---------- What this company has agreed to configure ----------
+	   The same answer the create endpoint validates against, so a form built
+	   from it cannot produce a submission the server then refuses. A company
+	   that has configured nothing sees exactly the form it saw before: every
+	   field below is hidden by default. */
+	let agreementFields = $state<FieldConfig[] | null>(null);
+	let lanesByWarehouse = $derived(isEnabled(agreementFields, 'lanes.loadingPoints'));
+	let multiCustomerEnabled = $derived(isEnabled(agreementFields, 'multiCustomers'));
+	let typeOptions = $derived(agreementTypeOptions(multiCustomerEnabled));
+
 	onMount(async () => {
+		void fieldConfigActions.load('agreement').then(async (f) => {
+			agreementFields = f;
+			// Only fetched when the company prices lanes by warehouse; for
+			// everyone else this list is never needed.
+			if (isEnabled(f, 'lanes.loadingPoints')) {
+				try {
+					warehouses = (await api.get(ENDPOINTS.warehouses.list)).data?.data ?? [];
+				} catch {
+					/* the pickers stay empty and say so */
+				}
+			}
+		});
 		const loads: Promise<unknown>[] = [
 			api
 				.get(ENDPOINTS.shippers.list)
@@ -362,7 +414,15 @@
 	function validate() {
 		if (!form.customerId) return 'Customer Name wajib dipilih';
 		if (!form.agreementType) return 'Type Agreement wajib dipilih';
-		if (form.initialRoutes.some((r) => !r.kota) || form.destinationRoutes.some((r) => !r.kota)) {
+		if (lanesByWarehouse) {
+			// The city lanes are not on the form for this company, so holding
+			// the contract to them would refuse it for a field nobody can see.
+			for (let k = 0; k < warehouseLaneCount; k++) {
+				const at = warehouseLaneCount > 1 ? ` pada Shipment ${k + 1}` : '';
+				if (!loadingPoints[k]) return `Loading Point${at} wajib dipilih`;
+				if (!unloadingPoints[k]) return `Unloading Point${at} wajib dipilih`;
+			}
+		} else if (form.initialRoutes.some((r) => !r.kota) || form.destinationRoutes.some((r) => !r.kota)) {
 			return 'Initial Route dan Destination Route wajib diisi';
 		}
 		if (!form.tanggalMulai || !form.durationValue) return 'Tanggal Mulai dan Contract Duration wajib diisi';
@@ -392,6 +452,15 @@
 			const payload = {
 				customerNama: selectedCustomer?.name || form.customerNama,
 				agreementType: form.agreementType,
+				// Sent only by a company that prices lanes by warehouse. Absent
+				// otherwise, so nothing changes for a contract priced city to
+				// city — and the server stores what it is given.
+				...(lanesByWarehouse
+					? {
+							loadingPoints: loadingPoints.filter(Boolean),
+							unloadingPoints: unloadingPoints.filter(Boolean)
+						}
+					: {}),
 				initialRoutes: form.initialRoutes.map((r) => ({
 					kota: r.kota,
 					level: r.level,
@@ -516,12 +585,52 @@
 			<label>Type Agreement <span class="req">*</span></label>
 			<FieldSelect
 				bind:value={form.agreementType}
-				options={AGREEMENT_TYPE_OPTIONS}
+				options={typeOptions}
 				placeholder="Pilih tipe agreement"
 				onchange={onAgreementTypeChange}
 			/>
 		</div>
 	</div>
+	{#if lanesByWarehouse}
+		<!-- This contract names the two warehouses, not the two cities. Same
+		     pairing as the city lanes below: index k of each list is one
+		     shipment's lane, added and removed together. -->
+		{#each { length: warehouseLaneCount } as _l, k (k)}
+			{#if isMultiShipment || multiCustomerEnabled}
+				<div class="route-shipment-head">
+					<span class="route-shipment-title">Shipment {k + 1}</span>
+					{#if warehouseLaneCount > 1}
+						<button type="button" class="route-shipment-remove" onclick={() => removeWarehouseLane(k)}
+							>Hapus</button
+						>
+					{/if}
+				</div>
+			{/if}
+			<div class="two-col">
+				<div class="field">
+					<label>Loading Point <span class="req">*</span></label>
+					<WarehouseSearchField
+						bind:value={loadingPoints[k]}
+						{warehouses}
+						placeholder="Cari alamat atau nama warehouse..."
+					/>
+				</div>
+				<div class="field">
+					<label>Unloading Point <span class="req">*</span></label>
+					<WarehouseSearchField
+						bind:value={unloadingPoints[k]}
+						{warehouses}
+						placeholder="Cari alamat atau nama warehouse..."
+					/>
+				</div>
+			</div>
+		{/each}
+		{#if isMultiShipment || multiCustomerEnabled}
+			<button type="button" class="btn btn-outline btn-sm" style="margin-top:14px;" onclick={addWarehouseLane}
+				>+ Tambah Shipment</button
+			>
+		{/if}
+	{:else}
 	<!-- A shipment is a lane: initial route k with destination route k is
 	     Shipment k+1, the same pairing an order made from this agreement
 	     uses for its points. Kept at city or kecamatan level — the agreement
@@ -586,10 +695,11 @@
 		</div>
 	{/each}
 	<!-- Only a multi-shipment agreement covers more than one lane. -->
-	{#if isMultiShipment}
-		<button type="button" class="btn btn-outline btn-sm" style="margin-top:14px;" onclick={addShipmentRoute}
-			>+ Tambah Shipment</button
-		>
+		{#if isMultiShipment}
+			<button type="button" class="btn btn-outline btn-sm" style="margin-top:14px;" onclick={addShipmentRoute}
+				>+ Tambah Shipment</button
+			>
+		{/if}
 	{/if}
 </div>
 
