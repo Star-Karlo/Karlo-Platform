@@ -143,7 +143,12 @@ export function shipmentCount(sp: WizardShipment): number {
  *  Before an agreement is chosen the answer is no, which is why the button to
  *  add one is disabled rather than hidden at that point. */
 export function allowsManyShipments(sp: WizardShipment): boolean {
-	return sp.agreementType === 'multi-shipment';
+	// A contract covering several customers covers several lanes too — one
+	// customer's goods go between their own two warehouses. Reading
+	// multi-shipment alone meant a planner could see the lanes the contract
+	// named but could not add one, on exactly the contracts most likely to
+	// need it.
+	return sp.agreementType === 'multi-shipment' || sp.agreementType === 'multi-customer';
 }
 
 /** The items belonging to one shipment, in the order they were entered.
