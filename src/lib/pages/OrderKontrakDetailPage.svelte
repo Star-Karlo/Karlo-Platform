@@ -1136,14 +1136,26 @@
 	   same answer that refuses a per-order override — so the card asks it
 	   rather than working it out again here and risking a different answer. */
 	let allowanceSnapshot = $state<any | null>(null);
+	/** True when the question could not be put to the server at all. */
+	let allowanceUnconfirmed = $state(false);
 	$effect(() => {
 		const id = order?.id;
 		if (!id) return;
 		api
 			.get(ENDPOINTS.orders.allowance(id))
-			.then((r) => (allowanceSnapshot = r.data?.data?.snapshot ?? null))
+			.then((r) => {
+				allowanceSnapshot = r.data?.data?.snapshot ?? null;
+				allowanceUnconfirmed = false;
+			})
 			.catch(() => {
-				/* no snapshot: the card computes from the trip, as before */
+				// Could not ask. That is NOT the same as "the contract fixed
+				// nothing": a planner without order.allowance.read, or a
+				// momentary failure, would otherwise be shown the computed
+				// breakdown as though it were what the driver is paid. The
+				// figures still show — hiding them helps nobody — but the
+				// card says they were not checked against the contract.
+				allowanceSnapshot = null;
+				allowanceUnconfirmed = true;
 			});
 	});
 
@@ -2350,6 +2362,12 @@
 							<span class="chev"><span class="icon-wrap"><ChevronDown size={14} /></span></span>
 						</div>
 						<div class="detail-section-body" style:display={sectionOpen.sangu ? undefined : 'none'}>
+							{#if allowanceUnconfirmed}
+								<p class="hint" style="margin:0 0 12px;">
+									Angka di bawah dihitung dari perjalanan order ini dan belum dicocokkan dengan agreement —
+									bila agreement sudah menetapkan uang sangu, angka yang berlaku adalah angka agreement.
+								</p>
+							{/if}
 							{#if allowanceSnapshot}
 								<!-- The contract fixed it, so there is one figure and
 								     nothing per order to revise. The agreement is named
