@@ -176,9 +176,7 @@
 	let loadingPoints = $state<string[]>(['']);
 	let unloadingPoints = $state<string[]>(['']);
 	let warehouses = $state<any[]>([]);
-	let warehouseLaneCount = $derived(
-		Math.max(loadingPoints.length, unloadingPoints.length, 1)
-	);
+	let warehouseLaneCount = $derived(Math.max(loadingPoints.length, unloadingPoints.length, 1));
 	function addWarehouseLane() {
 		loadingPoints.push('');
 		unloadingPoints.push('');
@@ -271,7 +269,9 @@
 		const synthetic = { detail: { tripEstimate: { jarakKm: laneKm, etaJam: laneHours } } };
 		return Math.round(computeUangSangu(synthetic, tripAllowance).subtotal);
 	});
-	let allowanceUpfront = $derived(Math.round((allowanceTotal * (Number(allowanceUpfrontPercent) || 0)) / 100));
+	let allowanceUpfront = $derived(
+		Math.round((allowanceTotal * (Number(allowanceUpfrontPercent) || 0)) / 100)
+	);
 	let allowanceFinal = $derived(allowanceTotal - allowanceUpfront);
 
 	/** Distance and time for the contract's first lane, from the real road
@@ -303,9 +303,7 @@
 			});
 	});
 
-	let routeShipmentCount = $derived(
-		Math.max(form.initialRoutes.length, form.destinationRoutes.length, 1)
-	);
+	let routeShipmentCount = $derived(Math.max(form.initialRoutes.length, form.destinationRoutes.length, 1));
 	function addShipmentRoute() {
 		form.initialRoutes.push(newRouteEntry());
 		form.destinationRoutes.push(newRouteEntry());
@@ -319,8 +317,59 @@
 	function routeDisplayValue(r: AgreementRouteEntry) {
 		return r.level === 'kecamatan' && r.kecamatan ? r.kecamatan : r.kota;
 	}
-	let kotaAsalSummary = $derived(form.initialRoutes.map(routeDisplayValue).filter(Boolean).join(' + '));
-	let kotaTujuanSummary = $derived(form.destinationRoutes.map(routeDisplayValue).filter(Boolean).join(' + '));
+
+	/* ---------- The lanes, when the form never asked for cities ----------
+	   A contract priced warehouse to warehouse — and every multi-customer
+	   contract, where each customer carries its own lanes in its own card —
+	   never shows the Initial/Destination Route fields. The agreement still
+	   records which cities it runs between, so they are read off the chosen
+	   warehouses rather than left blank. */
+
+	/** Which city a warehouse stands in, '' when it is not known. */
+	function warehouseCity(id: string): string {
+		return String(warehouses.find((w: any) => w.id === id)?.city ?? '').trim();
+	}
+
+	/** True when the two city fields are not on the form at all. */
+	let lanesWithoutCityFields = $derived(lanesByWarehouse || (multiCustomerEnabled && isMultiCustomer));
+
+	/** Every warehouse lane the contract covers: the contract's own, plus
+	 *  each further customer's when it covers several. */
+	function warehouseLanePairs(): { from: string; to: string }[] {
+		const out: { from: string; to: string }[] = [];
+		for (let k = 0; k < warehouseLaneCount; k++) {
+			out.push({ from: loadingPoints[k] || '', to: unloadingPoints[k] || '' });
+		}
+		if (multiCustomerEnabled && isMultiCustomer) {
+			for (const c of extraCustomers) {
+				for (let k = 0; k < c.loadingPoints.length; k++) {
+					out.push({ from: c.loadingPoints[k] || '', to: c.unloadingPoints[k] || '' });
+				}
+			}
+		}
+		return out;
+	}
+
+	/** The distinct cities on one end of those lanes, in the order chosen. */
+	function warehouseCitySummary(end: 'from' | 'to'): string {
+		const seen: string[] = [];
+		for (const lane of warehouseLanePairs()) {
+			const city = warehouseCity(lane[end]);
+			if (city && !seen.includes(city)) seen.push(city);
+		}
+		return seen.join(' + ');
+	}
+
+	let kotaAsalSummary = $derived(
+		lanesWithoutCityFields
+			? warehouseCitySummary('from')
+			: form.initialRoutes.map(routeDisplayValue).filter(Boolean).join(' + ')
+	);
+	let kotaTujuanSummary = $derived(
+		lanesWithoutCityFields
+			? warehouseCitySummary('to')
+			: form.destinationRoutes.map(routeDisplayValue).filter(Boolean).join(' + ')
+	);
 
 	let hargaDisplay = $state('');
 	function onHargaInput(e: Event) {
@@ -435,9 +484,12 @@
 	onMount(async () => {
 		void fieldConfigActions.load('agreement').then(async (f) => {
 			agreementFields = f;
-			// Only fetched when the company prices lanes by warehouse; for
-			// everyone else this list is never needed.
-			if (isEnabled(f, 'lanes.loadingPoints')) {
+			// Fetched when the company prices lanes by warehouse, and when it
+			// writes contracts covering several customers — those name their
+			// lanes by warehouse in each customer's own card whatever the
+			// company's usual lane style. For everyone else this list is
+			// never needed.
+			if (isEnabled(f, 'lanes.loadingPoints') || isEnabled(f, 'multiCustomers')) {
 				try {
 					warehouses = (await api.get(ENDPOINTS.warehouses.list)).data?.data ?? [];
 				} catch {
@@ -558,9 +610,11 @@
 			}
 			if (!billingSplit) return 'Pembagian Tagihan wajib dipilih';
 		}
-		if (lanesByWarehouse) {
-			// The city lanes are not on the form for this company, so holding
-			// the contract to them would refuse it for a field nobody can see.
+		if (lanesWithoutCityFields) {
+			// The city lanes are not on the form here, so holding the contract
+			// to them would refuse it for a field nobody can see. On a
+			// multi-customer contract that is true whatever the company's lane
+			// style: Customer 1 names warehouses in its own card.
 			for (let k = 0; k < warehouseLaneCount; k++) {
 				const at = warehouseLaneCount > 1 ? ` pada Shipment ${k + 1}` : '';
 				if (!loadingPoints[k]) return `Loading Point${at} wajib dipilih`;
@@ -677,23 +731,54 @@
 			// agreement covers each origin against each destination at the
 			// one price it names.
 			const rates = [];
-			for (const o of form.initialRoutes) {
-				for (const d of form.destinationRoutes) {
-					if (!o.kota || !d.kota) continue;
+			if (lanesWithoutCityFields) {
+				// The two cities were never asked for, so each lane's pair is
+				// the pair of warehouses chosen for it — lane k's origin with
+				// lane k's destination, not every origin against every
+				// destination, because these lanes are named, not combined.
+				// A lane repeated across customers prices once.
+				const seen = new Set<string>();
+				for (const lane of warehouseLanePairs()) {
+					const originCityId = warehouseCity(lane.from);
+					const destinationCityId = warehouseCity(lane.to);
+					if (!originCityId || !destinationCityId) continue;
+					const key = `${originCityId}\u0000${destinationCityId}`;
+					if (seen.has(key)) continue;
+					seen.add(key);
 					rates.push({
 						customerCompanyId,
-						originCityId: o.kota,
-						destinationCityId: d.kota,
-						originDistrictId: o.level === 'kecamatan' ? o.kecamatan || '' : '',
-						destinationDistrictId: d.level === 'kecamatan' ? d.kecamatan || '' : '',
+						originCityId,
+						destinationCityId,
+						originDistrictId: '',
+						destinationDistrictId: '',
 						pricingTypeId: payload.pricingType,
 						truckTypeId: '',
 						price: String(payload.tarif)
 					});
 				}
+			} else {
+				for (const o of form.initialRoutes) {
+					for (const d of form.destinationRoutes) {
+						if (!o.kota || !d.kota) continue;
+						rates.push({
+							customerCompanyId,
+							originCityId: o.kota,
+							destinationCityId: d.kota,
+							originDistrictId: o.level === 'kecamatan' ? o.kecamatan || '' : '',
+							destinationDistrictId: d.level === 'kecamatan' ? d.kecamatan || '' : '',
+							pricingTypeId: payload.pricingType,
+							truckTypeId: '',
+							price: String(payload.tarif)
+						});
+					}
+				}
 			}
 			if (rates.length === 0) {
-				toast('Pilih minimal satu rute asal dan satu rute tujuan');
+				toast(
+					lanesWithoutCityFields
+						? 'Warehouse yang dipilih belum punya data kota — lengkapi dulu di Master Data > Warehouse'
+						: 'Pilih minimal satu rute asal dan satu rute tujuan'
+				);
 				return;
 			}
 			if (editing && id) {
@@ -768,127 +853,134 @@
 	</div>
 {/if}
 
-<div class="card card-pad" class:form-locked={!form.agreementType}>
-	<!-- On a contract covering several customers the customer is named in
-	     their own card below, with their cargo and their lanes. Naming them
-	     here as well would be the same answer in two places. -->
-	{#if !(multiCustomerEnabled && isMultiCustomer)}
+<!-- A contract covering several customers has nothing to say at this level:
+     the customer, its cargo and its lanes are all answered inside that
+     customer's own card below, so this card would either repeat them or
+     stand empty. It is the contract's own card, not the form's frame. -->
+{#if !(multiCustomerEnabled && isMultiCustomer)}
+	<div class="card card-pad" class:form-locked={!form.agreementType}>
 		<div class="field">
 			<label>Customer Name <span class="req">*</span></label>
 			<FieldSelect bind:value={form.customerId} options={customerOptions} placeholder="Pilih customer" />
 		</div>
-	{/if}
-	{#if lanesByWarehouse && !(multiCustomerEnabled && isMultiCustomer)}
-		<!-- This contract names the two warehouses, not the two cities. Same
+		{#if lanesByWarehouse}
+			<!-- This contract names the two warehouses, not the two cities. Same
 		     pairing as the city lanes below: index k of each list is one
 		     shipment's lane, added and removed together. -->
-		{#each { length: warehouseLaneCount } as _l, k (k)}
+			{#each { length: warehouseLaneCount } as _l, k (k)}
+				{#if isMultiShipment || multiCustomerEnabled}
+					<div class="route-shipment-head">
+						<span class="route-shipment-title">Shipment {k + 1}</span>
+						{#if warehouseLaneCount > 1}
+							<button type="button" class="route-shipment-remove" onclick={() => removeWarehouseLane(k)}
+								>Hapus</button
+							>
+						{/if}
+					</div>
+				{/if}
+				<div class="two-col">
+					<div class="field">
+						<label>Loading Point <span class="req">*</span></label>
+						<WarehouseSearchField
+							bind:value={loadingPoints[k]}
+							{warehouses}
+							placeholder="Cari alamat atau nama warehouse..."
+						/>
+					</div>
+					<div class="field">
+						<label>Unloading Point <span class="req">*</span></label>
+						<WarehouseSearchField
+							bind:value={unloadingPoints[k]}
+							{warehouses}
+							placeholder="Cari alamat atau nama warehouse..."
+						/>
+					</div>
+				</div>
+			{/each}
 			{#if isMultiShipment || multiCustomerEnabled}
-				<div class="route-shipment-head">
-					<span class="route-shipment-title">Shipment {k + 1}</span>
-					{#if warehouseLaneCount > 1}
-						<button type="button" class="route-shipment-remove" onclick={() => removeWarehouseLane(k)}
-							>Hapus</button
-						>
-					{/if}
-				</div>
+				<button
+					type="button"
+					class="btn btn-outline btn-sm"
+					style="margin-top:14px;"
+					onclick={addWarehouseLane}>+ Tambah Shipment</button
+				>
 			{/if}
-			<div class="two-col">
-				<div class="field">
-					<label>Loading Point <span class="req">*</span></label>
-					<WarehouseSearchField
-						bind:value={loadingPoints[k]}
-						{warehouses}
-						placeholder="Cari alamat atau nama warehouse..."
-					/>
-				</div>
-				<div class="field">
-					<label>Unloading Point <span class="req">*</span></label>
-					<WarehouseSearchField
-						bind:value={unloadingPoints[k]}
-						{warehouses}
-						placeholder="Cari alamat atau nama warehouse..."
-					/>
-				</div>
-			</div>
-		{/each}
-		{#if isMultiShipment || multiCustomerEnabled}
-			<button type="button" class="btn btn-outline btn-sm" style="margin-top:14px;" onclick={addWarehouseLane}
-				>+ Tambah Shipment</button
-			>
-		{/if}
-	{:else}
-	<!-- A shipment is a lane: initial route k with destination route k is
+		{:else}
+			<!-- A shipment is a lane: initial route k with destination route k is
 	     Shipment k+1, the same pairing an order made from this agreement
 	     uses for its points. Kept at city or kecamatan level — the agreement
 	     names the lane, the order names the warehouses on it. -->
-	{#each { length: routeShipmentCount } as _s, k (k)}
-		{#if isMultiShipment}
-			<div class="route-shipment-head">
-				<span class="route-shipment-title">Shipment {k + 1}</span>
-				{#if routeShipmentCount > 1}
-					<button type="button" class="route-shipment-remove" onclick={() => removeShipmentRoute(k)}
-						>Hapus</button
-					>
+			{#each { length: routeShipmentCount } as _s, k (k)}
+				{#if isMultiShipment}
+					<div class="route-shipment-head">
+						<span class="route-shipment-title">Shipment {k + 1}</span>
+						{#if routeShipmentCount > 1}
+							<button type="button" class="route-shipment-remove" onclick={() => removeShipmentRoute(k)}
+								>Hapus</button
+							>
+						{/if}
+					</div>
 				{/if}
-			</div>
-		{/if}
-		<div class="two-col">
-			{#each [{ side: 'initial', label: 'Initial Route', place: 'asal' }, { side: 'destination', label: 'Destination Route', place: 'tujuan' }] as col (col.side)}
-				{@const r = (col.side === 'initial' ? form.initialRoutes : form.destinationRoutes)[k]}
-				<div class="field">
-					<label>{col.label} <span class="req">*</span></label>
-					{#if r}
-						<div class="route-entry">
-							<div class="route-field-row">
-								<div class="route-field-select">
-									<FieldSelect
-										value={r.kota}
-										onchange={(v) => onRouteKotaChange(r, v)}
-										options={INDONESIAN_CITY_OPTIONS}
-										placeholder={`Cari kota/kabupaten ${col.place}...`}
-										searchable
-									/>
+				<div class="two-col">
+					{#each [{ side: 'initial', label: 'Initial Route', place: 'asal' }, { side: 'destination', label: 'Destination Route', place: 'tujuan' }] as col (col.side)}
+						{@const r = (col.side === 'initial' ? form.initialRoutes : form.destinationRoutes)[k]}
+						<div class="field">
+							<label>{col.label} <span class="req">*</span></label>
+							{#if r}
+								<div class="route-entry">
+									<div class="route-field-row">
+										<div class="route-field-select">
+											<FieldSelect
+												value={r.kota}
+												onchange={(v) => onRouteKotaChange(r, v)}
+												options={INDONESIAN_CITY_OPTIONS}
+												placeholder={`Cari kota/kabupaten ${col.place}...`}
+												searchable
+											/>
+										</div>
+										<button type="button" class="btn btn-outline btn-sm" onclick={() => toggleRouteLevel(r)}>
+											{r.level === 'kecamatan' ? '− Kecamatan' : '+ Kecamatan'}
+										</button>
+									</div>
+									{#if r.level === 'kecamatan'}
+										{#if kecamatanOptionsFor(r.kota).length}
+											<FieldSelect
+												bind:value={r.kecamatan}
+												options={kecamatanOptionsFor(r.kota)}
+												placeholder={`Cari kecamatan ${col.place}...`}
+												style="margin-top:8px;"
+												searchable
+											/>
+										{:else}
+											<input
+												type="text"
+												bind:value={r.kecamatan}
+												placeholder="cth. Kecamatan Coblong"
+												style="margin-top:8px;"
+											/>
+											<span class="hint" style="display:block; margin-top:5px;"
+												>Belum ada data kecamatan untuk wilayah ini, silakan ketik manual.</span
+											>
+										{/if}
+									{/if}
 								</div>
-								<button type="button" class="btn btn-outline btn-sm" onclick={() => toggleRouteLevel(r)}>
-									{r.level === 'kecamatan' ? '− Kecamatan' : '+ Kecamatan'}
-								</button>
-							</div>
-							{#if r.level === 'kecamatan'}
-								{#if kecamatanOptionsFor(r.kota).length}
-									<FieldSelect
-										bind:value={r.kecamatan}
-										options={kecamatanOptionsFor(r.kota)}
-										placeholder={`Cari kecamatan ${col.place}...`}
-										style="margin-top:8px;"
-										searchable
-									/>
-								{:else}
-									<input
-										type="text"
-										bind:value={r.kecamatan}
-										placeholder="cth. Kecamatan Coblong"
-										style="margin-top:8px;"
-									/>
-									<span class="hint" style="display:block; margin-top:5px;"
-										>Belum ada data kecamatan untuk wilayah ini, silakan ketik manual.</span
-									>
-								{/if}
 							{/if}
 						</div>
-					{/if}
+					{/each}
 				</div>
 			{/each}
-		</div>
-	{/each}
-	<!-- Only a multi-shipment agreement covers more than one lane. -->
-		{#if isMultiShipment}
-			<button type="button" class="btn btn-outline btn-sm" style="margin-top:14px;" onclick={addShipmentRoute}
-				>+ Tambah Shipment</button
-			>
+			<!-- Only a multi-shipment agreement covers more than one lane. -->
+			{#if isMultiShipment}
+				<button
+					type="button"
+					class="btn btn-outline btn-sm"
+					style="margin-top:14px;"
+					onclick={addShipmentRoute}>+ Tambah Shipment</button
+				>
+			{/if}
 		{/if}
-	{/if}
-</div>
+	</div>
+{/if}
 
 <!-- Each customer names its own cargo.
      On a contract covering several, "what is being carried" is a different
@@ -967,7 +1059,9 @@
 		<div class="card card-pad" style="margin-top:16px;">
 			<div class="route-shipment-head">
 				<span class="route-shipment-title">Customer {i + 2}</span>
-				<button type="button" class="route-shipment-remove" onclick={() => removeExtraCustomer(i)}>Hapus</button>
+				<button type="button" class="route-shipment-remove" onclick={() => removeExtraCustomer(i)}
+					>Hapus</button
+				>
 			</div>
 			<div class="three-col">
 				<div class="field">
@@ -1117,7 +1211,8 @@
 	<div class="field">
 		<label>Truck Options (opsional, maks. {MAX_TRUCK_OPTIONS})</label>
 		<div class="hint" style="margin-bottom:8px;">
-			Jenis truck pilihan untuk agreement ini — tampil sebagai acuan planner saat menugaskan truck ke order dari agreement ini.
+			Jenis truck pilihan untuk agreement ini — tampil sebagai acuan planner saat menugaskan truck ke order
+			dari agreement ini.
 		</div>
 		<FieldSelect
 			bind:value={form.truckOptions}
@@ -1251,7 +1346,8 @@
 		</div>
 		{#if !laneKm}
 			<p class="hint" style="margin:0;">
-				Pilih Loading Point dan Unloading Point terlebih dahulu — jarak dihitung dari rute jalan antara keduanya.
+				Pilih Loading Point dan Unloading Point terlebih dahulu — jarak dihitung dari rute jalan antara
+				keduanya.
 			</p>
 		{:else}
 			<div class="two-col">
@@ -1275,8 +1371,8 @@
 				</div>
 			</div>
 		{/if}
-		</div>
-	{/if}
+	</div>
+{/if}
 
 <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:8px;">
 	<button class="btn btn-outline" onclick={cancel}>Batal</button>
