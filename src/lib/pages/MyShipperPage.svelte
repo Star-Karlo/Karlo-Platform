@@ -36,9 +36,7 @@
 		warehouseActions.getAll({ pageSize: 100 });
 		try {
 			const res = await api.get(ENDPOINTS.users.list, { page: 0, pageSize: 200 });
-			picUsers = (res.data.data ?? []).filter(
-				(u: any) => (u.role ?? '').toLowerCase() === 'warehousepic'
-			);
+			picUsers = (res.data.data ?? []).filter((u: any) => (u.role ?? '').toLowerCase() === 'warehousepic');
 		} catch {
 			picUsers = [];
 		}
@@ -117,7 +115,15 @@
 	);
 
 	function openCreate() {
-		form = { name: '', city: '', district: '', address: '', picName: '', picPhone: '', geofenceRadiusMeters: '' };
+		form = {
+			name: '',
+			city: '',
+			district: '',
+			address: '',
+			picName: '',
+			picPhone: '',
+			geofenceRadiusMeters: ''
+		};
 		picked = null;
 		formError = '';
 		showForm = true;
@@ -131,8 +137,15 @@
 		for (const key of ['city', 'district', 'address', 'picName', 'picPhone'] as const) {
 			if (form[key].trim()) payload[key] = form[key].trim();
 		}
-		if (form.geofenceRadiusMeters.trim()) {
-			payload.geofenceRadiusMeters = Number(form.geofenceRadiusMeters);
+		// Radius comes off a number input, so Svelte binds it as a NUMBER
+		// once the planner types in it — and as undefined when they clear
+		// it again. Calling .trim() on either threw inside this try, which
+		// the catch below reported as "Could not save the warehouse." with
+		// no request ever sent. Normalise before trimming, so the field
+		// behaves the same whether it holds '', a number, or nothing.
+		const radius = String(form.geofenceRadiusMeters ?? '').trim();
+		if (radius) {
+			payload.geofenceRadiusMeters = Number(radius);
 		}
 		// Sent only as a pair. Half a coordinate is not a location, and the
 		// service refuses it rather than storing a latitude with no longitude.
@@ -189,7 +202,11 @@
 </script>
 
 <div class="space-y-gutter">
-	<PageHeader title="Master Data — MyWarehouse" icon={WarehouseIcon} subtitle="{warehouses.length} warehouses">
+	<PageHeader
+		title="Master Data — MyWarehouse"
+		icon={WarehouseIcon}
+		subtitle="{warehouses.length} warehouses"
+	>
 		{#snippet actions()}
 			<!-- Both are disabled, and visibly so, rather than absent. Master
 			     data serves sites read-only today: creating one means the
@@ -201,20 +218,31 @@
 			</Button>
 			<!-- Still disabled: a warehouse PIC is a USER account, which means
 			     an invitation and a role, not a row on this screen. -->
-			<Button variant="outline" disabled title="A warehouse PIC is a user account — invite them from Collaboration">
+			<Button
+				variant="outline"
+				disabled
+				title="A warehouse PIC is a user account — invite them from Collaboration"
+			>
 				<Plus size={14} /> Tambah PIC Warehouse
 			</Button>
 		{/snippet}
 	</PageHeader>
 
 	{#if $warehouseStore.error}
-		<p class="rounded-card bg-danger/10 px-4 py-3 text-xs text-danger" role="alert">{$warehouseStore.error}</p>
+		<p class="rounded-card bg-danger/10 px-4 py-3 text-xs text-danger" role="alert">
+			{$warehouseStore.error}
+		</p>
 	{/if}
 
 	{#if $warehouseStore.loading}
 		<div class="flex justify-center py-16"><Spinner size={32} /></div>
 	{:else if warehouses.length === 0}
-		<Card><EmptyState message="No warehouses yet" hint="Add a loading or unloading point to get started." /></Card>
+		<Card
+			><EmptyState
+				message="No warehouses yet"
+				hint="Add a loading or unloading point to get started."
+			/></Card
+		>
 	{:else}
 		<Card title="Locations" padded={false}>
 			<div class="px-6 pb-6 pt-4">
@@ -263,7 +291,8 @@
 					{#snippet cell(row: any, column: Column, text: string)}
 						{#if column.key === 'phone' && row.phone}
 							<a href="tel:{row.phone}" class="flex items-center gap-1.5 text-cyan hover:underline">
-								<Phone size={12} /> {row.phone}
+								<Phone size={12} />
+								{row.phone}
 							</a>
 						{:else}
 							{text}
@@ -292,8 +321,8 @@
 			<p class="mb-1 text-xs text-muted">Titik Lokasi di Peta</p>
 			<MapView markers={pickedMarkers} onPick={(c) => (picked = c)} height="260px" />
 			<p class="mt-1 text-xs text-muted">
-				Klik peta untuk menentukan titik lokasi. Tanpa titik lokasi, warehouse tetap
-				tersimpan — tetapi rute dan jarak tidak bisa dihitung sampai titiknya diisi.
+				Klik peta untuk menentukan titik lokasi. Tanpa titik lokasi, warehouse tetap tersimpan — tetapi rute
+				dan jarak tidak bisa dihitung sampai titiknya diisi.
 			</p>
 		</div>
 
@@ -308,7 +337,11 @@
 
 		<div class="md:col-span-2">
 			<label for="w-address" class="form-label">Alamat Lengkap</label>
-			<Input id="w-address" bind:value={form.address} placeholder="Jl. Yos Sudarso No.88, Kec. Tanjung Priok…" />
+			<Input
+				id="w-address"
+				bind:value={form.address}
+				placeholder="Jl. Yos Sudarso No.88, Kec. Tanjung Priok…"
+			/>
 		</div>
 
 		<div>
@@ -318,9 +351,7 @@
 		<div>
 			<label for="w-geofence" class="form-label">Radius Geofence (m)</label>
 			<Input id="w-geofence" type="number" bind:value={form.geofenceRadiusMeters} placeholder="200" />
-			<p class="mt-1 text-xs text-muted">
-				Seberapa dekat dihitung "tiba". Kosongkan untuk memakai 200 m.
-			</p>
+			<p class="mt-1 text-xs text-muted">Seberapa dekat dihitung "tiba". Kosongkan untuk memakai 200 m.</p>
 		</div>
 
 		<div>

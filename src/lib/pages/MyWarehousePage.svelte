@@ -163,7 +163,13 @@
 		geoOpen = false;
 		if (!form.city.trim() && c.address?.kabupaten) form.city = c.address.kabupaten;
 		if (!form.address.trim()) {
-			form.address = [c.kind === 'road' ? c.name : '', c.address?.kelurahan, c.address?.kecamatan, c.address?.kabupaten, c.address?.provinsi]
+			form.address = [
+				c.kind === 'road' ? c.name : '',
+				c.address?.kelurahan,
+				c.address?.kecamatan,
+				c.address?.kabupaten,
+				c.address?.provinsi
+			]
 				.filter((s) => s && s.trim())
 				.join(', ');
 		}
@@ -184,7 +190,13 @@
 	}
 	/** The list from the service, or the old single contact as a one-entry list. */
 	function picsOf(s: Site): Pic[] {
-		if (s.pics && s.pics.length) return s.pics.map((p) => ({ id: p.id, name: p.name ?? '', phone: p.phone ?? '', isDefault: !!p.isDefault }));
+		if (s.pics && s.pics.length)
+			return s.pics.map((p) => ({
+				id: p.id,
+				name: p.name ?? '',
+				phone: p.phone ?? '',
+				isDefault: !!p.isDefault
+			}));
 		if (s.picName || s.picPhone) return [{ name: s.picName ?? '', phone: s.picPhone ?? '', isDefault: true }];
 		return [blankPic(true)];
 	}
@@ -266,8 +278,20 @@
 				return;
 			}
 			if (pics.length && !pics.some((p) => p.isDefault)) pics[0].isDefault = true;
-			payload.pics = pics.map((p) => ({ id: p.id ?? '', name: p.name.trim(), phone: p.phone.trim(), isDefault: p.isDefault }));
-			if (form.geofenceRadiusMeters.trim()) payload.geofenceRadiusMeters = Number(form.geofenceRadiusMeters);
+			payload.pics = pics.map((p) => ({
+				id: p.id ?? '',
+				name: p.name.trim(),
+				phone: p.phone.trim(),
+				isDefault: p.isDefault
+			}));
+			// Radius comes off a number input, so Svelte binds it as a NUMBER
+			// once the planner types in it — and as undefined when they clear
+			// it again. Calling .trim() on either threw inside this try, which
+			// the catch below reported as "Could not save the warehouse." with
+			// no request ever sent. Normalise before trimming, so the field
+			// behaves the same whether it holds '', a number, or nothing.
+			const radius = String(form.geofenceRadiusMeters ?? '').trim();
+			if (radius) payload.geofenceRadiusMeters = Number(radius);
 			if (picked) {
 				payload.longitude = picked[0];
 				payload.latitude = picked[1];
@@ -277,7 +301,14 @@
 			showForm = false;
 			await loadCustomers();
 		} catch (e: any) {
-			error = e?.response?.data?.message ?? 'Could not save the warehouse.';
+			// Log it. A fault in building the payload lands here too, and
+			// reporting that as "could not save" reads as a server refusal —
+			// which is what sent us looking at tokens and permissions while a
+			// TypeError in this function went unrecorded.
+			console.error('warehouse save failed', e);
+			error = e?.response
+				? (e.response.data?.message ?? 'Could not save the warehouse.')
+				: `Could not save the warehouse: ${e?.message ?? 'unexpected error'}`;
 		} finally {
 			saving = false;
 		}
@@ -308,10 +339,7 @@
 </script>
 
 <div class="space-y-gutter">
-	<PageHeader
-		{title}
-		icon={Warehouse}
-	/>
+	<PageHeader {title} icon={Warehouse} />
 
 	{#if error && !showForm}
 		<p class="rounded-card bg-danger/10 px-4 py-3 text-xs text-danger" role="alert">{error}</p>
@@ -450,7 +478,12 @@
 				{/if}
 			</div>
 			<p class="mb-1 mt-3 text-xs text-muted">Titik Lokasi di Peta</p>
-			<MapView markers={pickedMarkers} onPick={(c) => (picked = c)} fitKey={picked ? `${picked[0]},${picked[1]}` : ''} height="260px" />
+			<MapView
+				markers={pickedMarkers}
+				onPick={(c) => (picked = c)}
+				fitKey={picked ? `${picked[0]},${picked[1]}` : ''}
+				height="260px"
+			/>
 			<p class="mt-1 text-xs text-muted">
 				Klik peta untuk menentukan titik lokasi. Tanpa titik lokasi, warehouse tetap tersimpan — tetapi rute
 				dan jarak tidak bisa dihitung sampai titiknya diisi.
@@ -479,17 +512,32 @@
 		<Field label="Radius Geofence (m)" id="w-geo" help="Default 200 m bila kosong."
 			><Input id="w-geo" type="number" bind:value={form.geofenceRadiusMeters} /></Field
 		>
-		<Field label="PIC Gudang" id="w-pics" wide help="Bisa lebih dari satu. PIC default adalah yang dihubungi driver untuk kode OTP dan yang dipilih otomatis saat membuat order.">
+		<Field
+			label="PIC Gudang"
+			id="w-pics"
+			wide
+			help="Bisa lebih dari satu. PIC default adalah yang dihubungi driver untuk kode OTP dan yang dipilih otomatis saat membuat order."
+		>
 			<div class="pic-list">
 				{#each form.pics as pic, i (i)}
 					<div class="pic-row">
 						<Input id="w-pic-name-{i}" bind:value={pic.name} placeholder="Nama PIC" />
 						<Input id="w-pic-phone-{i}" bind:value={pic.phone} placeholder="Nomor WhatsApp" />
 						<label class="pic-default" title="Jadikan PIC default">
-							<input type="radio" name="pic-default" checked={pic.isDefault} onchange={() => setDefaultPic(i)} />
+							<input
+								type="radio"
+								name="pic-default"
+								checked={pic.isDefault}
+								onchange={() => setDefaultPic(i)}
+							/>
 							<span>Default</span>
 						</label>
-						<button type="button" class="btn btn-outline btn-sm" title="Hapus PIC" onclick={() => removePic(i)}>✕</button>
+						<button
+							type="button"
+							class="btn btn-outline btn-sm"
+							title="Hapus PIC"
+							onclick={() => removePic(i)}>✕</button
+						>
 					</div>
 				{/each}
 				<button type="button" class="btn btn-outline btn-sm" onclick={addPic}>+ Tambah PIC</button>
