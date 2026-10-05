@@ -746,25 +746,39 @@
 				>{/if}
 		</h1>
 	</div>
+	<!-- Highest in the hierarchy, and asked first: the type decides what the
+	     rest of the form even is — one customer with one lane, one customer
+	     with several, or several customers each with their own. Asking it
+	     inside the first card made it look like one field among many. -->
+	<div class="agreement-type-pick">
+		<FieldSelect
+			bind:value={form.agreementType}
+			options={typeOptions}
+			placeholder="Pilih tipe agreement"
+			onchange={onAgreementTypeChange}
+		/>
+	</div>
 </div>
 
-<div class="card card-pad">
-	<div class="two-col">
+<!-- Nothing below means anything until the type is chosen, so until it is
+     the form says so rather than offering fields whose shape may change. -->
+{#if !form.agreementType}
+	<div class="card card-pad">
+		<p class="hint" style="margin:0;">Pilih Type Agreement di atas untuk mulai mengisi.</p>
+	</div>
+{/if}
+
+<div class="card card-pad" class:form-locked={!form.agreementType}>
+	<!-- On a contract covering several customers the customer is named in
+	     their own card below, with their cargo and their lanes. Naming them
+	     here as well would be the same answer in two places. -->
+	{#if !(multiCustomerEnabled && isMultiCustomer)}
 		<div class="field">
 			<label>Customer Name <span class="req">*</span></label>
 			<FieldSelect bind:value={form.customerId} options={customerOptions} placeholder="Pilih customer" />
 		</div>
-		<div class="field">
-			<label>Type Agreement <span class="req">*</span></label>
-			<FieldSelect
-				bind:value={form.agreementType}
-				options={typeOptions}
-				placeholder="Pilih tipe agreement"
-				onchange={onAgreementTypeChange}
-			/>
-		</div>
-	</div>
-	{#if lanesByWarehouse}
+	{/if}
+	{#if lanesByWarehouse && !(multiCustomerEnabled && isMultiCustomer)}
 		<!-- This contract names the two warehouses, not the two cities. Same
 		     pairing as the city lanes below: index k of each list is one
 		     shipment's lane, added and removed together. -->
@@ -911,6 +925,40 @@
 				<FieldSelect bind:value={form.namaBarang} options={cargoItemOptions} placeholder="Pilih Cargo Item" />
 			</div>
 		</div>
+
+		<!-- This customer's own lanes, in this customer's own card. A
+		     shipment belongs to the customer whose goods it carries; listing
+		     them apart from the customer is what made it look as though they
+		     were shared. -->
+		{#each { length: warehouseLaneCount } as _l, k (k)}
+			<div class="route-shipment-head">
+				<span class="route-shipment-title">Shipment {k + 1}</span>
+				{#if warehouseLaneCount > 1}
+					<button type="button" class="route-shipment-remove" onclick={() => removeWarehouseLane(k)}
+						>Hapus</button
+					>
+				{/if}
+			</div>
+			<div class="two-col">
+				<div class="field">
+					<label>Loading Point <span class="req">*</span></label>
+					<WarehouseSearchField
+						bind:value={loadingPoints[k]}
+						{warehouses}
+						placeholder="Cari alamat atau nama warehouse..."
+					/>
+				</div>
+				<div class="field">
+					<label>Unloading Point <span class="req">*</span></label>
+					<WarehouseSearchField
+						bind:value={unloadingPoints[k]}
+						{warehouses}
+						placeholder="Cari alamat atau nama warehouse..."
+					/>
+				</div>
+			</div>
+		{/each}
+		<button type="button" class="btn btn-outline btn-sm" onclick={addWarehouseLane}>+ Tambah Shipment</button>
 	</div>
 {/if}
 
