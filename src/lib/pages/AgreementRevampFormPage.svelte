@@ -91,12 +91,11 @@
 		return parent?.name || '';
 	}
 	let cargoSpecificOptions = $derived(cargoTypes.map((s) => ({ value: s.name, label: s.name })));
-	let cargoItemOptions = $derived.by(() => {
-		const list = form.cargoTypeSpecific
-			? cargoItems.filter((it) => specificNama(it) === form.cargoTypeSpecific)
-			: cargoItems;
+	/** The items under one cargo type, or all of them when none is chosen. */
+	function cargoItemOptionsFor(cargoType: string) {
+		const list = cargoType ? cargoItems.filter((it) => specificNama(it) === cargoType) : cargoItems;
 		return list.map((it) => ({ value: it.name, label: it.name }));
-	});
+	}
 
 	function newRouteEntry(): AgreementRouteEntry {
 		return { kota: '', level: 'kota', kecamatan: '' }; // level: 'kota' | 'kecamatan'
@@ -141,6 +140,8 @@
 		const stillValid = kecamatanOptionsFor(v).some((o: { value: string }) => o.value === entry.kecamatan);
 		if (!stillValid) entry.kecamatan = '';
 	}
+
+	let cargoItemOptions = $derived(cargoItemOptionsFor(form.cargoTypeSpecific));
 
 	let isMultiShipment = $derived(form.agreementType === 'multi-shipment');
 	function onAgreementTypeChange(val: string | string[]) {
@@ -875,44 +876,41 @@
 	{/if}
 </div>
 
-<!-- The other customers this contract covers. Only for a contract that says
-     it covers several, and only where the company has that enabled. -->
-<!-- The allowance this contract agrees, instead of each order working one
-     out. Computed by the same function an order uses, from the real road
-     distance between the two warehouses named above, so the figure agreed
-     here and the figure it replaces cannot drift apart. -->
-{#if allowanceEnabled && lanesByWarehouse}
+<!-- Each customer names its own cargo.
+     On a contract covering several, "what is being carried" is a different
+     answer per customer — one ships bottled water, another spare parts — so
+     the cargo belongs inside the customer's own card rather than once at the
+     top of the contract. The contract's own customer is Customer 1 and reads
+     the agreement's fields; the others carry theirs on their own record. -->
+{#if multiCustomerEnabled && isMultiCustomer}
 	<div class="card card-pad" style="margin-top:16px;">
 		<div class="route-shipment-head">
-			<span class="route-shipment-title">Uang Sangu Driver</span>
-			{#if laneKm}<span class="hint">{laneKm} km · ETA {laneHours} jam</span>{/if}
+			<span class="route-shipment-title">Customer 1</span>
 		</div>
-		{#if !laneKm}
-			<p class="hint" style="margin:0;">
-				Pilih Loading Point dan Unloading Point terlebih dahulu — jarak dihitung dari rute jalan antara keduanya.
-			</p>
-		{:else}
-			<div class="two-col">
-				<div class="field">
-					<label>Total Uang Sangu</label>
-					<input type="text" readonly value={formatIDR(allowanceTotal)} />
-				</div>
-				<div class="field">
-					<label>Uang Sangu Driver Awal (%)</label>
-					<input type="number" min="0" max="100" bind:value={allowanceUpfrontPercent} />
-				</div>
+		<div class="three-col">
+			<div class="field">
+				<label>Customer Name <span class="req">*</span></label>
+				<FieldSelect
+					bind:value={form.customerId}
+					options={customerOptions}
+					placeholder="Pilih customer"
+					searchable
+				/>
 			</div>
-			<div class="two-col" style="margin-bottom:0;">
-				<div class="field" style="margin-bottom:0;">
-					<label>Uang Sangu Awal</label>
-					<input type="text" readonly value={formatIDR(allowanceUpfront)} />
-				</div>
-				<div class="field" style="margin-bottom:0;">
-					<label>Uang Sangu Akhir</label>
-					<input type="text" readonly value={formatIDR(allowanceFinal)} />
-				</div>
+			<div class="field">
+				<label>Cargo Type</label>
+				<FieldSelect
+					bind:value={form.cargoTypeSpecific}
+					options={cargoSpecificOptions}
+					placeholder="Pilih Cargo Type"
+					onchange={onCargoTypeChange}
+				/>
 			</div>
-		{/if}
+			<div class="field">
+				<label>Cargo Item</label>
+				<FieldSelect bind:value={form.namaBarang} options={cargoItemOptions} placeholder="Pilih Cargo Item" />
+			</div>
+		</div>
 	</div>
 {/if}
 
@@ -923,7 +921,7 @@
 				<span class="route-shipment-title">Customer {i + 2}</span>
 				<button type="button" class="route-shipment-remove" onclick={() => removeExtraCustomer(i)}>Hapus</button>
 			</div>
-			<div class="two-col">
+			<div class="three-col">
 				<div class="field">
 					<label>Customer Name <span class="req">*</span></label>
 					<FieldSelect
@@ -934,8 +932,20 @@
 					/>
 				</div>
 				<div class="field">
+					<label>Cargo Type</label>
+					<FieldSelect
+						bind:value={c.cargoTypeId}
+						options={cargoSpecificOptions}
+						placeholder="Pilih Cargo Type"
+					/>
+				</div>
+				<div class="field">
 					<label>Cargo Item</label>
-					<input type="text" bind:value={c.cargoItemId} placeholder="cth. Air Mineral Galon" />
+					<FieldSelect
+						bind:value={c.cargoItemId}
+						options={cargoItemOptionsFor(c.cargoTypeId)}
+						placeholder="Pilih Cargo Item"
+					/>
 				</div>
 			</div>
 
@@ -1024,24 +1034,29 @@
 		<textarea rows="5" bind:value={form.deskripsi} placeholder="cth. Termasuk biaya tol & asuransi"
 		></textarea>
 	</div>
-	<div class="two-col">
-		<div class="field">
-			<label>Cargo Type</label>
-			<FieldSelect
-				bind:value={form.cargoTypeSpecific}
-				options={cargoSpecificOptions}
-				placeholder="Pilih Cargo Type"
-				onchange={onCargoTypeChange}
-			/>
-		</div>
-		<div class="field">
-			<label>Cargo Item</label>
-			<FieldSelect bind:value={form.namaBarang} options={cargoItemOptions} placeholder="Pilih Cargo Item" />
-			<div class="hint" style="margin-top:6px;">
-				Belum ada di daftar? Tambah lewat menu Master Data → MyCargo.
+	<!-- On a contract covering several customers this pair lives in Customer
+	     1's own card, where the other customers' cargo is: two inputs for one
+	     answer would be two places to change it and one to forget. -->
+	{#if !(multiCustomerEnabled && isMultiCustomer)}
+		<div class="two-col">
+			<div class="field">
+				<label>Cargo Type</label>
+				<FieldSelect
+					bind:value={form.cargoTypeSpecific}
+					options={cargoSpecificOptions}
+					placeholder="Pilih Cargo Type"
+					onchange={onCargoTypeChange}
+				/>
+			</div>
+			<div class="field">
+				<label>Cargo Item</label>
+				<FieldSelect bind:value={form.namaBarang} options={cargoItemOptions} placeholder="Pilih Cargo Item" />
+				<div class="hint" style="margin-top:6px;">
+					Belum ada di daftar? Tambah lewat menu Master Data → MyCargo.
+				</div>
 			</div>
 		</div>
-	</div>
+	{/if}
 
 	<div class="field">
 		<label>Type of Truck Sesuai Muatan</label>
@@ -1170,6 +1185,50 @@
 		{/if}
 	</div>
 </div>
+
+<!-- Last, because it is the only part of the contract that is computed
+     rather than typed: it needs the warehouses chosen above before there is a
+     distance to compute from, and putting it higher would show an empty card
+     for most of the time somebody spends on this page.
+
+     The allowance this contract agrees, instead of each order working one
+     out. Computed by the same function an order uses, from the real road
+     distance between the two warehouses named above, so the figure agreed
+     here and the figure it replaces cannot drift apart. -->
+{#if allowanceEnabled && lanesByWarehouse}
+	<div class="card card-pad" style="margin-top:16px;">
+		<div class="route-shipment-head">
+			<span class="route-shipment-title">Uang Sangu Driver</span>
+			{#if laneKm}<span class="hint">{laneKm} km · ETA {laneHours} jam</span>{/if}
+		</div>
+		{#if !laneKm}
+			<p class="hint" style="margin:0;">
+				Pilih Loading Point dan Unloading Point terlebih dahulu — jarak dihitung dari rute jalan antara keduanya.
+			</p>
+		{:else}
+			<div class="two-col">
+				<div class="field">
+					<label>Total Uang Sangu</label>
+					<input type="text" readonly value={formatIDR(allowanceTotal)} />
+				</div>
+				<div class="field">
+					<label>Uang Sangu Driver Awal (%)</label>
+					<input type="number" min="0" max="100" bind:value={allowanceUpfrontPercent} />
+				</div>
+			</div>
+			<div class="two-col" style="margin-bottom:0;">
+				<div class="field" style="margin-bottom:0;">
+					<label>Uang Sangu Awal</label>
+					<input type="text" readonly value={formatIDR(allowanceUpfront)} />
+				</div>
+				<div class="field" style="margin-bottom:0;">
+					<label>Uang Sangu Akhir</label>
+					<input type="text" readonly value={formatIDR(allowanceFinal)} />
+				</div>
+			</div>
+		{/if}
+		</div>
+	{/if}
 
 <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:8px;">
 	<button class="btn btn-outline" onclick={cancel}>Batal</button>

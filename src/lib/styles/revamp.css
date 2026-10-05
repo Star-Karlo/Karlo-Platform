@@ -332,6 +332,10 @@ input.field-select-checkbox{width:15px; height:15px; padding:0; border:none; bor
 .latlng-display input{font-family:'Google Sans Flex','Roboto Mono',monospace; font-variant-numeric:tabular-nums;}
 
 .two-col{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px;}
+/* Customer, cargo type and cargo item read as one line in a customer's card,
+   the way the contract is filled in. Stacks on a narrow screen. */
+.three-col{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:16px;}
+@media (max-width: 860px){ .three-col{grid-template-columns:1fr;} }
 .two-col > .field, .three-col > .field{min-width:0;}
 /* Date / time inputs have a wide intrinsic size; without this they push a
    half-width column over its neighbour instead of shrinking. */
