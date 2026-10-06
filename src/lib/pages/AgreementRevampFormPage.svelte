@@ -325,6 +325,42 @@
 	   records which cities it runs between, so they are read off the chosen
 	   warehouses rather than left blank. */
 
+	/* ---------- Whose warehouses a lane may pick from ----------
+	   A transporter keeps its customers' warehouses in its own register and
+	   MyWarehouse groups them per customer, alongside its own sites, which
+	   serve everyone. A lane on this contract runs between THIS customer's
+	   sites and the company's own — offering the whole register let a planner
+	   pick another customer's gate, which is both wrong and, on a contract
+	   covering several customers, a small leak of who else they haul for.
+
+	   Own sites carry no customerCompanyId: the API omits the field when it is
+	   empty, so the test is its absence, not a comparison against ''. */
+	function warehousesFor(customerId: string) {
+		return warehouses.filter((w: any) => !w.customerCompanyId || w.customerCompanyId === customerId);
+	}
+
+	/* Changing who the contract is for invalidates lanes chosen for someone
+	   else: those warehouse ids belong to the previous customer and are no
+	   longer offered, so the picker would show a stale label over a value that
+	   would still be submitted. The lanes are blanked, keeping their count, so
+	   a multi-shipment contract does not collapse to one on a mis-click.
+
+	   Only a user's own pick reaches here — FieldSelect emits on selection,
+	   not on assignment — so loading an agreement for editing is unaffected. */
+	function onContractCustomerChange() {
+		loadingPoints = loadingPoints.map(() => '');
+		unloadingPoints = unloadingPoints.map(() => '');
+	}
+	function onExtraCustomerChange(c: ExtraCustomer) {
+		c.loadingPoints = c.loadingPoints.map(() => '');
+		c.unloadingPoints = c.unloadingPoints.map(() => '');
+	}
+
+	/** An extra customer is chosen by name, so its id comes from the list. */
+	function customerIdOf(name: string) {
+		return customers.find((c: any) => c.name === name)?.id ?? '';
+	}
+
 	/** Which city a warehouse stands in, '' when it is not known. */
 	function warehouseCity(id: string): string {
 		return String(warehouses.find((w: any) => w.id === id)?.city ?? '').trim();
@@ -861,7 +897,12 @@
 	<div class="card card-pad" class:form-locked={!form.agreementType}>
 		<div class="field">
 			<label>Customer Name <span class="req">*</span></label>
-			<FieldSelect bind:value={form.customerId} options={customerOptions} placeholder="Pilih customer" />
+			<FieldSelect
+				bind:value={form.customerId}
+				options={customerOptions}
+				placeholder="Pilih customer"
+				onchange={onContractCustomerChange}
+			/>
 		</div>
 		{#if lanesByWarehouse}
 			<!-- This contract names the two warehouses, not the two cities. Same
@@ -883,7 +924,7 @@
 						<label>Loading Point <span class="req">*</span></label>
 						<WarehouseSearchField
 							bind:value={loadingPoints[k]}
-							{warehouses}
+							warehouses={warehousesFor(form.customerId)}
 							placeholder="Cari alamat atau nama warehouse..."
 						/>
 					</div>
@@ -891,7 +932,7 @@
 						<label>Unloading Point <span class="req">*</span></label>
 						<WarehouseSearchField
 							bind:value={unloadingPoints[k]}
-							{warehouses}
+							warehouses={warehousesFor(form.customerId)}
 							placeholder="Cari alamat atau nama warehouse..."
 						/>
 					</div>
@@ -1001,6 +1042,7 @@
 					options={customerOptions}
 					placeholder="Pilih customer"
 					searchable
+					onchange={onContractCustomerChange}
 				/>
 			</div>
 			<div class="field">
@@ -1036,7 +1078,7 @@
 					<label>Loading Point <span class="req">*</span></label>
 					<WarehouseSearchField
 						bind:value={loadingPoints[k]}
-						{warehouses}
+						warehouses={warehousesFor(form.customerId)}
 						placeholder="Cari alamat atau nama warehouse..."
 					/>
 				</div>
@@ -1044,7 +1086,7 @@
 					<label>Unloading Point <span class="req">*</span></label>
 					<WarehouseSearchField
 						bind:value={unloadingPoints[k]}
-						{warehouses}
+						warehouses={warehousesFor(form.customerId)}
 						placeholder="Cari alamat atau nama warehouse..."
 					/>
 				</div>
@@ -1071,6 +1113,7 @@
 						options={customers.map((cu: any) => ({ value: cu.name, label: cu.name }))}
 						placeholder="Pilih customer"
 						searchable
+						onchange={() => onExtraCustomerChange(c)}
 					/>
 				</div>
 				<div class="field">
@@ -1105,7 +1148,7 @@
 						<label>Loading Point <span class="req">*</span></label>
 						<WarehouseSearchField
 							bind:value={c.loadingPoints[k]}
-							{warehouses}
+							warehouses={warehousesFor(c.customerId || customerIdOf(c.customerName))}
 							placeholder="Cari alamat atau nama warehouse..."
 						/>
 					</div>
@@ -1113,7 +1156,7 @@
 						<label>Unloading Point <span class="req">*</span></label>
 						<WarehouseSearchField
 							bind:value={c.unloadingPoints[k]}
-							{warehouses}
+							warehouses={warehousesFor(c.customerId || customerIdOf(c.customerName))}
 							placeholder="Cari alamat atau nama warehouse..."
 						/>
 					</div>

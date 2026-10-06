@@ -38,15 +38,28 @@
 
 	let customerOptions = $derived(customers.map((c) => ({ value: c.name, label: c.name })));
 
-
 	/* Changing the customer invalidates any agreement already picked for a
-	   different customer. */
+	   different customer, and the warehouses with it: those sites belong to
+	   the previous customer and are no longer offered. The lanes keep their
+	   count so a multi-stop plan does not collapse on a mis-click. */
 	function onCustomerChange(i: number) {
 		const sp = wizard.shipments[i];
 		sp.agreementId = '';
 		sp.agreementLabel = '';
 		sp.agreementTruckTypes = [];
 		sp.truckOptions = [];
+		sp.loadingPoints = sp.loadingPoints.map(() => '');
+		sp.unloadingPoints = sp.unloadingPoints.map(() => '');
+	}
+
+	/* ---------- Whose warehouses a lane may pick from ----------
+	   The register holds every customer's sites plus the company's own, which
+	   serve everyone. A lane runs between THIS customer's sites and those, so
+	   offering the whole list let a planner pick another customer's gate.
+	   Own sites carry no customerCompanyId — the API omits it when empty. */
+	function warehousesFor(sp: { customerNama: string }) {
+		const customerId = customers.find((c) => c.name === sp.customerNama)?.id ?? '';
+		return warehouses.filter((w: any) => !w.customerCompanyId || w.customerCompanyId === customerId);
 	}
 
 	/* ---------- Select Agreement (picker modal) ---------- */
@@ -93,7 +106,9 @@
 	   picks them as before. */
 	function applyAgreementPoints(sp: WizardShipment, detail: any) {
 		const loads: string[] = Array.isArray(detail.loadingPoints) ? detail.loadingPoints.filter(Boolean) : [];
-		const unloads: string[] = Array.isArray(detail.unloadingPoints) ? detail.unloadingPoints.filter(Boolean) : [];
+		const unloads: string[] = Array.isArray(detail.unloadingPoints)
+			? detail.unloadingPoints.filter(Boolean)
+			: [];
 		if (!loads.length && !unloads.length) return;
 
 		const pairs = Math.max(loads.length, unloads.length, 1);
@@ -109,8 +124,10 @@
 		// Each point proposes its warehouse's own PIC, as choosing one by
 		// hand would.
 		for (let k = 0; k < pairs; k++) {
-			if (sp.loadingPoints[k]) onPointChosen(wizard.shipments.indexOf(sp), 'loadingPoints', k, sp.loadingPoints[k]);
-			if (sp.unloadingPoints[k]) onPointChosen(wizard.shipments.indexOf(sp), 'unloadingPoints', k, sp.unloadingPoints[k]);
+			if (sp.loadingPoints[k])
+				onPointChosen(wizard.shipments.indexOf(sp), 'loadingPoints', k, sp.loadingPoints[k]);
+			if (sp.unloadingPoints[k])
+				onPointChosen(wizard.shipments.indexOf(sp), 'unloadingPoints', k, sp.unloadingPoints[k]);
 		}
 	}
 
@@ -170,7 +187,10 @@
 	function dropShipmentItems(sp: WizardShipment, shipmentNo: number) {
 		sp.items = sp.items
 			.filter((it) => (it.shipmentNo || 1) !== shipmentNo)
-			.map((it) => ({ ...it, shipmentNo: (it.shipmentNo || 1) > shipmentNo ? it.shipmentNo - 1 : it.shipmentNo || 1 }));
+			.map((it) => ({
+				...it,
+				shipmentNo: (it.shipmentNo || 1) > shipmentNo ? it.shipmentNo - 1 : it.shipmentNo || 1
+			}));
 		if (!sp.items.length) sp.items = [newItem(1)];
 	}
 
@@ -209,29 +229,51 @@
 	   another of the warehouse's PICs or add a new one, which is also saved to
 	   the warehouse so the next order finds it. */
 	type PicField = 'loadingPics' | 'unloadingPics';
-	const picField = (field: 'loadingPoints' | 'unloadingPoints'): PicField => (field === 'loadingPoints' ? 'loadingPics' : 'unloadingPics');
+	const picField = (field: 'loadingPoints' | 'unloadingPoints'): PicField =>
+		field === 'loadingPoints' ? 'loadingPics' : 'unloadingPics';
 	function warehouseOf(id: string): Warehouse | undefined {
 		return warehouses.find((w) => w.id === id);
 	}
-	function onPointChosen(i: number, field: 'loadingPoints' | 'unloadingPoints', pointIndex: number, id: string) {
+	function onPointChosen(
+		i: number,
+		field: 'loadingPoints' | 'unloadingPoints',
+		pointIndex: number,
+		id: string
+	) {
 		const pics = wizard.shipments[i][picField(field)];
 		while (pics.length <= pointIndex) pics.push(null);
 		pics[pointIndex] = defaultPicOf(warehouseOf(id));
 	}
 	function picOptions(id: string): { value: string; label: string }[] {
 		const w = warehouseOf(id);
-		const list = (w?.pics?.length ? w.pics : w?.picName ? [{ id: 'legacy', name: w.picName, phone: w.picPhone ?? '' }] : []) as { id?: string; name: string; phone?: string }[];
-		return list.map((p, k) => ({ value: p.id ?? `#${k}`, label: `${p.name}${p.phone ? ` · ${p.phone}` : ''}` }));
+		const list = (
+			w?.pics?.length
+				? w.pics
+				: w?.picName
+					? [{ id: 'legacy', name: w.picName, phone: w.picPhone ?? '' }]
+					: []
+		) as { id?: string; name: string; phone?: string }[];
+		return list.map((p, k) => ({
+			value: p.id ?? `#${k}`,
+			label: `${p.name}${p.phone ? ` · ${p.phone}` : ''}`
+		}));
 	}
 	function picValue(pic: PointPic | null, id: string): string {
 		if (!pic) return '';
 		const w = warehouseOf(id);
-		const k = (w?.pics ?? []).findIndex((p) => (pic.id && p.id === pic.id) || (p.name === pic.name && (p.phone ?? '') === pic.phone));
+		const k = (w?.pics ?? []).findIndex(
+			(p) => (pic.id && p.id === pic.id) || (p.name === pic.name && (p.phone ?? '') === pic.phone)
+		);
 		if (k >= 0) return w!.pics![k].id ?? `#${k}`;
 		if (w?.picName === pic.name) return 'legacy';
 		return '';
 	}
-	function onPicSelect(i: number, field: 'loadingPoints' | 'unloadingPoints', pointIndex: number, value: string) {
+	function onPicSelect(
+		i: number,
+		field: 'loadingPoints' | 'unloadingPoints',
+		pointIndex: number,
+		value: string
+	) {
 		if (value === '__new__') {
 			openNewPic(i, field, pointIndex);
 			return;
@@ -244,11 +286,16 @@
 			return;
 		}
 		const k = (w?.pics ?? []).findIndex((p, idx) => (p.id ?? `#${idx}`) === value);
-		pics[pointIndex] = k >= 0 ? { id: w!.pics![k].id, name: w!.pics![k].name, phone: w!.pics![k].phone ?? '' } : null;
+		pics[pointIndex] =
+			k >= 0 ? { id: w!.pics![k].id, name: w!.pics![k].name, phone: w!.pics![k].phone ?? '' } : null;
 	}
 
 	let showPicModal = $state(false);
-	let picTarget = $state<{ index: number; field: 'loadingPoints' | 'unloadingPoints'; pointIndex: number } | null>(null);
+	let picTarget = $state<{
+		index: number;
+		field: 'loadingPoints' | 'unloadingPoints';
+		pointIndex: number;
+	} | null>(null);
 	let picForm = $state({ name: '', phone: '', saveToWarehouse: true });
 	let picSaving = $state(false);
 	let picError = $state('');
@@ -274,7 +321,12 @@
 		picError = '';
 		try {
 			if (picForm.saveToWarehouse && w) {
-				const existing = (w.pics ?? []).map((p) => ({ id: p.id ?? '', name: p.name, phone: p.phone ?? '', isDefault: !!p.isDefault }));
+				const existing = (w.pics ?? []).map((p) => ({
+					id: p.id ?? '',
+					name: p.name,
+					phone: p.phone ?? '',
+					isDefault: !!p.isDefault
+				}));
 				const pics = [...existing, { id: '', name, phone, isDefault: existing.length === 0 }];
 				const res = await api.put(ENDPOINTS.warehouses.update(w.id), { name: w.name, pics });
 				const updated = res.data?.data;
@@ -307,7 +359,11 @@
 				<!-- Today at the earliest; the picker itself refuses a past day,
 				     and the wizard checks the clock too when a time is given. -->
 				<input type="date" min={today} bind:value={wizard.estimatedLoadDate} />
-				<input type="time" min={wizard.estimatedLoadDate === today ? nowTime : undefined} bind:value={wizard.estimatedLoadTime} />
+				<input
+					type="time"
+					min={wizard.estimatedLoadDate === today ? nowTime : undefined}
+					bind:value={wizard.estimatedLoadTime}
+				/>
 			</div>
 		</div>
 		<div class="field">
@@ -375,7 +431,9 @@
 					<div class="shipment-pair-head">
 						<span class="shipment-pair-title">Shipment {k + 1}</span>
 						{#if shipmentCount(sp) > 1}
-							<button type="button" class="shipment-pair-remove" onclick={() => removeShipment(i, k)}>Hapus</button>
+							<button type="button" class="shipment-pair-remove" onclick={() => removeShipment(i, k)}
+								>Hapus</button
+							>
 						{/if}
 					</div>
 
@@ -386,7 +444,7 @@
 								<div class="multi-point-field">
 									<WarehouseSearchField
 										bind:value={sp.loadingPoints[k]}
-										{warehouses}
+										warehouses={warehousesFor(sp)}
 										placeholder="Cari alamat atau nama warehouse..."
 										disabled={!sp.agreementId}
 										onchange={(id) => onPointChosen(i, 'loadingPoints', k, id)}
@@ -397,7 +455,8 @@
 											<select
 												class="point-pic-select"
 												value={picValue(sp.loadingPics[k] ?? null, sp.loadingPoints[k])}
-												onchange={(e) => onPicSelect(i, 'loadingPoints', k, (e.currentTarget as HTMLSelectElement).value)}
+												onchange={(e) =>
+													onPicSelect(i, 'loadingPoints', k, (e.currentTarget as HTMLSelectElement).value)}
 											>
 												<option value="">— pilih PIC —</option>
 												{#each picOptions(sp.loadingPoints[k]) as o (o.value)}
@@ -425,7 +484,7 @@
 								<div class="multi-point-field">
 									<WarehouseSearchField
 										bind:value={sp.unloadingPoints[k]}
-										{warehouses}
+										warehouses={warehousesFor(sp)}
 										placeholder="Cari alamat atau nama warehouse..."
 										disabled={!sp.agreementId}
 										onchange={(id) => onPointChosen(i, 'unloadingPoints', k, id)}
@@ -436,7 +495,8 @@
 											<select
 												class="point-pic-select"
 												value={picValue(sp.unloadingPics[k] ?? null, sp.unloadingPoints[k])}
-												onchange={(e) => onPicSelect(i, 'unloadingPoints', k, (e.currentTarget as HTMLSelectElement).value)}
+												onchange={(e) =>
+													onPicSelect(i, 'unloadingPoints', k, (e.currentTarget as HTMLSelectElement).value)}
 											>
 												<option value="">— pilih PIC —</option>
 												{#each picOptions(sp.unloadingPoints[k]) as o (o.value)}
@@ -469,7 +529,9 @@
 					type="button"
 					class="btn btn-outline btn-sm add-shipment-btn"
 					disabled={!sp.agreementId}
-					title={!sp.agreementId ? 'Pilih agreement terlebih dahulu' : 'Tambah satu pasang titik muat dan bongkar'}
+					title={!sp.agreementId
+						? 'Pilih agreement terlebih dahulu'
+						: 'Tambah satu pasang titik muat dan bongkar'}
 					onclick={() => addShipment(i)}>+ Tambah Shipment</button
 				>
 			{/if}
@@ -492,10 +554,16 @@
 
 <Modal open={showPicModal} size="sm" title="PIC baru" onClose={() => (showPicModal = false)}>
 	<FormGrid>
-		<Field label="Nama PIC" id="np-name" required><Input id="np-name" bind:value={picForm.name} placeholder="cth. Budi" /></Field>
-		<Field label="Nomor WhatsApp" id="np-phone"><Input id="np-phone" bind:value={picForm.phone} placeholder="08xx…" /></Field>
+		<Field label="Nama PIC" id="np-name" required
+			><Input id="np-name" bind:value={picForm.name} placeholder="cth. Budi" /></Field
+		>
+		<Field label="Nomor WhatsApp" id="np-phone"
+			><Input id="np-phone" bind:value={picForm.phone} placeholder="08xx…" /></Field
+		>
 		<Field label="" id="np-save" wide>
-			<label class="np-check"><input type="checkbox" bind:checked={picForm.saveToWarehouse} /> Simpan ke daftar PIC warehouse ini</label>
+			<label class="np-check"
+				><input type="checkbox" bind:checked={picForm.saveToWarehouse} /> Simpan ke daftar PIC warehouse ini</label
+			>
 		</Field>
 	</FormGrid>
 	{#if picError}<p class="np-error">{picError}</p>{/if}
@@ -536,8 +604,12 @@
 		color: var(--error, #b3261e);
 		cursor: pointer;
 	}
-	.shipment-pair-remove:hover { text-decoration: underline; }
-	.add-shipment-btn { margin-top: 16px; }
+	.shipment-pair-remove:hover {
+		text-decoration: underline;
+	}
+	.add-shipment-btn {
+		margin-top: 16px;
+	}
 
 	/* The PIC control sits inside the point's own column, so its edges line
 	   up with the search field above it instead of running under the two icon
@@ -545,9 +617,18 @@
 	   here because a native select's arrow does not follow the radius. */
 	/* The point's controls are taller than the icon buttons now, so the row
 	   aligns to the top and the buttons drop to the search field's own line. */
-	.multi-point-search-row { align-items: flex-start; }
-	.multi-point-search-row > button { margin-top: 6px; }
-	.point-pic { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+	.multi-point-search-row {
+		align-items: flex-start;
+	}
+	.multi-point-search-row > button {
+		margin-top: 6px;
+	}
+	.point-pic {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin-top: 8px;
+	}
 	.point-pic-label {
 		font-size: 12px;
 		font-weight: 600;
@@ -569,18 +650,36 @@
 		background-repeat: no-repeat;
 		background-position: right 12px center;
 		background-size: 15px;
-		transition: border-color .15s, box-shadow .15s;
+		transition:
+			border-color 0.15s,
+			box-shadow 0.15s;
 	}
 	.point-pic-select:focus {
 		border-color: var(--primary, #0b57d0);
-		box-shadow: 0 0 0 3px rgba(11, 87, 208, .14);
+		box-shadow: 0 0 0 3px rgba(11, 87, 208, 0.14);
 		outline: none;
 	}
 	/* Nothing chosen yet reads as a placeholder, not as a value. */
-	.point-pic-select:invalid, .point-pic-select option[value=""] { color: var(--on-surface-variant, #6b7280); }
-	@media (max-width: 720px) {
-		.point-pic { align-items: stretch; flex-direction: column; gap: 4px; }
+	.point-pic-select:invalid,
+	.point-pic-select option[value=''] {
+		color: var(--on-surface-variant, #6b7280);
 	}
-	.np-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
-	.np-error { color: var(--danger, #b91c1c); font-size: 12px; margin-top: 8px; }
+	@media (max-width: 720px) {
+		.point-pic {
+			align-items: stretch;
+			flex-direction: column;
+			gap: 4px;
+		}
+	}
+	.np-check {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 13px;
+	}
+	.np-error {
+		color: var(--danger, #b91c1c);
+		font-size: 12px;
+		margin-top: 8px;
+	}
 </style>
