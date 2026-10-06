@@ -151,6 +151,15 @@
 			form.initialRoutes = [form.initialRoutes[0] || newRouteEntry()];
 			form.destinationRoutes = [form.destinationRoutes[0] || newRouteEntry()];
 		}
+		// The warehouse lanes needed the same trim and never had it: switching
+		// multi-shipment back to single left the extra pairs in place, out of
+		// sight once the + Tambah Shipment button went, and submitted them.
+		// Multi-customer keeps its lanes — Customer 1 carries its own, and
+		// several of them is the point.
+		if (val === 'single-shipment') {
+			loadingPoints = [loadingPoints[0] ?? ''];
+			unloadingPoints = [unloadingPoints[0] ?? ''];
+		}
 	}
 
 	// Per-Truk is a flat price regardless of load, so Minimum/Maximum Load
@@ -909,7 +918,15 @@
 		     pairing as the city lanes below: index k of each list is one
 		     shipment's lane, added and removed together. -->
 			{#each { length: warehouseLaneCount } as _l, k (k)}
-				{#if isMultiShipment || multiCustomerEnabled}
+				<!-- Only a multi-shipment contract numbers its lanes. The test
+				     used to be the COMPANY's multi-customer flag, which is not
+				     an agreement type: a company allowed to write
+				     multi-customer contracts had "Shipment 1" and a + Tambah
+				     Shipment button on its SINGLE shipment agreements, which
+				     is the multi-shipment form under another name. A
+				     multi-customer contract never reaches here — its lanes
+				     live in each customer's own card. -->
+				{#if isMultiShipment}
 					<div class="route-shipment-head">
 						<span class="route-shipment-title">Shipment {k + 1}</span>
 						{#if warehouseLaneCount > 1}
@@ -938,7 +955,7 @@
 					</div>
 				</div>
 			{/each}
-			{#if isMultiShipment || multiCustomerEnabled}
+			{#if isMultiShipment}
 				<button
 					type="button"
 					class="btn btn-outline btn-sm"
