@@ -64,12 +64,25 @@
 	   rule in AgreementRevampFormPage.
 
 	   Own sites carry no customerCompanyId; the API omits it when empty. */
-	function warehousesFor(sp: { customerNama: string }) {
+	function warehousesFor(sp: { customerNama: string }, ...selected: string[]) {
 		const customerId = customers.find((c) => c.name === sp.customerNama)?.id ?? '';
 		const own = warehouses.filter((w: any) => !w.customerCompanyId);
-		if (!customerId) return own;
-		const theirs = warehouses.filter((w: any) => w.customerCompanyId === customerId);
-		return theirs.length ? theirs : own;
+		const theirs = customerId ? warehouses.filter((w: any) => w.customerCompanyId === customerId) : [];
+		const base = !customerId ? own : theirs.length ? theirs : own;
+		// A point the contract already chose stays nameable even if it falls
+		// outside the scope — an agreement that names a Gudang Sendiri, or one
+		// written before this scoping. The picker names a warehouse by finding
+		// its id in the list it was handed, so dropping it would leave a
+		// filled point looking empty while still carrying the id.
+		const have = new Set(base.map((w: any) => w.id));
+		// flatMap rather than map+filter(Boolean): the latter leaves `undefined`
+		// in the type, and the picker's prop does not accept it.
+		const kept = selected.flatMap((id) => {
+			if (!id || have.has(id)) return [];
+			const w = warehouses.find((x: any) => x.id === id);
+			return w ? [w] : [];
+		});
+		return kept.length ? [...base, ...kept] : base;
 	}
 
 	/* ---------- Select Agreement (picker modal) ---------- */
@@ -391,7 +404,21 @@
 	<div class="shipment-block">
 		<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 		<div class="shipment-block-header" onclick={() => (sp.expanded = !sp.expanded)}>
-			<span class="shipment-block-title">Data Shipment</span>
+			<!-- A card is one CUSTOMER's shipments, which only shows when there
+			     is more than one of them: a contract covering several brings a
+			     card per customer, and two blocks both headed "Data Shipment"
+			     read as the same customer twice. With a single customer the
+			     old heading is the honest one — numbering one of anything
+			     invites the reader to look for the second. -->
+			<span class="shipment-block-title">
+				{#if wizard.shipments.length > 1}
+					Customer {i + 1}{#if sp.customerNama}
+						<span class="shipment-block-subtitle">{sp.customerNama}</span>
+					{/if}
+				{:else}
+					Data Shipment
+				{/if}
+			</span>
 			<div class="shipment-block-actions">
 				<span class="shipment-block-chevron" class:open={sp.expanded}><ChevronDown size={16} /></span>
 			</div>
@@ -454,7 +481,7 @@
 								<div class="multi-point-field">
 									<WarehouseSearchField
 										bind:value={sp.loadingPoints[k]}
-										warehouses={warehousesFor(sp)}
+										warehouses={warehousesFor(sp, sp.loadingPoints[k])}
 										placeholder="Cari alamat atau nama warehouse..."
 										disabled={!sp.agreementId}
 										onchange={(id) => onPointChosen(i, 'loadingPoints', k, id)}
@@ -494,7 +521,7 @@
 								<div class="multi-point-field">
 									<WarehouseSearchField
 										bind:value={sp.unloadingPoints[k]}
-										warehouses={warehousesFor(sp)}
+										warehouses={warehousesFor(sp, sp.unloadingPoints[k])}
 										placeholder="Cari alamat atau nama warehouse..."
 										disabled={!sp.agreementId}
 										onchange={(id) => onPointChosen(i, 'unloadingPoints', k, id)}

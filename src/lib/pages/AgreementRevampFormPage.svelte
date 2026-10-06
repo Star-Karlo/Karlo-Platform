@@ -425,11 +425,24 @@
 
 	   Own sites carry no customerCompanyId: the API omits the field when it
 	   is empty, so the test is its absence, not a comparison against ''. */
-	function warehousesFor(customerId: string) {
+	function warehousesFor(customerId: string, ...selected: string[]) {
 		const own = warehouses.filter((w: any) => !w.customerCompanyId);
-		if (!customerId) return own;
-		const theirs = warehouses.filter((w: any) => w.customerCompanyId === customerId);
-		return theirs.length ? theirs : own;
+		const theirs = customerId ? warehouses.filter((w: any) => w.customerCompanyId === customerId) : [];
+		const base = !customerId ? own : theirs.length ? theirs : own;
+		// Whatever is already chosen stays in the list even if it falls outside
+		// the scope — a contract written before this scoping, or one that
+		// names a Gudang Sendiri. The picker names a warehouse by finding its
+		// id in the list it was handed, so dropping it would leave a filled
+		// field looking empty while still submitting the id behind it.
+		const have = new Set(base.map((w: any) => w.id));
+		// flatMap rather than map+filter(Boolean): the latter leaves `undefined`
+		// in the type, and the picker's prop does not accept it.
+		const kept = selected.flatMap((id) => {
+			if (!id || have.has(id)) return [];
+			const w = warehouses.find((x: any) => x.id === id);
+			return w ? [w] : [];
+		});
+		return kept.length ? [...base, ...kept] : base;
 	}
 
 	/* Changing who the contract is for invalidates lanes chosen for someone
@@ -1078,7 +1091,7 @@
 						<div class="warehouse-pick-row">
 							<WarehouseSearchField
 								bind:value={loadingPoints[k]}
-								warehouses={warehousesFor(form.customerId)}
+								warehouses={warehousesFor(form.customerId, loadingPoints[k])}
 								placeholder="Cari alamat atau nama warehouse..."
 							/>
 							<button
@@ -1096,7 +1109,7 @@
 						<div class="warehouse-pick-row">
 							<WarehouseSearchField
 								bind:value={unloadingPoints[k]}
-								warehouses={warehousesFor(form.customerId)}
+								warehouses={warehousesFor(form.customerId, unloadingPoints[k])}
 								placeholder="Cari alamat atau nama warehouse..."
 							/>
 							<button
@@ -1252,7 +1265,7 @@
 					<div class="warehouse-pick-row">
 						<WarehouseSearchField
 							bind:value={loadingPoints[k]}
-							warehouses={warehousesFor(form.customerId)}
+							warehouses={warehousesFor(form.customerId, loadingPoints[k])}
 							placeholder="Cari alamat atau nama warehouse..."
 						/>
 						<button
@@ -1270,7 +1283,7 @@
 					<div class="warehouse-pick-row">
 						<WarehouseSearchField
 							bind:value={unloadingPoints[k]}
-							warehouses={warehousesFor(form.customerId)}
+							warehouses={warehousesFor(form.customerId, unloadingPoints[k])}
 							placeholder="Cari alamat atau nama warehouse..."
 						/>
 						<button
@@ -1342,7 +1355,7 @@
 						<div class="warehouse-pick-row">
 							<WarehouseSearchField
 								bind:value={c.loadingPoints[k]}
-								warehouses={warehousesFor(c.customerId || customerIdOf(c.customerName))}
+								warehouses={warehousesFor(c.customerId || customerIdOf(c.customerName), c.loadingPoints[k])}
 								placeholder="Cari alamat atau nama warehouse..."
 							/>
 							<button
@@ -1363,7 +1376,7 @@
 						<div class="warehouse-pick-row">
 							<WarehouseSearchField
 								bind:value={c.unloadingPoints[k]}
-								warehouses={warehousesFor(c.customerId || customerIdOf(c.customerName))}
+								warehouses={warehousesFor(c.customerId || customerIdOf(c.customerName), c.unloadingPoints[k])}
 								placeholder="Cari alamat atau nama warehouse..."
 							/>
 							<button
