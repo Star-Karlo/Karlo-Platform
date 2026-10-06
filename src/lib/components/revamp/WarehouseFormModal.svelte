@@ -24,10 +24,19 @@
 	let {
 		show = $bindable(false),
 		editing = null,
+		customerCompanyId = '',
+		customerName = '',
 		onSaved
 	}: {
 		show?: boolean;
 		editing?: Record<string, any> | null;
+		/** Whose warehouse this is. Empty means the company's own site.
+		 *  Set when the modal is opened from a customer's lane, so the site
+		 *  lands in that customer's register rather than becoming an own
+		 *  site that every customer can see. */
+		customerCompanyId?: string;
+		/** Only to say whose register it will land in. */
+		customerName?: string;
 		onSaved?: (w: SavedWarehouse) => void;
 	} = $props();
 
@@ -167,13 +176,18 @@
 				latitude: form.lat,
 				longitude: form.lng
 			};
+			// The owner rides on the request, not on the saved shape the caller
+			// is handed back. Sent only when the modal was opened from a
+			// customer's lane, so a site created from My Warehouse stays the
+			// company's own, as it always has.
+			const body = customerCompanyId ? { ...payload, customerCompanyId } : payload;
 			let id: string;
 			if (editing) {
 				id = editing.id;
-				await api.put(ENDPOINTS.warehouses.update(id), payload);
+				await api.put(ENDPOINTS.warehouses.update(id), body);
 				toast('Data warehouse berhasil diperbarui');
 			} else {
-				const res = await api.post(ENDPOINTS.warehouses.create, payload);
+				const res = await api.post(ENDPOINTS.warehouses.create, body);
 				id = res.data.data?.id;
 				toast('Warehouse baru berhasil ditambahkan');
 			}
@@ -191,7 +205,11 @@
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 	<div class="modal-overlay" onclick={onOverlayClick}>
 		<div class="modal-box modal-box-lg" role="dialog" aria-modal="true">
-			<h3>{editing ? 'Edit Warehouse' : 'Tambah Warehouse'}</h3>
+			<h3>
+				{editing ? 'Edit Warehouse' : 'Tambah Warehouse'}{#if !editing && customerName}
+					<span class="warehouse-modal-owner">— {customerName}</span>
+				{/if}
+			</h3>
 
 			<div class="modal-scroll-body">
 				<div class="two-col">

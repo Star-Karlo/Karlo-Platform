@@ -1338,9 +1338,55 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .agreement-doc-party-name{font-weight:700; font-size:14px;}
 .agreement-doc-section{margin-top:24px;}
 .agreement-doc-section h2{font-size:14px; font-weight:700; margin-bottom:10px; border-bottom:1px solid var(--outline-variant); padding-bottom:6px;}
+/* The allowance, itemised: each row names a cost, the arithmetic behind it,
+   and the figure, with the amount right-aligned so the column reads as a sum.
+   The subtotal is separated by a rule rather than a heading — it is the same
+   column continued, not a new section. */
+/* The shortcut beside a warehouse picker: register a site without leaving a
+   half-filled contract. Sized and aligned to the picker's own search button
+   so the pair reads as one control, not a stray icon. */
+/* Picker and its add-shortcut on one line; the picker takes the space and the
+   button keeps its size. min-width:0 so a long warehouse name cannot push the
+   button off the card. */
+.warehouse-pick-row{display:flex; align-items:flex-start; gap:8px;}
+.warehouse-pick-row > .warehouse-search-field{flex:1; min-width:0;}
+.warehouse-add-btn{display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px; flex:none;
+  border:1px solid var(--outline-variant); border-radius:9px; background:var(--surface); color:var(--primary); cursor:pointer;}
+.warehouse-add-btn:hover{border-color:var(--primary); background:var(--surface-variant);}
+
+/* Whose register the new site will land in, said in the title rather than as
+   a field: it is decided by the lane the modal was opened from, not chosen. */
+.warehouse-modal-owner{font-weight:500; color:var(--on-surface-variant);}
+
+.allowance-breakdown{display:flex; flex-direction:column; gap:2px;}
+.allowance-row{display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--outline-variant);}
+.allowance-row-main{flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;}
+.allowance-row-label{font-size:13px; font-weight:600; color:var(--on-surface);}
+.allowance-row-basis{font-size:11px; color:var(--on-surface-variant);}
+.allowance-row-amount{font-size:13px; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap;}
+.allowance-row-edit{display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; flex:none;
+  border:1px solid var(--outline-variant); border-radius:7px; background:transparent; color:var(--on-surface-variant); cursor:pointer;}
+.allowance-row-edit:hover{color:var(--on-surface); border-color:var(--outline);}
+.allowance-row-input{width:150px; flex:none; text-align:right; font-variant-numeric:tabular-nums;}
+.allowance-extra-label{flex:1; min-width:0;}
+.allowance-add{align-self:flex-start; padding-left:0;}
+.allowance-subtotal{border-bottom:none; border-top:2px solid var(--outline); margin-top:4px; padding-top:12px;}
+.allowance-subtotal .allowance-row-label{flex:1; font-size:13px;}
+.allowance-subtotal .allowance-row-amount{font-size:15px;}
+
+/* One number, stated plainly. Red when negative, which is the only state the
+   reader has to act on. */
+.margin-profit-card{display:flex; flex-direction:column; align-items:center; gap:4px; text-align:center;}
+.margin-profit-label{font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--on-surface-variant);}
+.margin-profit-value{font-size:30px; font-weight:800; font-variant-numeric:tabular-nums; color:var(--on-surface);}
+.margin-profit-value.negative{color:var(--error, #b3261e);}
+
 .agreement-doc-table{width:100%; border-collapse:collapse;}
 .agreement-doc-table td{padding:6px 0; vertical-align:top;}
 .agreement-doc-table td:first-child{width:200px; color:var(--on-surface-variant); font-weight:600;}
+/* How a component was worked out, under its name: "448.5 Km / 6 x IDR 6.800".
+   A reader who disputes the figure needs the arithmetic, not just the total. */
+.agreement-doc-basis{display:block; font-weight:400; font-size:11px; color:var(--on-surface-variant); margin-top:2px;}
 .agreement-doc-routes{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
 .agreement-doc-route-label{font-weight:700; margin-bottom:6px;}
 .agreement-doc-routes ul{margin:0; padding-left:18px;}

@@ -26,6 +26,9 @@
 	let lineage = $state<AgreementRow[]>([]);
 	let loaded = $state(false);
 	let transporterName = $state('');
+	/** Only to name the lanes a warehouse-priced contract was written against;
+	 *  a contract priced city to city never needs it. */
+	let warehouses = $state<any[]>([]);
 
 	onMount(async () => {
 		try {
@@ -48,6 +51,13 @@
 			transporterName = res.data?.data?.name || '';
 		} catch {
 			transporterName = '';
+		}
+		if (Array.isArray(terms?.loadingPoints) && terms.loadingPoints.length) {
+			try {
+				warehouses = (await api.get(ENDPOINTS.warehouses.list)).data?.data ?? [];
+			} catch {
+				/* the lane falls back to its city, below */
+			}
 		}
 		loaded = true;
 	});
@@ -91,6 +101,48 @@
 	function routeLabel(r: AgreementRouteEntry) {
 		return r.level === 'kecamatan' && r.kecamatan ? r.kecamatan : r.kota;
 	}
+
+	/* ---------- The lanes a warehouse-priced contract names ----------
+	   A contract that picked two warehouses recorded THOSE, not two cities,
+	   and the city fields were never on its form. Reading only the city
+	   routes left this section headed "Titik Muat" with nothing under it —
+	   the document's most important paragraph, blank, on every MAST
+	   agreement. Named here from the register, with the city as the fallback
+	   so a contract written before the warehouse was renamed still reads. */
+	let warehouseLanes = $derived.by(() => {
+		const from = Array.isArray(terms?.loadingPoints) ? (terms.loadingPoints as string[]) : [];
+		const to = Array.isArray(terms?.unloadingPoints) ? (terms.unloadingPoints as string[]) : [];
+		if (!from.length && !to.length) return null;
+		const name = (id: string) => {
+			const w = warehouses.find((x: any) => x.id === id);
+			if (!w) return id ? '—' : '';
+			return w.city ? `${w.name} — ${w.city}` : w.name;
+		};
+		return {
+			from: from.map(name).filter(Boolean),
+			to: to.map(name).filter(Boolean)
+		};
+	});
+
+	/* ---------- What the contract agreed the driver is paid ----------
+	   A contract that fixes the allowance is agreeing a sum of money, which
+	   belongs in the document as much as the price does: it is the figure an
+	   order made under this contract will not be allowed to overrule. The
+	   document omitted it entirely, so the one copy a customer is shown did
+	   not state it. Components are listed when the contract itemised them. */
+	let allowance = $derived.by(() => {
+		const a = terms?.allowance as any;
+		if (!a || typeof a !== 'object') return null;
+		const total = Number(a.total) || 0;
+		if (total <= 0) return null;
+		return {
+			total,
+			upfrontPercent: Number(a.upfrontPercent) || 0,
+			upfront: Number(a.upfront) || 0,
+			final: Number(a.final) || 0,
+			components: Array.isArray(a.components) ? a.components : []
+		};
+	});
 
 	let truckTypes = $derived(
 		(terms?.truckTypeMatrix || []).map((key) => {
@@ -219,21 +271,57 @@
 				<div>
 					<div class="agreement-doc-route-label">Titik Muat (Initial Route)</div>
 					<ul>
-						{#each initialRoutes as r, i (i)}
-							<li>{routeLabel(r)}</li>
-						{/each}
+						{#if warehouseLanes}
+							{#each warehouseLanes.from as w, i (i)}
+								<li>{w}</li>
+							{/each}
+						{:else}
+							{#each initialRoutes as r, i (i)}
+								<li>{routeLabel(r)}</li>
+							{/each}
+						{/if}
 					</ul>
 				</div>
 				<div>
 					<div class="agreement-doc-route-label">Titik Bongkar (Destination Route)</div>
 					<ul>
-						{#each destinationRoutes as r, i (i)}
-							<li>{routeLabel(r)}</li>
-						{/each}
+						{#if warehouseLanes}
+							{#each warehouseLanes.to as w, i (i)}
+								<li>{w}</li>
+							{/each}
+						{:else}
+							{#each destinationRoutes as r, i (i)}
+								<li>{routeLabel(r)}</li>
+							{/each}
+						{/if}
 					</ul>
 				</div>
 			</div>
 		</div>
+
+		{#if allowance}
+			<div class="agreement-doc-section">
+				<h2>Uang Sangu Driver</h2>
+				<table class="agreement-doc-table">
+					<tbody>
+						{#each allowance.components as c, i (i)}
+							<tr>
+								<td
+									>{c.label}{#if c.basis}<span class="agreement-doc-basis">{c.basis}</span>{/if}</td
+								>
+								<td>{formatIDR(Number(c.amount) || 0)}</td>
+							</tr>
+						{/each}
+						<tr><td>Total Uang Sangu</td><td>{formatIDR(allowance.total)}</td></tr>
+						<tr>
+							<td>Uang Sangu Awal ({allowance.upfrontPercent}%)</td>
+							<td>{formatIDR(allowance.upfront)}</td>
+						</tr>
+						<tr><td>Uang Sangu Akhir</td><td>{formatIDR(allowance.final)}</td></tr>
+					</tbody>
+				</table>
+			</div>
+		{/if}
 
 		{#if truckTypes.length}
 			<div class="agreement-doc-section">

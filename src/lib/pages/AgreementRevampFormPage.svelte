@@ -10,7 +10,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { X } from 'lucide-svelte';
+	import { X, Pencil } from 'lucide-svelte';
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { toast } from '$lib/stores/ui';
@@ -26,6 +26,7 @@
 	import { computeUangSangu, seedTripAllowance } from '$lib/revamp/uangSangu.js';
 	import { formatIDR } from '$lib/revamp/currency.js';
 	import WarehouseSearchField from '$lib/components/revamp/WarehouseSearchField.svelte';
+	import WarehouseFormModal from '$lib/components/revamp/WarehouseFormModal.svelte';
 	import { toAgreementRow, type AgreementRow, type AgreementRouteEntry } from '$lib/revamp/agreementView';
 	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
 	import TruckTypeMatrixRevamp from '$lib/components/revamp/TruckTypeMatrixRevamp.svelte';
@@ -273,11 +274,79 @@
 	let allowanceUpfrontPercent = $state(60);
 	let allowanceEnabled = $derived(isEnabled(agreementFields, 'allowance.upfrontPercent'));
 
-	let allowanceTotal = $derived.by(() => {
-		if (!laneKm) return 0;
+	/* ---------- What the allowance is made of ----------
+	   A single total is a figure to take on trust. The contract is agreeing a
+	   sum the orders under it may not overrule, so it shows the arithmetic:
+	   each component, how it was worked out, and a way to correct it where the
+	   configured rate does not fit this lane.
+
+	   Fuel and meals come from the same computeUangSangu an order uses, so the
+	   contract and the orders under it cannot drift apart. Lodging is worked
+	   out here rather than taken from that function, which only bills it after
+	   the trip from actual nights — a contract has no actuals, so it estimates
+	   from the ETA, rounded DOWN: a journey of under a day owes no night. */
+	let allowanceOverrides = $state<Record<string, number | null>>({});
+	let allowanceExtras = $state<{ label: string; amount: number | string }[]>([]);
+
+	function overrideOr(key: string, computed: number) {
+		const o = allowanceOverrides[key];
+		return o === undefined || o === null ? computed : Number(o) || 0;
+	}
+
+	let allowanceComponents = $derived.by(() => {
+		if (!laneKm) return [];
 		const synthetic = { detail: { tripEstimate: { jarakKm: laneKm, etaJam: laneHours } } };
-		return Math.round(computeUangSangu(synthetic, tripAllowance).subtotal);
+		const u = computeUangSangu(synthetic, tripAllowance);
+		const nights = Math.floor((Number(laneHours) || 0) / 24);
+		const perNight = Number(tripAllowance?.lodging?.nominalPerNight) || 0;
+		const rows = [
+			{ key: 'bbm', label: 'Uang Bahan Bakar', basis: u.bbm.formula, computed: Math.round(u.bbm.value) },
+			{
+				key: 'uangMakan',
+				label: 'Uang Makan',
+				basis: u.uangMakan.formula,
+				computed: Math.round(u.uangMakan.value)
+			},
+			{
+				key: 'lodging',
+				label: 'Uang Penginapan',
+				basis: `${nights} malam × ${formatIDR(perNight)} (ETA ${laneHours} Jam ÷ 24, dibulatkan ke bawah)`,
+				computed: nights * perNight
+			}
+		];
+		return rows.map((r) => ({
+			...r,
+			amount: overrideOr(r.key, r.computed),
+			edited: allowanceOverrides[r.key] !== undefined && allowanceOverrides[r.key] !== null
+		}));
 	});
+
+	let allowanceExtraTotal = $derived(allowanceExtras.reduce((sum, e) => sum + (Number(e.amount) || 0), 0));
+	let allowanceTotal = $derived(
+		allowanceComponents.reduce((sum, c) => sum + c.amount, 0) + allowanceExtraTotal
+	);
+
+	/** Which row is open for editing; the pencil opens it, Selesai closes it. */
+	let editingAllowanceKey = $state('');
+	function editAllowanceComponent(key: string, current: number) {
+		if (allowanceOverrides[key] === undefined || allowanceOverrides[key] === null) {
+			allowanceOverrides = { ...allowanceOverrides, [key]: current };
+		}
+		editingAllowanceKey = key;
+	}
+	/** Back to the configured rate — the override is removed, not zeroed. */
+	function resetAllowanceComponent(key: string) {
+		const next = { ...allowanceOverrides };
+		delete next[key];
+		allowanceOverrides = next;
+		if (editingAllowanceKey === key) editingAllowanceKey = '';
+	}
+	function addAllowanceExtra() {
+		allowanceExtras = [...allowanceExtras, { label: '', amount: '' }];
+	}
+	function removeAllowanceExtra(i: number) {
+		allowanceExtras = allowanceExtras.filter((_, k) => k !== i);
+	}
 	let allowanceUpfront = $derived(
 		Math.round((allowanceTotal * (Number(allowanceUpfrontPercent) || 0)) / 100)
 	);
@@ -365,6 +434,31 @@
 		c.unloadingPoints = c.unloadingPoints.map(() => '');
 	}
 
+	/* ---------- Register a warehouse without leaving the contract ----------
+	   A lane needs a site that is not in the register yet, and sending the
+	   planner to My Warehouse means losing a half-filled contract. The same
+	   modal My Warehouse uses opens here, and the site it creates is selected
+	   into the lane that asked for it — and belongs to that lane's customer,
+	   so it appears in the same scoped list the picker offers. */
+	let showWarehouseModal = $state(false);
+	let warehouseTargetCustomerId = $state('');
+	let warehouseTargetCustomerName = $state('');
+	let applyCreatedWarehouse: ((id: string) => void) | null = null;
+
+	function openCreateWarehouse(customerId: string, apply: (id: string) => void) {
+		warehouseTargetCustomerId = customerId;
+		warehouseTargetCustomerName = customers.find((c: any) => c.id === customerId)?.name ?? '';
+		applyCreatedWarehouse = apply;
+		showWarehouseModal = true;
+	}
+	function onWarehouseSaved(w: any) {
+		// Into the local register first, or the picker cannot name what the
+		// planner just created until the page is reloaded.
+		warehouses = [...warehouses, { ...w, customerCompanyId: warehouseTargetCustomerId || undefined }];
+		applyCreatedWarehouse?.(w.id);
+		applyCreatedWarehouse = null;
+	}
+
 	/** An extra customer is chosen by name, so its id comes from the list. */
 	function customerIdOf(name: string) {
 		return customers.find((c: any) => c.name === name)?.id ?? '';
@@ -417,6 +511,12 @@
 	);
 
 	let hargaDisplay = $state('');
+
+	/* The contract's own bottom line: what is left of the agreed price once
+	   the driver is paid. Negative is not an error and is not hidden — a lane
+	   priced below what it costs to drive is exactly what this is for. */
+	let marginProfit = $derived((Number(parseThousands(hargaDisplay)) || 0) - allowanceTotal);
+
 	function onHargaInput(e: Event) {
 		const el = e.currentTarget as HTMLInputElement;
 		hargaDisplay = formatThousands(el.value);
@@ -713,7 +813,28 @@
 								total: allowanceTotal,
 								upfrontPercent: Number(allowanceUpfrontPercent) || 0,
 								upfront: allowanceUpfront,
-								final: allowanceFinal
+								final: allowanceFinal,
+								// The arithmetic travels with the figure. Without it the
+								// agreement document can only state a total, and a total
+								// nobody can check is a total nobody can dispute.
+								components: [
+									...allowanceComponents.map((c) => ({
+										key: c.key,
+										label: c.label,
+										basis: c.edited ? 'Diubah manual' : c.basis,
+										amount: c.amount,
+										edited: c.edited
+									})),
+									...allowanceExtras
+										.filter((e) => e.label.trim() && Number(e.amount) > 0)
+										.map((e) => ({
+											key: 'extra',
+											label: e.label.trim(),
+											basis: 'Komponen biaya tambahan',
+											amount: Number(e.amount) || 0,
+											edited: true
+										}))
+								]
 							}
 						}
 					: {}),
@@ -939,19 +1060,39 @@
 				<div class="two-col">
 					<div class="field">
 						<label>Loading Point <span class="req">*</span></label>
-						<WarehouseSearchField
-							bind:value={loadingPoints[k]}
-							warehouses={warehousesFor(form.customerId)}
-							placeholder="Cari alamat atau nama warehouse..."
-						/>
+						<div class="warehouse-pick-row">
+							<WarehouseSearchField
+								bind:value={loadingPoints[k]}
+								warehouses={warehousesFor(form.customerId)}
+								placeholder="Cari alamat atau nama warehouse..."
+							/>
+							<button
+								type="button"
+								class="warehouse-add-btn"
+								title="Tambah warehouse baru"
+								aria-label="Tambah warehouse untuk Loading Point"
+								onclick={() => openCreateWarehouse(form.customerId, (id) => (loadingPoints[k] = id))}
+								><Pencil size={14} /></button
+							>
+						</div>
 					</div>
 					<div class="field">
 						<label>Unloading Point <span class="req">*</span></label>
-						<WarehouseSearchField
-							bind:value={unloadingPoints[k]}
-							warehouses={warehousesFor(form.customerId)}
-							placeholder="Cari alamat atau nama warehouse..."
-						/>
+						<div class="warehouse-pick-row">
+							<WarehouseSearchField
+								bind:value={unloadingPoints[k]}
+								warehouses={warehousesFor(form.customerId)}
+								placeholder="Cari alamat atau nama warehouse..."
+							/>
+							<button
+								type="button"
+								class="warehouse-add-btn"
+								title="Tambah warehouse baru"
+								aria-label="Tambah warehouse untuk Unloading Point"
+								onclick={() => openCreateWarehouse(form.customerId, (id) => (unloadingPoints[k] = id))}
+								><Pencil size={14} /></button
+							>
+						</div>
 					</div>
 				</div>
 			{/each}
@@ -1093,19 +1234,39 @@
 			<div class="two-col">
 				<div class="field">
 					<label>Loading Point <span class="req">*</span></label>
-					<WarehouseSearchField
-						bind:value={loadingPoints[k]}
-						warehouses={warehousesFor(form.customerId)}
-						placeholder="Cari alamat atau nama warehouse..."
-					/>
+					<div class="warehouse-pick-row">
+						<WarehouseSearchField
+							bind:value={loadingPoints[k]}
+							warehouses={warehousesFor(form.customerId)}
+							placeholder="Cari alamat atau nama warehouse..."
+						/>
+						<button
+							type="button"
+							class="warehouse-add-btn"
+							title="Tambah warehouse baru"
+							aria-label="Tambah warehouse untuk Loading Point"
+							onclick={() => openCreateWarehouse(form.customerId, (id) => (loadingPoints[k] = id))}
+							><Pencil size={14} /></button
+						>
+					</div>
 				</div>
 				<div class="field">
 					<label>Unloading Point <span class="req">*</span></label>
-					<WarehouseSearchField
-						bind:value={unloadingPoints[k]}
-						warehouses={warehousesFor(form.customerId)}
-						placeholder="Cari alamat atau nama warehouse..."
-					/>
+					<div class="warehouse-pick-row">
+						<WarehouseSearchField
+							bind:value={unloadingPoints[k]}
+							warehouses={warehousesFor(form.customerId)}
+							placeholder="Cari alamat atau nama warehouse..."
+						/>
+						<button
+							type="button"
+							class="warehouse-add-btn"
+							title="Tambah warehouse baru"
+							aria-label="Tambah warehouse untuk Unloading Point"
+							onclick={() => openCreateWarehouse(form.customerId, (id) => (unloadingPoints[k] = id))}
+							><Pencil size={14} /></button
+						>
+					</div>
 				</div>
 			</div>
 		{/each}
@@ -1163,19 +1324,45 @@
 				<div class="two-col">
 					<div class="field">
 						<label>Loading Point <span class="req">*</span></label>
-						<WarehouseSearchField
-							bind:value={c.loadingPoints[k]}
-							warehouses={warehousesFor(c.customerId || customerIdOf(c.customerName))}
-							placeholder="Cari alamat atau nama warehouse..."
-						/>
+						<div class="warehouse-pick-row">
+							<WarehouseSearchField
+								bind:value={c.loadingPoints[k]}
+								warehouses={warehousesFor(c.customerId || customerIdOf(c.customerName))}
+								placeholder="Cari alamat atau nama warehouse..."
+							/>
+							<button
+								type="button"
+								class="warehouse-add-btn"
+								title="Tambah warehouse baru"
+								aria-label="Tambah warehouse untuk Loading Point"
+								onclick={() =>
+									openCreateWarehouse(
+										c.customerId || customerIdOf(c.customerName),
+										(id) => (c.loadingPoints[k] = id)
+									)}><Pencil size={14} /></button
+							>
+						</div>
 					</div>
 					<div class="field">
 						<label>Unloading Point <span class="req">*</span></label>
-						<WarehouseSearchField
-							bind:value={c.unloadingPoints[k]}
-							warehouses={warehousesFor(c.customerId || customerIdOf(c.customerName))}
-							placeholder="Cari alamat atau nama warehouse..."
-						/>
+						<div class="warehouse-pick-row">
+							<WarehouseSearchField
+								bind:value={c.unloadingPoints[k]}
+								warehouses={warehousesFor(c.customerId || customerIdOf(c.customerName))}
+								placeholder="Cari alamat atau nama warehouse..."
+							/>
+							<button
+								type="button"
+								class="warehouse-add-btn"
+								title="Tambah warehouse baru"
+								aria-label="Tambah warehouse untuk Unloading Point"
+								onclick={() =>
+									openCreateWarehouse(
+										c.customerId || customerIdOf(c.customerName),
+										(id) => (c.unloadingPoints[k] = id)
+									)}><Pencil size={14} /></button
+							>
+						</div>
 					</div>
 				</div>
 			{/each}
@@ -1410,7 +1597,73 @@
 				keduanya.
 			</p>
 		{:else}
-			<div class="two-col">
+			<!-- The arithmetic, not just the answer. Each row says how it was
+			     worked out, and can be corrected where the configured rate does
+			     not fit this lane; correcting one leaves the others computed. -->
+			<div class="allowance-breakdown">
+				{#each allowanceComponents as c (c.key)}
+					<div class="allowance-row">
+						<div class="allowance-row-main">
+							<span class="allowance-row-label">{c.label}</span>
+							<span class="allowance-row-basis">
+								{c.edited ? 'Diubah manual — nilai kontrak' : c.basis}
+							</span>
+						</div>
+						{#if editingAllowanceKey === c.key}
+							<input
+								class="allowance-row-input"
+								type="number"
+								min="0"
+								bind:value={allowanceOverrides[c.key]}
+							/>
+							<button type="button" class="btn btn-text btn-sm" onclick={() => (editingAllowanceKey = '')}
+								>Selesai</button
+							>
+							<button type="button" class="btn btn-text btn-sm" onclick={() => resetAllowanceComponent(c.key)}
+								>Hitung ulang</button
+							>
+						{:else}
+							<span class="allowance-row-amount">{formatIDR(c.amount)}</span>
+							<button
+								type="button"
+								class="allowance-row-edit"
+								title="Ubah nilai"
+								aria-label={`Ubah ${c.label}`}
+								onclick={() => editAllowanceComponent(c.key, c.computed)}><Pencil size={13} /></button
+							>
+						{/if}
+					</div>
+				{/each}
+
+				{#each allowanceExtras as e, i (i)}
+					<div class="allowance-row">
+						<input
+							class="allowance-extra-label"
+							type="text"
+							placeholder="Nama komponen biaya"
+							bind:value={e.label}
+						/>
+						<input class="allowance-row-input" type="number" min="0" placeholder="0" bind:value={e.amount} />
+						<button
+							type="button"
+							class="allowance-row-edit"
+							aria-label="Hapus komponen"
+							onclick={() => removeAllowanceExtra(i)}><X size={13} /></button
+						>
+					</div>
+				{/each}
+
+				<button type="button" class="btn btn-text btn-sm allowance-add" onclick={addAllowanceExtra}
+					>+ Tambah Komponen Biaya</button
+				>
+
+				<div class="allowance-row allowance-subtotal">
+					<span class="allowance-row-label">Subtotal Uang Sangu</span>
+					<span class="allowance-row-amount">{formatIDR(allowanceTotal)}</span>
+				</div>
+			</div>
+
+			<div class="two-col" style="margin-top:16px;">
 				<div class="field">
 					<label>Total Uang Sangu</label>
 					<input type="text" readonly value={formatIDR(allowanceTotal)} />
@@ -1433,6 +1686,25 @@
 		{/if}
 	</div>
 {/if}
+
+<!-- What the contract leaves once the driver is paid. Shown next to the
+     allowance because that is the figure it is subtracted from, and shown
+     even when negative: a lane priced below what it costs to drive is the
+     thing this number exists to reveal. -->
+{#if allowanceEnabled && lanesByWarehouse && laneKm}
+	<div class="card card-pad margin-profit-card" style="margin-top:16px;">
+		<span class="margin-profit-label">Margin Profit</span>
+		<span class="margin-profit-value" class:negative={marginProfit < 0}>{formatIDR(marginProfit)}</span>
+		<span class="hint">Harga perjanjian − Uang Sangu Driver</span>
+	</div>
+{/if}
+
+<WarehouseFormModal
+	bind:show={showWarehouseModal}
+	customerCompanyId={warehouseTargetCustomerId}
+	customerName={warehouseTargetCustomerName}
+	onSaved={onWarehouseSaved}
+/>
 
 <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:8px;">
 	<button class="btn btn-outline" onclick={cancel}>Batal</button>
