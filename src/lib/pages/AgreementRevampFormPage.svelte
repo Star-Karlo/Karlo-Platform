@@ -404,17 +404,32 @@
 	   warehouses rather than left blank. */
 
 	/* ---------- Whose warehouses a lane may pick from ----------
-	   A transporter keeps its customers' warehouses in its own register and
-	   MyWarehouse groups them per customer, alongside its own sites, which
-	   serve everyone. A lane on this contract runs between THIS customer's
-	   sites and the company's own — offering the whole register let a planner
-	   pick another customer's gate, which is both wrong and, on a contract
-	   covering several customers, a small leak of who else they haul for.
+	   A transporter keeps its customers' warehouses in its own register, and
+	   MyWarehouse groups them per customer. A lane on this contract runs
+	   between THIS customer's sites, so those are what the picker offers:
+	   offering the whole register let a planner pick another customer's gate,
+	   which is wrong on its own and, on a contract covering several
+	   customers, a quiet disclosure of who else the transporter hauls for.
 
-	   Own sites carry no customerCompanyId: the API omits the field when it is
-	   empty, so the test is its absence, not a comparison against ''. */
+	   Gudang Sendiri — the company's own sites — are NOT mixed in. They were
+	   at first, on the reasoning that an own depot serves everyone, and the
+	   result was a customer's list padded with eight sites that are nothing
+	   to do with them.
+
+	   The exception is a customer with no warehouses of its own, which is
+	   every customer of a company that keeps all its sites under Gudang
+	   Sendiri. Returning nothing there would leave such a company unable to
+	   name a lane at all, so the own sites stand in. That is a fact about the
+	   data, not a branch for one customer: a register organised per customer
+	   behaves one way, a flat one the other, and neither asks who it is for.
+
+	   Own sites carry no customerCompanyId: the API omits the field when it
+	   is empty, so the test is its absence, not a comparison against ''. */
 	function warehousesFor(customerId: string) {
-		return warehouses.filter((w: any) => !w.customerCompanyId || w.customerCompanyId === customerId);
+		const own = warehouses.filter((w: any) => !w.customerCompanyId);
+		if (!customerId) return own;
+		const theirs = warehouses.filter((w: any) => w.customerCompanyId === customerId);
+		return theirs.length ? theirs : own;
 	}
 
 	/* Changing who the contract is for invalidates lanes chosen for someone
@@ -1068,11 +1083,11 @@
 							/>
 							<button
 								type="button"
-								class="warehouse-add-btn"
+								class="mini-icon-btn"
 								title="Tambah warehouse baru"
 								aria-label="Tambah warehouse untuk Loading Point"
 								onclick={() => openCreateWarehouse(form.customerId, (id) => (loadingPoints[k] = id))}
-								><Pencil size={14} /></button
+								><span class="icon-wrap"><Pencil size={16} /></span></button
 							>
 						</div>
 					</div>
@@ -1086,11 +1101,11 @@
 							/>
 							<button
 								type="button"
-								class="warehouse-add-btn"
+								class="mini-icon-btn"
 								title="Tambah warehouse baru"
 								aria-label="Tambah warehouse untuk Unloading Point"
 								onclick={() => openCreateWarehouse(form.customerId, (id) => (unloadingPoints[k] = id))}
-								><Pencil size={14} /></button
+								><span class="icon-wrap"><Pencil size={16} /></span></button
 							>
 						</div>
 					</div>
@@ -1242,11 +1257,11 @@
 						/>
 						<button
 							type="button"
-							class="warehouse-add-btn"
+							class="mini-icon-btn"
 							title="Tambah warehouse baru"
 							aria-label="Tambah warehouse untuk Loading Point"
 							onclick={() => openCreateWarehouse(form.customerId, (id) => (loadingPoints[k] = id))}
-							><Pencil size={14} /></button
+							><span class="icon-wrap"><Pencil size={16} /></span></button
 						>
 					</div>
 				</div>
@@ -1260,11 +1275,11 @@
 						/>
 						<button
 							type="button"
-							class="warehouse-add-btn"
+							class="mini-icon-btn"
 							title="Tambah warehouse baru"
 							aria-label="Tambah warehouse untuk Unloading Point"
 							onclick={() => openCreateWarehouse(form.customerId, (id) => (unloadingPoints[k] = id))}
-							><Pencil size={14} /></button
+							><span class="icon-wrap"><Pencil size={16} /></span></button
 						>
 					</div>
 				</div>
@@ -1332,14 +1347,14 @@
 							/>
 							<button
 								type="button"
-								class="warehouse-add-btn"
+								class="mini-icon-btn"
 								title="Tambah warehouse baru"
 								aria-label="Tambah warehouse untuk Loading Point"
 								onclick={() =>
 									openCreateWarehouse(
 										c.customerId || customerIdOf(c.customerName),
 										(id) => (c.loadingPoints[k] = id)
-									)}><Pencil size={14} /></button
+									)}><span class="icon-wrap"><Pencil size={16} /></span></button
 							>
 						</div>
 					</div>
@@ -1353,14 +1368,14 @@
 							/>
 							<button
 								type="button"
-								class="warehouse-add-btn"
+								class="mini-icon-btn"
 								title="Tambah warehouse baru"
 								aria-label="Tambah warehouse untuk Unloading Point"
 								onclick={() =>
 									openCreateWarehouse(
 										c.customerId || customerIdOf(c.customerName),
 										(id) => (c.unloadingPoints[k] = id)
-									)}><Pencil size={14} /></button
+									)}><span class="icon-wrap"><Pencil size={16} /></span></button
 							>
 						</div>
 					</div>

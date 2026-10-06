@@ -1338,26 +1338,26 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .agreement-doc-party-name{font-weight:700; font-size:14px;}
 .agreement-doc-section{margin-top:24px;}
 .agreement-doc-section h2{font-size:14px; font-weight:700; margin-bottom:10px; border-bottom:1px solid var(--outline-variant); padding-bottom:6px;}
-/* The allowance, itemised: each row names a cost, the arithmetic behind it,
-   and the figure, with the amount right-aligned so the column reads as a sum.
-   The subtotal is separated by a rule rather than a heading — it is the same
-   column continued, not a new section. */
-/* The shortcut beside a warehouse picker: register a site without leaving a
-   half-filled contract. Sized and aligned to the picker's own search button
-   so the pair reads as one control, not a stray icon. */
-/* Picker and its add-shortcut on one line; the picker takes the space and the
-   button keeps its size. min-width:0 so a long warehouse name cannot push the
-   button off the card. */
-.warehouse-pick-row{display:flex; align-items:flex-start; gap:8px;}
+/* Picker, its search button and the add-warehouse shortcut on one line.
+   The shortcut reuses .mini-icon-btn, the picker's own search button class,
+   so the two are identical by construction rather than by two sets of
+   matching numbers — which is exactly how they drifted: 38px against 32px, a
+   different radius and border, and aligned to the top of the field while the
+   search button sat centred in it.
+
+   Centred and gapped to match .search-field-row, so the three read as one
+   row. min-width:0 so a long warehouse name cannot push the buttons off. */
+.warehouse-pick-row{display:flex; align-items:center; gap:10px;}
 .warehouse-pick-row > .warehouse-search-field{flex:1; min-width:0;}
-.warehouse-add-btn{display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px; flex:none;
-  border:1px solid var(--outline-variant); border-radius:9px; background:var(--surface); color:var(--primary); cursor:pointer;}
-.warehouse-add-btn:hover{border-color:var(--primary); background:var(--surface-variant);}
 
 /* Whose register the new site will land in, said in the title rather than as
    a field: it is decided by the lane the modal was opened from, not chosen. */
 .warehouse-modal-owner{font-weight:500; color:var(--on-surface-variant);}
 
+/* The allowance, itemised: each row names a cost, the arithmetic behind it,
+   and the figure, with the amount right-aligned so the column reads as a sum.
+   The subtotal is separated by a rule rather than a heading — it is the same
+   column continued, not a new section. */
 .allowance-breakdown{display:flex; flex-direction:column; gap:2px;}
 .allowance-row{display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--outline-variant);}
 .allowance-row-main{flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;}

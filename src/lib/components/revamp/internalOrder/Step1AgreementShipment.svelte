@@ -53,13 +53,23 @@
 	}
 
 	/* ---------- Whose warehouses a lane may pick from ----------
-	   The register holds every customer's sites plus the company's own, which
-	   serve everyone. A lane runs between THIS customer's sites and those, so
-	   offering the whole list let a planner pick another customer's gate.
-	   Own sites carry no customerCompanyId — the API omits it when empty. */
+	   This customer's sites, as MyWarehouse groups them. Not the company's
+	   own Gudang Sendiri as well: mixing those in padded a customer's list
+	   with sites that are nothing to do with them.
+
+	   Unless the customer has none — which is every customer of a company
+	   that keeps all its sites under Gudang Sendiri — where the own sites
+	   stand in, or such a company could not name a lane at all. A fact about
+	   the data, not a branch for one customer. Kept in step with the same
+	   rule in AgreementRevampFormPage.
+
+	   Own sites carry no customerCompanyId; the API omits it when empty. */
 	function warehousesFor(sp: { customerNama: string }) {
 		const customerId = customers.find((c) => c.name === sp.customerNama)?.id ?? '';
-		return warehouses.filter((w: any) => !w.customerCompanyId || w.customerCompanyId === customerId);
+		const own = warehouses.filter((w: any) => !w.customerCompanyId);
+		if (!customerId) return own;
+		const theirs = warehouses.filter((w: any) => w.customerCompanyId === customerId);
+		return theirs.length ? theirs : own;
 	}
 
 	/* ---------- Select Agreement (picker modal) ---------- */
