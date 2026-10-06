@@ -68,7 +68,6 @@
 
 	let TRANSPORTER_NAME = $derived(companyName || TRANSPORTER_NAME_FALLBACK);
 
-
 	function toProtoWarehouse(w: any) {
 		if (!w) return null;
 		const lat = w.latitude ?? w.location?.coordinates?.[1] ?? null;
@@ -191,7 +190,13 @@
 		}
 		loaded = true;
 		if (raw) {
-			await Promise.all([loadWarehouses(raw), loadRoutes(), loadVehicle(raw), loadSiblings(raw), loadShipment()]);
+			await Promise.all([
+				loadWarehouses(raw),
+				loadRoutes(),
+				loadVehicle(raw),
+				loadSiblings(raw),
+				loadShipment()
+			]);
 		}
 	}
 
@@ -248,7 +253,11 @@
 			id: raw.id,
 			idOrder: raw.orderNumber || raw.id,
 			shipperName: raw.shipperCompanyName || d.shipperName || '',
-			status: kontrakStatus({ ...raw, shipmentPods: shipment?.pods ?? raw.shipmentPods, shipmentAcceptedAt: shipment?.acceptedAt ?? raw.shipmentAcceptedAt }),
+			status: kontrakStatus({
+				...raw,
+				shipmentPods: shipment?.pods ?? raw.shipmentPods,
+				shipmentAcceptedAt: shipment?.acceptedAt ?? raw.shipmentAcceptedAt
+			}),
 			assignedTruckPlate: raw.truckPoliceNumber || '',
 			assignedTruckType: raw.truckTypeName || '',
 			assignedDriverName: raw.driverName || '',
@@ -398,9 +407,7 @@
 				rows: CARGO_FIELDS.map((f) => ({
 					...f,
 					values: phases.map((p: any) =>
-						p.data && p.data[f.key] != null && p.data[f.key] !== ''
-							? cargoValueNumber(p.data[f.key])
-							: null
+						p.data && p.data[f.key] != null && p.data[f.key] !== '' ? cargoValueNumber(p.data[f.key]) : null
 					)
 				}))
 			});
@@ -450,7 +457,9 @@
 	];
 	const POD_PHOTO_MAX = 2;
 	let canShowPodPhotosMuat = $derived(api.testMode() || atOrPassed(order?.status, 'verifikasi_pod_muat'));
-	let canShowPodPhotosBongkar = $derived(api.testMode() || atOrPassed(order?.status, 'verifikasi_pod_bongkar'));
+	let canShowPodPhotosBongkar = $derived(
+		api.testMode() || atOrPassed(order?.status, 'verifikasi_pod_bongkar')
+	);
 	/**
 	 * Every photo of one type for one phase: what the driver submitted from
 	 * K-Trip first (it is the POD of record), then anything added here. One
@@ -611,7 +620,8 @@
 		const weight = mine.reduce((sum: number, it: any) => sum + (Number(it.weightKg) || 0), 0);
 		const qty = mine.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 0), 0);
 		const volume = mine.reduce(
-			(sum: number, it: any) => sum + (Number(it.dimP) || 0) * (Number(it.dimL) || 0) * (Number(it.dimT) || 0),
+			(sum: number, it: any) =>
+				sum + (Number(it.dimP) || 0) * (Number(it.dimL) || 0) * (Number(it.dimT) || 0),
 			0
 		);
 		return {
@@ -713,9 +723,7 @@
 	 *  still to come. Null on a journey without its own stops, where the
 	 *  phase totals below are the answer they always were. */
 	let verifyCounterpart = $derived(
-		(shipment?.stops ?? []).length > 2
-			? counterpartActual(verifyModalPhase, verifyModalStopIndex)
-			: null
+		(shipment?.stops ?? []).length > 2 ? counterpartActual(verifyModalPhase, verifyModalStopIndex) : null
 	);
 	let verifyPerStopCounterpart = $derived((shipment?.stops ?? []).length > 2);
 
@@ -763,10 +771,7 @@
 	}
 	/** The phase's figures: every verified visit added up. A journey with one
 	 *  stop yields that stop's own numbers, which is what it always wrote. */
-	function sumOfVerifiedStops(
-		stops: any[],
-		fallback: Record<string, number>
-	): Record<string, number> {
+	function sumOfVerifiedStops(stops: any[], fallback: Record<string, number>): Record<string, number> {
 		const verified = stops.filter((s) => s?.verified && s.actual);
 		if (!verified.length) return fallback;
 		const add = (k: string) =>
@@ -1029,7 +1034,8 @@
 
 	// ---------- Route ----------
 	let routeAllPoints = $derived.by(() => {
-		if (!order) return [] as { warehouse: any; label: string; pic?: { name?: string; phone?: string } | null }[];
+		if (!order)
+			return [] as { warehouse: any; label: string; pic?: { name?: string; phone?: string } | null }[];
 		if ((order.loadingPoints?.length || 0) > 0 && (order.unloadingPoints?.length || 0) > 0) {
 			const loading: string[] = order.loadingPoints;
 			const unloading: string[] = order.unloadingPoints;
@@ -1193,7 +1199,9 @@
 			? {
 					components: [
 						{
-							key: 'uangSanguAkhir',
+							// `id`, as the itemised components use: the save
+							// builds its map from that field.
+							id: 'uangSanguAkhir',
 							label: 'Uang Sangu Akhir',
 							formula: `Proporsi akhir ${allowanceSnapshot.upfrontPercent ? 100 - Number(allowanceSnapshot.upfrontPercent) : ''}% dari total Uang Sangu pada agreement`,
 							value: Number(allowanceSnapshot.final),
@@ -1246,22 +1254,30 @@
 		}
 		const byId: Record<string, any> = Object.fromEntries(reconDraft.components.map((c) => [c.id, c]));
 		const basePostTrip = order.detail?.postTrip || {
-			actualNights: postTripRecon.nights,
-			actualDays: postTripRecon.days,
+			actualNights: postTripRecon.nights ?? 0,
+			actualDays: postTripRecon.days ?? 0,
 			reimburse: []
 		};
 		const reimburse = (basePostTrip.reimburse || []).map((r: any, i: number) => {
 			const c = byId[`reimburse_${i}`];
 			return c ? { ...r, status: c.status, note: c.note } : r;
 		});
-		await patchDetail({
-			postTrip: {
-				...basePostTrip,
-				reimburse,
-				finalized: { lodging: byId.lodging.finalized, meal: byId.meal.finalized },
-				overrides: { lodging: byId.lodging.nominal, meal: byId.meal.nominal }
-			}
-		});
+		// Only the lines this reconciliation actually has.
+		//
+		// A contract that fixed the allowance has no lodging or meal to
+		// reconcile — the closing share was agreed on the contract, not worked
+		// out from nights away — so its reconciliation carries a single line.
+		// Reading byId.lodging.finalized unconditionally threw a TypeError
+		// before anything was saved, which is why finalising reconciliation
+		// did nothing on every order under such a contract.
+		const finalized: Record<string, unknown> = {};
+		const overrides: Record<string, unknown> = {};
+		for (const key of ['lodging', 'meal']) {
+			if (!byId[key]) continue;
+			finalized[key] = byId[key].finalized;
+			overrides[key] = byId[key].nominal;
+		}
+		await patchDetail({ postTrip: { ...basePostTrip, reimburse, finalized, overrides } });
 		toast('Rekonsiliasi post-trip diperbarui');
 		reconModalOpen = false;
 	}
@@ -1493,9 +1509,15 @@
 				// the status had plainly moved past both.
 				const firstOfKind = journeyStops.find((st: any) => st.kind === stop.kind);
 				const mine = !!firstOfKind && firstOfKind.id === stop.id;
-				const arrivedAt = stop.arrivedAt ?? (mine ? (isLoad ? shipment?.arrivedLoadingAt : shipment?.arrivedUnloadingAt) : null);
-				const startedAt = stop.startedAt ?? (mine ? (isLoad ? shipment?.loadingStartedAt : shipment?.unloadingStartedAt) : null);
-				const cargoAt = stop.cargoCheckedAt ?? (mine ? (isLoad ? shipment?.loadingCargoCheckedAt : shipment?.unloadingCargoCheckedAt) : null);
+				const arrivedAt =
+					stop.arrivedAt ??
+					(mine ? (isLoad ? shipment?.arrivedLoadingAt : shipment?.arrivedUnloadingAt) : null);
+				const startedAt =
+					stop.startedAt ??
+					(mine ? (isLoad ? shipment?.loadingStartedAt : shipment?.unloadingStartedAt) : null);
+				const cargoAt =
+					stop.cargoCheckedAt ??
+					(mine ? (isLoad ? shipment?.loadingCargoCheckedAt : shipment?.unloadingCargoCheckedAt) : null);
 
 				// Setting off. The first point of the journey is the shipment's
 				// own departure; every later one is raised by the planner
@@ -1530,7 +1552,12 @@
 					add(cargoAt, `Item Muatan Telah Diverifikasi — ${label}`, driver, 'Driver');
 				}
 				for (const pod of podsOfStop(stop.id)) {
-					add(pod.submittedAt, `Submit POD & Selesai ${isLoad ? 'Muat' : 'Bongkar'} — ${label}`, driver, 'Driver');
+					add(
+						pod.submittedAt,
+						`Submit POD & Selesai ${isLoad ? 'Muat' : 'Bongkar'} — ${label}`,
+						driver,
+						'Driver'
+					);
 					add(pod.submittedAt, `Pengecekan POD — ${label}`, TRANSPORTER_NAME, 'Planner');
 					if (pod.status === 'rejected') {
 						add(pod.reviewedAt, `POD Ditolak — ${label}`, TRANSPORTER_NAME, 'Planner');
@@ -2010,7 +2037,10 @@
 									<div class="pod-photo-grid-row">
 										<span class="pod-photo-grid-label">Muat {si + 1}</span>
 										{#each POD_PHOTO_TYPES as type (`muat-${si}-${type.key}`)}
-											{@render podSlots(podPhotoSlotsForStop('muat', type.key, si), `${type.label} — Muat ${si + 1}`)}
+											{@render podSlots(
+												podPhotoSlotsForStop('muat', type.key, si),
+												`${type.label} — Muat ${si + 1}`
+											)}
 										{/each}
 									</div>
 								{/each}
@@ -2027,7 +2057,10 @@
 									<div class="pod-photo-grid-row">
 										<span class="pod-photo-grid-label">Bongkar {si + 1}</span>
 										{#each POD_PHOTO_TYPES as type (`bongkar-${si}-${type.key}`)}
-											{@render podSlots(podPhotoSlotsForStop('bongkar', type.key, si), `${type.label} — Bongkar ${si + 1}`)}
+											{@render podSlots(
+												podPhotoSlotsForStop('bongkar', type.key, si),
+												`${type.label} — Bongkar ${si + 1}`
+											)}
 										{/each}
 									</div>
 								{/each}
@@ -2391,199 +2424,207 @@
 									<div class="sangu-total-value">{formatIDR(Number(allowanceSnapshot.upfront))}</div>
 								</div>
 							{:else}
-							{#each [{ key: 'menujuMuat', label: 'Biaya Perjalanan Menuju Lokasi Muat' }, { key: 'bbm', label: 'Biaya BBM' }, { key: 'tol', label: 'Biaya Tol' }, { key: 'uangMakan', label: 'Uang Makan' }] as row (row.key)}
-								<div
-									class="sangu-row"
-									style:border-bottom={row.key === 'uangMakan' &&
-									!(uangSangu.ferry.melewatiFerry || uangSangu.custom.length || canEditPreTripEstimate)
-										? 'none'
-										: undefined}
-								>
-									<div class="sangu-row-body">
-										<div class="sangu-row-label">{row.label}</div>
-										<div class="sangu-row-formula">{uangSangu[row.key].formula}</div>
+								{#each [{ key: 'menujuMuat', label: 'Biaya Perjalanan Menuju Lokasi Muat' }, { key: 'bbm', label: 'Biaya BBM' }, { key: 'tol', label: 'Biaya Tol' }, { key: 'uangMakan', label: 'Uang Makan' }] as row (row.key)}
+									<div
+										class="sangu-row"
+										style:border-bottom={row.key === 'uangMakan' &&
+										!(uangSangu.ferry.melewatiFerry || uangSangu.custom.length || canEditPreTripEstimate)
+											? 'none'
+											: undefined}
+									>
+										<div class="sangu-row-body">
+											<div class="sangu-row-label">{row.label}</div>
+											<div class="sangu-row-formula">{uangSangu[row.key].formula}</div>
+										</div>
+										<div class="sangu-row-value">
+											{#if editingField === row.key}
+												<div class="sangu-inline-edit">
+													<input
+														type="text"
+														inputmode="numeric"
+														value={overrideDisplay[row.key]}
+														oninput={(e) => onOverrideInput(row.key, e)}
+														placeholder="0"
+														class="sangu-inline-value-input"
+													/>
+													<button
+														class="icon-btn"
+														title="Konfirmasi"
+														onclick={() => confirmEditField(row.key)}
+														><span class="icon-wrap"><Check size={13} /></span></button
+													>
+												</div>
+											{:else}
+												<span class:zero={(overrideDraft[row.key] ?? uangSangu[row.key].value) === 0}>
+													{formatIDR(overrideDraft[row.key] ?? uangSangu[row.key].value)}
+												</span>
+												{#if showSanguEdit}
+													<button
+														class="icon-btn sangu-edit-value"
+														title="Edit nilai"
+														onclick={() => startEditField(row.key)}
+														><span class="icon-wrap"><Pencil size={16} /></span></button
+													>
+												{/if}
+											{/if}
+										</div>
 									</div>
-									<div class="sangu-row-value">
-										{#if editingField === row.key}
-											<div class="sangu-inline-edit">
-												<input
-													type="text"
-													inputmode="numeric"
-													value={overrideDisplay[row.key]}
-													oninput={(e) => onOverrideInput(row.key, e)}
-													placeholder="0"
-													class="sangu-inline-value-input"
-												/>
-												<button class="icon-btn" title="Konfirmasi" onclick={() => confirmEditField(row.key)}
-													><span class="icon-wrap"><Check size={13} /></span></button
-												>
+								{/each}
+
+								{#if uangSangu.ferry.melewatiFerry}
+									<div
+										class="sangu-row"
+										style:border-bottom={uangSangu.custom.length || canEditPreTripEstimate
+											? undefined
+											: 'none'}
+									>
+										<div class="sangu-row-body">
+											<div class="sangu-row-label">
+												Biaya Ferry
+												{#if uangSangu.ferry.needsInput}<span class="sangu-needs-input-tag"
+														>Perlu Diinput</span
+													>{/if}
 											</div>
-										{:else}
-											<span class:zero={(overrideDraft[row.key] ?? uangSangu[row.key].value) === 0}>
-												{formatIDR(overrideDraft[row.key] ?? uangSangu[row.key].value)}
-											</span>
-											{#if showSanguEdit}
-												<button
-													class="icon-btn sangu-edit-value"
-													title="Edit nilai"
-													onclick={() => startEditField(row.key)}
-													><span class="icon-wrap"><Pencil size={16} /></span></button
+											<div class="sangu-row-formula">{uangSangu.ferry.formula}</div>
+										</div>
+										<div class="sangu-row-value">
+											{#if uangSangu.ferry.needsInput && showSanguEdit}
+												<div class="sangu-inline-edit">
+													<input
+														type="text"
+														inputmode="numeric"
+														value={ferryPriceDisplay}
+														oninput={onFerryPriceInput}
+														placeholder="0"
+														class="sangu-inline-value-input"
+													/>
+													<button class="icon-btn" title="Simpan" onclick={saveFerryPrice}
+														><span class="icon-wrap"><Check size={13} /></span></button
+													>
+												</div>
+											{:else}
+												<span class:zero={uangSangu.ferry.value === 0}
+													>{formatIDR(uangSangu.ferry.value)}</span
 												>
 											{/if}
-										{/if}
-									</div>
-								</div>
-							{/each}
-
-							{#if uangSangu.ferry.melewatiFerry}
-								<div
-									class="sangu-row"
-									style:border-bottom={uangSangu.custom.length || canEditPreTripEstimate ? undefined : 'none'}
-								>
-									<div class="sangu-row-body">
-										<div class="sangu-row-label">
-											Biaya Ferry
-											{#if uangSangu.ferry.needsInput}<span class="sangu-needs-input-tag">Perlu Diinput</span
-												>{/if}
 										</div>
-										<div class="sangu-row-formula">{uangSangu.ferry.formula}</div>
 									</div>
-									<div class="sangu-row-value">
-										{#if uangSangu.ferry.needsInput && showSanguEdit}
-											<div class="sangu-inline-edit">
-												<input
-													type="text"
-													inputmode="numeric"
-													value={ferryPriceDisplay}
-													oninput={onFerryPriceInput}
-													placeholder="0"
-													class="sangu-inline-value-input"
-												/>
-												<button class="icon-btn" title="Simpan" onclick={saveFerryPrice}
-													><span class="icon-wrap"><Check size={13} /></span></button
-												>
+								{/if}
+
+								{#each uangSangu.custom as c (c.index)}
+									<div
+										class="sangu-row"
+										style:border-bottom={c.index === uangSangu.custom.length - 1 && !canEditPreTripEstimate
+											? 'none'
+											: undefined}
+									>
+										<div class="sangu-row-body">
+											<div class="sangu-row-label">
+												{c.label}
+												<span class="sangu-tambahan-tag">Tambahan</span>
 											</div>
-										{:else}
-											<span class:zero={uangSangu.ferry.value === 0}>{formatIDR(uangSangu.ferry.value)}</span>
-										{/if}
-									</div>
-								</div>
-							{/if}
-
-							{#each uangSangu.custom as c (c.index)}
-								<div
-									class="sangu-row"
-									style:border-bottom={c.index === uangSangu.custom.length - 1 && !canEditPreTripEstimate
-										? 'none'
-										: undefined}
-								>
-									<div class="sangu-row-body">
-										<div class="sangu-row-label">
-											{c.label}
-											<span class="sangu-tambahan-tag">Tambahan</span>
+											<div class="sangu-row-formula">{c.formula}</div>
 										</div>
-										<div class="sangu-row-formula">{c.formula}</div>
-									</div>
-									<div class="sangu-row-value">{formatIDR(c.nominal)}</div>
-									{#if showSanguEdit}
-										<button
-											class="icon-btn sangu-remove-component"
-											title="Hapus komponen"
-											onclick={() => removeCustomComponent(c.index)}
-										>
-											<span class="icon-wrap"><X size={15} /></span>
-										</button>
-									{/if}
-								</div>
-							{/each}
-
-							{#if canEditPreTripEstimate && !showSanguEdit}
-								<div class="sangu-row" style="border-bottom:none;">
-									<div class="sangu-row-body">
-										<div class="sangu-row-label">+ Tambahkan Komponen Biaya</div>
-									</div>
-								</div>
-							{/if}
-
-							{#if showSanguEdit && !addingComponentOpen}
-								<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-								<div
-									class="sangu-row sangu-add-trigger"
-									style="border-bottom:none;"
-									onclick={openAddComponent}
-								>
-									<div class="sangu-row-body">
-										<div class="sangu-row-label">+ Tambah Komponen Biaya</div>
-									</div>
-								</div>
-							{/if}
-
-							{#if showSanguEdit && addingComponentOpen}
-								<div class="sangu-add-component" style="border-bottom:none;">
-									<div class="sangu-row-label" style="margin-bottom:8px;">Tambah Komponen Biaya</div>
-									<div class="sangu-add-component-form">
-										<input
-											type="text"
-											bind:value={newComponentLabel}
-											placeholder="Nama komponen, cth. Izin Kawasan"
-										/>
-										<input
-											type="text"
-											inputmode="numeric"
-											value={newComponentNominalDisplay}
-											oninput={onNewComponentNominalInput}
-											placeholder="Nominal (Rp)"
-										/>
-										<button class="btn btn-outline btn-sm" onclick={addCustomComponent}>Tambah</button>
-									</div>
-								</div>
-							{/if}
-
-							<div class="sangu-subtotal">
-								<div>
-									<div class="sangu-subtotal-label">Subtotal Uang Sangu Pre-Trip</div>
-									<div class="sangu-subtotal-hint">Pembayaran awal tetap ke driver</div>
-								</div>
-								<div class="sangu-subtotal-value">{formatIDR(sanguSubtotalDisplay)}</div>
-							</div>
-
-							{#if uangSanguFinalized}
-								<div class="sangu-finalized-badge">
-									<span class="icon-wrap"><Check size={13} /></span> Uang Sangu sudah difinalisasi — tidak bisa
-									diperbarui lagi.
-								</div>
-							{:else}
-								<div class="sangu-recon-actions sangu-recon-actions--split">
-									<div class="sangu-recon-actions-left">
-										{#if !sanguEditMode}
+										<div class="sangu-row-value">{formatIDR(c.nominal)}</div>
+										{#if showSanguEdit}
 											<button
-												type="button"
-												class="btn btn-outline"
-												disabled={!canFinalizeUangSangu}
-												title={canFinalizeUangSangu
-													? ''
-													: 'Tunggu truck ditugaskan sebelum bisa memfinalisasi Uang Sangu'}
-												onclick={confirmFinalizeUangSangu}
+												class="icon-btn sangu-remove-component"
+												title="Hapus komponen"
+												onclick={() => removeCustomComponent(c.index)}
 											>
-												<span class="icon-wrap"><Check size={13} /></span> Finalisasi
+												<span class="icon-wrap"><X size={15} /></span>
 											</button>
 										{/if}
 									</div>
-									<div class="sangu-recon-actions-right">
-										<!-- Nothing to update when the contract fixed the
+								{/each}
+
+								{#if canEditPreTripEstimate && !showSanguEdit}
+									<div class="sangu-row" style="border-bottom:none;">
+										<div class="sangu-row-body">
+											<div class="sangu-row-label">+ Tambahkan Komponen Biaya</div>
+										</div>
+									</div>
+								{/if}
+
+								{#if showSanguEdit && !addingComponentOpen}
+									<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+									<div
+										class="sangu-row sangu-add-trigger"
+										style="border-bottom:none;"
+										onclick={openAddComponent}
+									>
+										<div class="sangu-row-body">
+											<div class="sangu-row-label">+ Tambah Komponen Biaya</div>
+										</div>
+									</div>
+								{/if}
+
+								{#if showSanguEdit && addingComponentOpen}
+									<div class="sangu-add-component" style="border-bottom:none;">
+										<div class="sangu-row-label" style="margin-bottom:8px;">Tambah Komponen Biaya</div>
+										<div class="sangu-add-component-form">
+											<input
+												type="text"
+												bind:value={newComponentLabel}
+												placeholder="Nama komponen, cth. Izin Kawasan"
+											/>
+											<input
+												type="text"
+												inputmode="numeric"
+												value={newComponentNominalDisplay}
+												oninput={onNewComponentNominalInput}
+												placeholder="Nominal (Rp)"
+											/>
+											<button class="btn btn-outline btn-sm" onclick={addCustomComponent}>Tambah</button>
+										</div>
+									</div>
+								{/if}
+
+								<div class="sangu-subtotal">
+									<div>
+										<div class="sangu-subtotal-label">Subtotal Uang Sangu Pre-Trip</div>
+										<div class="sangu-subtotal-hint">Pembayaran awal tetap ke driver</div>
+									</div>
+									<div class="sangu-subtotal-value">{formatIDR(sanguSubtotalDisplay)}</div>
+								</div>
+
+								{#if uangSanguFinalized}
+									<div class="sangu-finalized-badge">
+										<span class="icon-wrap"><Check size={13} /></span> Uang Sangu sudah difinalisasi — tidak bisa
+										diperbarui lagi.
+									</div>
+								{:else}
+									<div class="sangu-recon-actions sangu-recon-actions--split">
+										<div class="sangu-recon-actions-left">
+											{#if !sanguEditMode}
+												<button
+													type="button"
+													class="btn btn-outline"
+													disabled={!canFinalizeUangSangu}
+													title={canFinalizeUangSangu
+														? ''
+														: 'Tunggu truck ditugaskan sebelum bisa memfinalisasi Uang Sangu'}
+													onclick={confirmFinalizeUangSangu}
+												>
+													<span class="icon-wrap"><Check size={13} /></span> Finalisasi
+												</button>
+											{/if}
+										</div>
+										<div class="sangu-recon-actions-right">
+											<!-- Nothing to update when the contract fixed the
 										     figure; the server refuses an override anyway,
 										     so offering the button would only produce an
 										     error the planner cannot act on. -->
-										{#if !sanguEditMode && !allowanceSnapshot}
-											<button class="btn btn-primary" onclick={openSanguEdit}>
-												<span class="icon-wrap"><Pencil size={16} /></span> Update Uang Sangu
-											</button>
-										{:else}
-											<button class="btn btn-primary" onclick={saveUangSanguUpdate}>Update Data</button>
-										{/if}
+											{#if !sanguEditMode && !allowanceSnapshot}
+												<button class="btn btn-primary" onclick={openSanguEdit}>
+													<span class="icon-wrap"><Pencil size={16} /></span> Update Uang Sangu
+												</button>
+											{:else}
+												<button class="btn btn-primary" onclick={saveUangSanguUpdate}>Update Data</button>
+											{/if}
+										</div>
 									</div>
-								</div>
-							{/if}
+								{/if}
 							{/if}
 						</div>
 					</div>
@@ -2974,7 +3015,10 @@
 										<div
 											class="epod-verify-photo-frame"
 											onclick={() =>
-												openPhotoModal(`Foto Surat Jalan — ${verifyPhaseLabel}`, podSrc(verifyFirstSuratJalanPhoto))}
+												openPhotoModal(
+													`Foto Surat Jalan — ${verifyPhaseLabel}`,
+													podSrc(verifyFirstSuratJalanPhoto)
+												)}
 										>
 											<img src={podSrc(verifyFirstSuratJalanPhoto)} alt="" />
 										</div>
@@ -3104,12 +3148,14 @@
 									!verifyDraftValid}
 								title={verifyBlockedBy
 									? `Verifikasi ${stopLabelOf(verifyBlockedBy)} dulu`
-									: api.testMode() && !phaseHasAnyPhoto(verifyModalPhase, verifyPerStop ? verifyModalStopIndex : null)
+									: api.testMode() &&
+										  !phaseHasAnyPhoto(verifyModalPhase, verifyPerStop ? verifyModalStopIndex : null)
 										? 'Mode Uji: verifikasi tanpa foto POD'
 										: ''}
 								onclick={confirmVerification}
 							>
-								Setuju{#if api.testMode() && !phaseHasAnyPhoto(verifyModalPhase, verifyPerStop ? verifyModalStopIndex : null)} (Mode Uji){/if}
+								Setuju{#if api.testMode() && !phaseHasAnyPhoto(verifyModalPhase, verifyPerStop ? verifyModalStopIndex : null)}
+									(Mode Uji){/if}
 							</button>
 						{:else}
 							<button class="btn btn-primary" onclick={closeVerifyModal}>Tutup</button>
@@ -3191,7 +3237,11 @@
 											{#each podPhotosPresent('muat', type.key) as src, i (i)}
 												<div class="epod-photo-doc-item">
 													<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
-													<img src={podSrc(src)} alt="" onclick={() => openPhotoModal(`${type.label} — Muat`, podSrc(src))} />
+													<img
+														src={podSrc(src)}
+														alt=""
+														onclick={() => openPhotoModal(`${type.label} — Muat`, podSrc(src))}
+													/>
 													<div class="epod-photo-caption">{type.label.replace('Foto ', '')} Muat {i + 1}</div>
 												</div>
 											{/each}
@@ -3204,7 +3254,11 @@
 											{#each podPhotosPresent('bongkar', type.key) as src, i (i)}
 												<div class="epod-photo-doc-item">
 													<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
-													<img src={podSrc(src)} alt="" onclick={() => openPhotoModal(`${type.label} — Bongkar`, podSrc(src))} />
+													<img
+														src={podSrc(src)}
+														alt=""
+														onclick={() => openPhotoModal(`${type.label} — Bongkar`, podSrc(src))}
+													/>
 													<div class="epod-photo-caption">
 														{type.label.replace('Foto ', '')} Bongkar {i + 1}
 													</div>
