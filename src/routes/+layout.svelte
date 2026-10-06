@@ -1,7 +1,8 @@
 <script lang="ts">
 	import '../app.css';
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { page, updated } from '$app/stores';
+	import { beforeNavigate } from '$app/navigation';
 	import { authStore } from '$lib/stores/auth';
 	import { isPublicPath } from '$lib/constants/publicRoutes';
 	import AppHeader from '$lib/components/layout/AppHeader.svelte';
@@ -16,6 +17,23 @@
 	// everywhere except the pages that exist for people who have none.
 	onMount(() => {
 		if (!isPublicPath(window.location.pathname)) authStore.init();
+	});
+
+	// A deploy that landed while this tab was open took its chunks with it:
+	// the assets are immutable and named by hash, so the ones this page still
+	// refers to are now 404. Client-side routing then dies with "Failed to
+	// fetch dynamically imported module" and the planner gets a blank page
+	// from a tab that worked a moment ago.
+	//
+	// version.json is polled (see svelte.config.js); once it has moved, the
+	// next navigation is handed to the browser instead, which loads the new
+	// build. Nothing is interrupted — this only takes effect when the person
+	// is already leaving the page they are on.
+	beforeNavigate((navigation) => {
+		if ($updated && navigation.to?.url) {
+			navigation.cancel();
+			window.location.href = navigation.to.url.href;
+		}
 	});
 </script>
 

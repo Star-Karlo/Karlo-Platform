@@ -16,6 +16,57 @@ export interface AuthState {
 	ready: boolean;
 }
 
+/* ---------- Refresh before the token dies, not after ----------
+   The access token lasts two hours. Nothing renewed it, so the first requests
+   after it lapsed all failed at once: eight parallel loads on a page, eight
+   401s in the console, one shared refresh, eight replays. The app recovered
+   every time — but a wall of red reading "No token provided." is
+   indistinguishable from the app being broken, and it was twice mistaken for
+   exactly that while hunting unrelated faults.
+
+   So the expiry is read off the token and a renewal is scheduled a couple of
+   minutes ahead of it. This is additive: if the timer never fires, or its
+   refresh fails, the interceptor still catches the 401 as before. Both paths
+   go through the same shared promise, so they cannot rotate the refresh token
+   against each other. */
+const REFRESH_MARGIN_MS = 2 * 60 * 1000;
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** When this token expires, from its own `exp` claim; 0 when unreadable. */
+function expiryOf(token: string): number {
+	try {
+		const [, payload] = token.split('.');
+		if (!payload) return 0;
+		const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+		return (Number(JSON.parse(json)?.exp) || 0) * 1000;
+	} catch {
+		return 0;
+	}
+}
+
+function stopRefreshTimer() {
+	if (refreshTimer) clearTimeout(refreshTimer);
+	refreshTimer = null;
+}
+
+function scheduleRefresh(token: string) {
+	stopRefreshTimer();
+	if (!browser || !token) return;
+	const expiresAt = expiryOf(token);
+	if (!expiresAt) return; // Unreadable token: leave it to the interceptor.
+	// At least a few seconds out, so a token that is already old does not
+	// spin a timer that fires immediately and repeatedly.
+	const delay = Math.max(expiresAt - Date.now() - REFRESH_MARGIN_MS, 5_000);
+	refreshTimer = setTimeout(() => {
+		void api
+			.refresh()
+			.then((next) => scheduleRefresh(next))
+			.catch(() => {
+				/* The interceptor will deal with it on the next request. */
+			});
+	}, delay);
+}
+
 let stopWatch: () => void = () => {};
 function startWatch() {
 	stopWatch();
@@ -45,7 +96,12 @@ function createAuthStore() {
 		ready: false
 	});
 
-	const signedOut = () => set({ isAuthenticated: false, token: null, user: null, ready: true });
+	const signedOut = () => {
+		// Nothing left to renew, and a timer that outlived the session would
+		// try to refresh a cookie the server has already revoked.
+		stopRefreshTimer();
+		set({ isAuthenticated: false, token: null, user: null, ready: true });
+	};
 
 	return {
 		subscribe,
@@ -61,6 +117,7 @@ function createAuthStore() {
 			if (token && user && !stale) {
 				set({ isAuthenticated: true, token, user: JSON.parse(user), ready: true });
 				api.setToken(token);
+				scheduleRefresh(token);
 				actingFor.init();
 				startWatch();
 				return;
@@ -98,6 +155,7 @@ function createAuthStore() {
 			tabStore.set(TOKEN_KEY, token);
 			tabStore.set(USER_KEY, JSON.stringify(user));
 			api.setToken(token);
+			scheduleRefresh(token);
 			set({ isAuthenticated: true, token, user, ready: true });
 			startWatch();
 		},
