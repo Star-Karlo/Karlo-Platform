@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { visibleNav, permissionForUrl, type NavItem } from './nav';
+import { visibleNav, permissionForUrl, navFor, type NavItem } from './nav';
+import { FINANCE_ENABLED, LTL_ENABLED } from '$lib/revamp/features';
 
 describe('nav visibility', () => {
 	const items: NavItem[] = [
@@ -45,5 +46,30 @@ describe('homeForIdentity', () => {
 		const home = homeForIdentity({ isPlatformStaff: true, role: 'admin' });
 		expect(home.startsWith('/')).toBe(true);
 		expect(home.startsWith('http')).toBe(false);
+	});
+});
+
+/* Modules that are built but deliberately not shown. A flag nobody checks is
+   a flag that comes back on by accident, so the sidebar is asserted against
+   it rather than against a fixed list. */
+describe('hidden modules', () => {
+	const consoles = ['admin', 'transporter', 'mitra'];
+
+	it('keeps Finance out of every sidebar while the flag is off', () => {
+		for (const role of consoles) {
+			const names = navFor(role).map((i) => i.name);
+			expect(names.includes('Finance')).toBe(FINANCE_ENABLED);
+		}
+	});
+
+	it('leaves the Finance routes reachable — this hides a menu, not access', () => {
+		// Permission mapping is what actually guards these pages, and it must
+		// keep answering for them whether or not the menu shows them.
+		expect(permissionForUrl('/t/finance/invoice')).toBeTruthy();
+	});
+
+	it('states plainly which modules are hidden', () => {
+		expect(FINANCE_ENABLED).toBe(false);
+		expect(LTL_ENABLED).toBe(false);
 	});
 });

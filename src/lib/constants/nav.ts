@@ -24,6 +24,7 @@ import {
 	PackagePlus,
 	Network
 } from 'lucide-svelte';
+import { FINANCE_ENABLED } from '$lib/revamp/features';
 
 export interface NavItem {
 	name: string;
@@ -141,16 +142,20 @@ export const navItems: Record<string, NavItem[]> = {
 				{ name: 'Empty Order', url: '/a/empty-order' }
 			]
 		},
-		{
-			name: 'Finance',
-			icon: Receipt,
-			children: [
-				{ name: 'Invoice', url: '/a/finance/invoice' },
-				{ name: 'Jurnal', url: '/a/finance/jurnal' },
-				{ name: 'Laporan', url: '/a/finance/laporan' },
-				{ name: 'COA', url: '/a/finance/coa' }
-			]
-		},
+		...(FINANCE_ENABLED
+			? [
+					{
+						name: 'Finance',
+						icon: Receipt,
+						children: [
+							{ name: 'Invoice', url: '/a/finance/invoice' },
+							{ name: 'Jurnal', url: '/a/finance/jurnal' },
+							{ name: 'Laporan', url: '/a/finance/laporan' },
+							{ name: 'COA', url: '/a/finance/coa' }
+						]
+					}
+				]
+			: []),
 		{
 			name: 'Master Data',
 			icon: Database,
@@ -301,16 +306,20 @@ export const navItems: Record<string, NavItem[]> = {
 				{ name: 'Empty Order', url: '/t/empty-order' }
 			]
 		},
-		{
-			name: 'Finance',
-			icon: Receipt,
-			children: [
-				{ name: 'Invoice', url: '/t/finance/invoice' },
-				{ name: 'Jurnal', url: '/t/finance/jurnal' },
-				{ name: 'Laporan', url: '/t/finance/laporan' },
-				{ name: 'COA', url: '/t/finance/coa' }
-			]
-		},
+		...(FINANCE_ENABLED
+			? [
+					{
+						name: 'Finance',
+						icon: Receipt,
+						children: [
+							{ name: 'Invoice', url: '/t/finance/invoice' },
+							{ name: 'Jurnal', url: '/t/finance/jurnal' },
+							{ name: 'Laporan', url: '/t/finance/laporan' },
+							{ name: 'COA', url: '/t/finance/coa' }
+						]
+					}
+				]
+			: []),
 		{
 			name: 'Master Data',
 			icon: Database,
@@ -383,16 +392,20 @@ export const navItems: Record<string, NavItem[]> = {
 				{ name: 'Empty Order', url: '/m/empty-order' }
 			]
 		},
-		{
-			name: 'Finance',
-			icon: Receipt,
-			children: [
-				{ name: 'Invoice', url: '/m/finance/invoice' },
-				{ name: 'Jurnal', url: '/m/finance/jurnal' },
-				{ name: 'Laporan', url: '/m/finance/laporan' },
-				{ name: 'COA', url: '/m/finance/coa' }
-			]
-		},
+		...(FINANCE_ENABLED
+			? [
+					{
+						name: 'Finance',
+						icon: Receipt,
+						children: [
+							{ name: 'Invoice', url: '/m/finance/invoice' },
+							{ name: 'Jurnal', url: '/m/finance/jurnal' },
+							{ name: 'Laporan', url: '/m/finance/laporan' },
+							{ name: 'COA', url: '/m/finance/coa' }
+						]
+					}
+				]
+			: []),
 		{
 			name: 'Master Data',
 			icon: Database,
