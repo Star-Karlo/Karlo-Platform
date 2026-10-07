@@ -37,6 +37,7 @@
 		X
 	} from 'lucide-svelte';
 	import { api } from '$lib/utils/api';
+	import { LTL_ENABLED } from '$lib/revamp/features';
 	import { ENDPOINTS, ORDER_STATUS } from '$lib/constants/endpoints';
 	import { toast } from '$lib/stores/ui';
 	import { TRUCK_MARKER } from '$lib/constants/assets';
@@ -477,6 +478,10 @@
 	const selectedTruckOptions = $derived(
 		(truckOptionKeysOf(selectedOrder?.raw).length ? truckOptionKeysOf(selectedOrder?.raw) : agreementTruckOptions).map(describeTruckOption)
 	);
+
+	/** Columns in the open-orders table; the LTL checkbox is one of them only
+	 *  while LTL is shown, and an empty row has to span exactly as many. */
+	const orderColumnCount = LTL_ENABLED ? 7 : 6;
 
 	// LTL — several orders on one truck
 	let ltlSelectMode = $state(false);
@@ -1596,31 +1601,38 @@
 			{#if activeTab === 'orders'}
 				<table class="planner-table">
 					<colgroup>
-						<col style="width:9%" /><col style="width:12%" /><col style="width:13%" /><col style="width:15%" /><col style="width:26%" /><col style="width:16%" /><col style="width:9%" />
+						{#if LTL_ENABLED}<col style="width:9%" />{/if}
+						<col style="width:12%" /><col style="width:13%" /><col style="width:15%" />
+						<col style={LTL_ENABLED ? 'width:26%' : 'width:35%'} />
+						<col style="width:16%" /><col style="width:9%" />
 					</colgroup>
 					<thead>
 						<tr>
-							<th class="planner-ltl-col">
-								<label class="planner-ltl-toggle" title="Aktifkan untuk memilih beberapa order sekaligus">
-									<input type="checkbox" bind:checked={ltlSelectMode} />
-									<span class="planner-ltl-switch"></span>
-									LTL
-								</label>
-							</th>
+							{#if LTL_ENABLED}
+								<th class="planner-ltl-col">
+									<label class="planner-ltl-toggle" title="Aktifkan untuk memilih beberapa order sekaligus">
+										<input type="checkbox" bind:checked={ltlSelectMode} />
+										<span class="planner-ltl-switch"></span>
+										LTL
+									</label>
+								</th>
+							{/if}
 							<th>Type Pengiriman</th><th>ID Order</th><th>Klien</th><th>Rute</th><th>Status</th><th>Kontrol</th>
 						</tr>
 					</thead>
 					<tbody>
 						{#if loading}
-							<tr><td colspan="7"><div class="empty">Memuat…</div></td></tr>
+							<tr><td colspan={orderColumnCount}><div class="empty">Memuat…</div></td></tr>
 						{:else if !openOrders.length}
-							<tr><td colspan="7"><div class="empty"><div class="eic">📦</div>Tidak ada order terbuka.</div></td></tr>
+							<tr><td colspan={orderColumnCount}><div class="empty"><div class="eic">📦</div>Tidak ada order terbuka.</div></td></tr>
 						{/if}
 						{#each pagedOpenOrders as o (o.key)}
 							<tr class="planner-row" class:planner-row-selected={selectedOrderKey === o.key || ltlSelectedKeys.includes(o.key)} onclick={() => selectOrder(o)}>
-								<td class="planner-ltl-col">
-									<input type="checkbox" class="planner-ltl-check" disabled={!ltlSelectMode} checked={ltlSelectedKeys.includes(o.key)} onclick={(e) => toggleLtlOrder(o, e)} />
-								</td>
+								{#if LTL_ENABLED}
+									<td class="planner-ltl-col">
+										<input type="checkbox" class="planner-ltl-check" disabled={!ltlSelectMode} checked={ltlSelectedKeys.includes(o.key)} onclick={(e) => toggleLtlOrder(o, e)} />
+									</td>
+								{/if}
 								<td><span class="badge" class:badge-active={o.shipmentType === 'Multi Shipment'} class:badge-planner={o.shipmentType !== 'Multi Shipment'}>{o.shipmentType}</span></td>
 								<td><b>{o.orderId}</b></td>
 								<td>{o.shipperName}</td>

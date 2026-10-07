@@ -21,6 +21,7 @@
 	import { toast } from '$lib/stores/ui';
 	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
 	import { kontrakStatus } from '$lib/revamp/kontrakStatus';
+	import { LTL_ENABLED } from '$lib/revamp/features';
 	import { statusLabel, statusBadgeClass } from '$lib/revamp/spotOrderStatus.js';
 	import { shipmentTypeLabel } from '$lib/revamp/shipmentType.js';
 	import { computeUangSangu, computePostTripReconciliation } from '$lib/revamp/uangSangu.js';
@@ -257,7 +258,8 @@
 	const KPI_CARDS = [
 		{ key: 'planned', label: 'Order Planned' },
 		{ key: 'onduty', label: 'Order Single Shipment' },
-		{ key: 'ltl', label: 'Order LTL' },
+		// LTL is built but not shown; see $lib/revamp/features.
+		...(LTL_ENABLED ? ([{ key: 'ltl', label: 'Order LTL' }] as const) : []),
 		{ key: 'multishipment', label: 'Order Multishipment' },
 		{ key: 'podMuat', label: 'Verifikasi POD Muat' },
 		{ key: 'podBongkar', label: 'Verifikasi POD Bongkar' },
