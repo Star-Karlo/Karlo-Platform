@@ -1354,6 +1354,15 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
   background:var(--warning-container, #fff4e5); color:var(--on-warning-container, #7a4b00);
   border:1px solid var(--warning, #e8a33d);}
 
+/* The truck's own state, one fact per row: icon, what it is, the value. Read
+   down the column rather than across, because the values have no common unit
+   and lining them up would suggest they do. */
+.ct-fleet-status{display:flex; flex-direction:column; gap:2px; padding:4px 0;}
+.ct-fleet-status-row{display:flex; align-items:flex-start; gap:10px; padding:7px 2px; color:var(--on-surface-variant);}
+.ct-fleet-status-row > div{display:flex; flex-direction:column; gap:1px; min-width:0;}
+.ct-fleet-status-row small{font-size:10.5px; text-transform:uppercase; letter-spacing:0.04em;}
+.ct-fleet-status-row b{font-size:13px; color:var(--on-surface); overflow-wrap:anywhere;}
+
 .warehouse-pick-row{display:flex; align-items:center; gap:10px;}
 .warehouse-pick-row > .warehouse-search-field{flex:1; min-width:0;}
 

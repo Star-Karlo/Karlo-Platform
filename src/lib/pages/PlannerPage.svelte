@@ -114,7 +114,10 @@
 		/** Tolled stretches of the geometry, as MAPID reports them. */
 		tollKm?: number | null;
 		/** The fare per golongan and per gate, from MAPID's toll API, when the route crosses a toll road. */
-		toll?: { prices: Record<string, number>; gates: { name: string; gate?: string; prices: Record<string, number> }[] } | null;
+		toll?: {
+			prices: Record<string, number>;
+			gates: { name: string; gate?: string; prices: Record<string, number> }[];
+		} | null;
 	};
 
 	const TRUCK_STATUS_LIST = [
@@ -225,9 +228,18 @@
 	}
 	/** Best known position per vehicle id: FMS live fix first, then /fleet/live. */
 	const positionOf = $derived.by(() => {
-		const byPlate = new Map<string, { lat: number; lon: number; at?: string; city?: string; live: boolean }>();
+		const byPlate = new Map<
+			string,
+			{ lat: number; lon: number; at?: string; city?: string; live: boolean }
+		>();
 		for (const p of positions) {
-			byPlate.set(plateKey(p.policeNumber), { lat: p.lat, lon: p.lon, at: p.at, city: p.city, live: p.source === 'live' });
+			byPlate.set(plateKey(p.policeNumber), {
+				lat: p.lat,
+				lon: p.lon,
+				at: p.at,
+				city: p.city,
+				live: p.source === 'live'
+			});
 		}
 		for (const v of fmsFleet) {
 			if (!hasFix(v.position)) continue;
@@ -348,18 +360,23 @@
 				raw: o,
 				orderId: o.orderNumber ?? o.id,
 				shipperName: o.shipperCompanyName ?? d.shipperName ?? o.customerName ?? '-',
-				rute:
-					d.rute ??
-					[o.originWarehouseName, o.destinationWarehouseName].filter(Boolean).join(' — '),
+				rute: d.rute ?? [o.originWarehouseName, o.destinationWarehouseName].filter(Boolean).join(' — '),
 				tanggalPickup: d.tanggalPickup ?? (o.pickupAt ? formatTimestampLabel(new Date(o.pickupAt)) : ''),
 				itemNames: items.length
-					? items.map((it) => it.name ?? it.nama ?? it.itemName).filter(Boolean).join(', ')
+					? items
+							.map((it) => it.name ?? it.nama ?? it.itemName)
+							.filter(Boolean)
+							.join(', ')
 					: (d.muatan ?? o.cargoTypeName ?? '-'),
 				totalTonase: d.totalBerat ?? `${formatThousands(String(Math.round(tonaseKg)))} Kg`,
 				totalQty: d.kuantitas ?? String(qty),
 				totalVolume: d.totalVolume ?? `${volume} m³`,
 				tonaseKg,
-				shipmentType: shipmentTypeLabel({ detail: d, loadingPoints: loadingIds, unloadingPoints: unloadingIds }),
+				shipmentType: shipmentTypeLabel({
+					detail: d,
+					loadingPoints: loadingIds,
+					unloadingPoints: unloadingIds
+				}),
 				statusLabel: statusLabel(status),
 				statusBadgeClass: statusBadgeClass(status),
 				truckTypeName: o.truckTypeName ?? d.fleetDescription ?? '',
@@ -383,7 +400,11 @@
 			(type === 'muat' ? muat : bongkar).push({
 				type,
 				kota: w?.city ?? fallback?.kota ?? '',
-				label: w?.name ?? fallback?.label ?? (type === 'muat' ? o.raw.originWarehouseName : o.raw.destinationWarehouseName) ?? '-',
+				label:
+					w?.name ??
+					fallback?.label ??
+					(type === 'muat' ? o.raw.originWarehouseName : o.raw.destinationWarehouseName) ??
+					'-',
 				alamat: w?.address ?? fallback?.detail ?? '',
 				pic: w?.picName ?? fallback?.pic,
 				telepon: w?.picPhone ?? fallback?.telepon,
@@ -432,7 +453,9 @@
 		try {
 			const w = Number(localStorage.getItem('planner-side-width'));
 			if (w >= SIDE_PANEL_MIN && w <= SIDE_PANEL_MAX) sidePanelWidth = w;
-		} catch { /* ignore */ }
+		} catch {
+			/* ignore */
+		}
 	});
 	function startSideResize(e: MouseEvent) {
 		e.preventDefault();
@@ -444,7 +467,11 @@
 			window.removeEventListener('mousemove', move);
 			window.removeEventListener('mouseup', stop);
 			document.body.style.userSelect = '';
-			try { localStorage.setItem('planner-side-width', String(sidePanelWidth)); } catch { /* ignore */ }
+			try {
+				localStorage.setItem('planner-side-width', String(sidePanelWidth));
+			} catch {
+				/* ignore */
+			}
 		};
 		document.body.style.userSelect = 'none';
 		window.addEventListener('mousemove', move);
@@ -467,16 +494,22 @@
 		const o = selectedOrder;
 		agreementTruckOptions = [];
 		if (!o || truckOptionKeysOf(o.raw).length || !o.raw.agreementId) return;
-		api.get(ENDPOINTS.agreements.one(o.raw.agreementId))
+		api
+			.get(ENDPOINTS.agreements.one(o.raw.agreementId))
 			.then((r) => {
 				if (selectedOrder?.key !== o.key) return;
 				const d = r.data?.data?.detail ?? {};
-				agreementTruckOptions = Array.isArray(d.truckOptions) ? d.truckOptions.slice(0, MAX_TRUCK_OPTIONS) : [];
+				agreementTruckOptions = Array.isArray(d.truckOptions)
+					? d.truckOptions.slice(0, MAX_TRUCK_OPTIONS)
+					: [];
 			})
 			.catch(() => {});
 	});
 	const selectedTruckOptions = $derived(
-		(truckOptionKeysOf(selectedOrder?.raw).length ? truckOptionKeysOf(selectedOrder?.raw) : agreementTruckOptions).map(describeTruckOption)
+		(truckOptionKeysOf(selectedOrder?.raw).length
+			? truckOptionKeysOf(selectedOrder?.raw)
+			: agreementTruckOptions
+		).map(describeTruckOption)
 	);
 
 	/** Columns in the open-orders table; the LTL checkbox is one of them only
@@ -502,7 +535,12 @@
 			qty += Number(s.order.totalQty) || 0;
 			vol += parseFloat(s.order.totalVolume) || 0;
 		}
-		return { kg, tonase: `${formatThousands(String(Math.round(kg)))} Kg`, qty: String(qty), volume: `${Math.round(vol * 100) / 100} m³` };
+		return {
+			kg,
+			tonase: `${formatThousands(String(Math.round(kg)))} Kg`,
+			qty: String(qty),
+			volume: `${Math.round(vol * 100) / 100} m³`
+		};
 	});
 
 	// ---------------------------------------------------------------------
@@ -524,7 +562,16 @@
 		{ match: /cde|engkel/i, kg: 2500 },
 		{ match: /pickup|van/i, kg: 1000 }
 	];
-	const STANDARD_TRUCK_CLASSES = ['Van/Pickup', 'CDE', 'CDD', 'Fuso / Medium', 'Tronton', 'Trailer 20ft', 'Trailer 40ft', 'Trailer 45ft'];
+	const STANDARD_TRUCK_CLASSES = [
+		'Van/Pickup',
+		'CDE',
+		'CDD',
+		'Fuso / Medium',
+		'Tronton',
+		'Trailer 20ft',
+		'Trailer 40ft',
+		'Trailer 45ft'
+	];
 	function capacityKgForTruckType(type: string): number | null {
 		const rule = TRUCK_TYPE_CAPACITY_KG.find((r) => r.match.test(type || ''));
 		return rule ? rule.kg : null;
@@ -543,7 +590,9 @@
 	let ltlSimTruckType = $state('');
 	let ltlSimCollapsed = $state(false);
 	const ltlSimCapacityKg = $derived(capacityKgForTruckType(ltlSimTruckType));
-	const ltlLoadPercent = $derived(ltlSimCapacityKg ? Math.round((ltlCombinedTotals.kg / ltlSimCapacityKg) * 100) : 0);
+	const ltlLoadPercent = $derived(
+		ltlSimCapacityKg ? Math.round((ltlCombinedTotals.kg / ltlSimCapacityKg) * 100) : 0
+	);
 	const ltlIsOverload = $derived(!!ltlSimCapacityKg && ltlLoadPercent > 100);
 	// Picking a truck for the LTL group seeds the simulator with its type.
 	$effect(() => {
@@ -552,7 +601,8 @@
 	});
 	function shadeColor(hex: string, percent: number) {
 		const n = parseInt(hex.slice(1), 16);
-		const ch = (c: number) => Math.round(Math.min(255, Math.max(0, c + (percent > 0 ? (255 - c) * percent : c * percent))));
+		const ch = (c: number) =>
+			Math.round(Math.min(255, Math.max(0, c + (percent > 0 ? (255 - c) * percent : c * percent))));
 		return `#${[ch(n >> 16), ch((n >> 8) & 255), ch(n & 255)].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
 	}
 	const LTL_SIM_BED = { x: 2, y: 4, width: 31, height: 18 };
@@ -567,7 +617,8 @@
 			dark: shadeColor(color, -0.3),
 			fillH,
 			fillY: LTL_SIM_BED.y + LTL_SIM_BED.height - fillH,
-			fillColor: pct > 100 ? 'rgba(211,47,47,.6)' : pct >= 80 ? 'rgba(245,158,11,.6)' : 'rgba(255,255,255,.55)'
+			fillColor:
+				pct > 100 ? 'rgba(211,47,47,.6)' : pct >= 80 ? 'rgba(245,158,11,.6)' : 'rgba(255,255,255,.55)'
 		};
 	});
 	const ltlCombinedStops = $derived.by(() => {
@@ -578,7 +629,9 @@
 		}
 		return [...muat, ...bongkar];
 	});
-	const canPair = $derived(!!selectedTruck && (!!selectedOrder || (ltlPanelActive && ltlShipments.length > 0)));
+	const canPair = $derived(
+		!!selectedTruck && (!!selectedOrder || (ltlPanelActive && ltlShipments.length > 0))
+	);
 
 	function selectOrder(o: OpenOrder) {
 		if (ltlSelectMode) {
@@ -611,11 +664,14 @@
 	}
 	function selectTruck(t: Vehicle) {
 		if (truckStatusOf(t) !== 'available') {
-			toast(`Truck ${t.licensePlate} sedang ${TRUCK_STATUS_META[truckStatusOf(t)].label} — tidak bisa ditugaskan`);
+			toast(
+				`Truck ${t.licensePlate} sedang ${TRUCK_STATUS_META[truckStatusOf(t)].label} — tidak bisa ditugaskan`
+			);
 			return;
 		}
 		selectedTruckId = selectedTruckId === t.id ? null : t.id;
-		if (selectedTruckId) flyTo = positionOf.get(t.id) ? [positionOf.get(t.id)!.lon, positionOf.get(t.id)!.lat] : null;
+		if (selectedTruckId)
+			flyTo = positionOf.get(t.id) ? [positionOf.get(t.id)!.lon, positionOf.get(t.id)!.lat] : null;
 	}
 	function viewTruckDetail(t: Vehicle, e?: Event) {
 		e?.stopPropagation();
@@ -658,7 +714,10 @@
 			for (const seg of src.tollSegments) {
 				if (seg?.status && seg.status !== 'toll' && seg.status !== 'tolled') continue;
 				for (let i = Math.max(0, seg.from ?? 0); i < Math.min(geometry.length - 1, seg.to ?? 0); i++) {
-					m += haversineKm({ lat: geometry[i][1], lng: geometry[i][0] }, { lat: geometry[i + 1][1], lng: geometry[i + 1][0] });
+					m += haversineKm(
+						{ lat: geometry[i][1], lng: geometry[i][0] },
+						{ lat: geometry[i + 1][1], lng: geometry[i + 1][0] }
+					);
 				}
 			}
 			tollKm = Math.round(m * 10) / 10;
@@ -697,7 +756,8 @@
 		const g = golonganForTruck(selectedTruck);
 		if (g) selectedGolongan = g;
 	});
-	const tollFare = (r: RouteSummary) => (r.toll?.prices ? (r.toll.prices[`golongan_${selectedGolongan}`] ?? null) : null);
+	const tollFare = (r: RouteSummary) =>
+		r.toll?.prices ? (r.toll.prices[`golongan_${selectedGolongan}`] ?? null) : null;
 	async function planRoute(points: [number, number][]): Promise<RouteSummary> {
 		if (points.length < 2) return { distanceKm: null, durationMin: null, geometry: [] };
 		const res = await api.post(ENDPOINTS.routing.route, { points, profile: 'truck', includeTolls: true });
@@ -724,7 +784,7 @@
 	let stopOrderOverride = $state<Stop[] | null>(null);
 	let savingSequence = $state(false);
 	$effect(() => {
-		void selectedOrderKey, ltlSelectedKeys;
+		(void selectedOrderKey, ltlSelectedKeys);
 		customRouteMode = false;
 		customViaPoints = [];
 		stopOrderOverride = null;
@@ -770,7 +830,10 @@
 	});
 	function toggleCustomRoute() {
 		customRouteMode = !customRouteMode;
-		if (customRouteMode) toast('Klik di map untuk menambah titik rute, geser titik untuk menyesuaikan, klik kanan untuk menghapus');
+		if (customRouteMode)
+			toast(
+				'Klik di map untuk menambah titik rute, geser titik untuk menyesuaikan, klik kanan untuk menghapus'
+			);
 	}
 	function resetCustomRoute() {
 		customViaPoints = [];
@@ -796,7 +859,12 @@
 	/** "+" on a row: a new via-point just beside that stop, right after it in the sequence. */
 	function addViaPointNear(row: CustomStopRow) {
 		if (!row.coords) return;
-		const insertAt = row.kind === 'muat' && row.stopIndex === undefined ? 0 : row.kind === 'via' ? row.viaIndex! + 1 : customViaPoints.length;
+		const insertAt =
+			row.kind === 'muat' && row.stopIndex === undefined
+				? 0
+				: row.kind === 'via'
+					? row.viaIndex! + 1
+					: customViaPoints.length;
 		const arr = [...customViaPoints];
 		arr.splice(insertAt, 0, { lng: row.coords[0] + 0.01, lat: row.coords[1] + 0.01 });
 		customViaPoints = arr;
@@ -953,12 +1021,18 @@
 	let transporterRadiusKm = $state(DEFAULT_PICKUP_RADIUS_KM);
 	let transporterSortIdle = $state(false);
 	const truckTypeOptions = $derived(
-		[...new Set(vehicles.map(typeLabel).filter((x) => x && x !== '-'))].sort().map((v) => ({ value: v, label: v }))
+		[...new Set(vehicles.map(typeLabel).filter((x) => x && x !== '-'))]
+			.sort()
+			.map((v) => ({ value: v, label: v }))
 	);
 	function truckDistanceKm(t: Vehicle): number | null {
 		const p = positionOf.get(t.id);
 		if (!p || !firstLoadingPoint) return null;
-		return Math.round(haversineKm({ lat: p.lat, lng: p.lon }, { lat: firstLoadingPoint[1], lng: firstLoadingPoint[0] }) * 10) / 10;
+		return (
+			Math.round(
+				haversineKm({ lat: p.lat, lng: p.lon }, { lat: firstLoadingPoint[1], lng: firstLoadingPoint[0] }) * 10
+			) / 10
+		);
 	}
 	function truckEtaMinutes(t: Vehicle): number | null {
 		const d = truckDistanceKm(t);
@@ -966,7 +1040,12 @@
 	}
 	function equipmentMatch(t: Vehicle) {
 		const mine = typeLabel(t).toLowerCase();
-		if (selectedTruckOptions.some((o) => mine.includes(o.label.toLowerCase()) || o.label.toLowerCase().includes(mine))) return true;
+		if (
+			selectedTruckOptions.some(
+				(o) => mine.includes(o.label.toLowerCase()) || o.label.toLowerCase().includes(mine)
+			)
+		)
+			return true;
 		const want = (selectedOrder?.truckTypeName ?? '').toLowerCase();
 		return !!want && mine.includes(want);
 	}
@@ -991,7 +1070,9 @@
 	function openFindTransporter() {
 		findTransporterOpen = true;
 		transporterTypeFilter = selectedOrder?.truckTypeName
-			? truckTypeOptions.filter((o) => o.value.toLowerCase().includes(selectedOrder!.truckTypeName.toLowerCase())).map((o) => o.value)
+			? truckTypeOptions
+					.filter((o) => o.value.toLowerCase().includes(selectedOrder!.truckTypeName.toLowerCase()))
+					.map((o) => o.value)
 			: [];
 		activeTab = 'fleet';
 	}
@@ -999,11 +1080,18 @@
 	// ---------------------------------------------------------------------
 	// Fleet catalog + vendor catalog
 	// ---------------------------------------------------------------------
-	const FLEET_STATUS_RANK: Record<TruckStatus, number> = { available: 0, planned: 1, onduty: 2, unpaired: 3, unavailable: 4 };
+	const FLEET_STATUS_RANK: Record<TruckStatus, number> = {
+		available: 0,
+		planned: 1,
+		onduty: 2,
+		unpaired: 3,
+		unavailable: 4
+	};
 	const fleetCatalogTrucks = $derived.by(() => {
 		let list = filteredTrucks;
 		if (findTransporterOpen) {
-			if (transporterTypeFilter.length) list = list.filter((t) => transporterTypeFilter.includes(typeLabel(t)));
+			if (transporterTypeFilter.length)
+				list = list.filter((t) => transporterTypeFilter.includes(typeLabel(t)));
 			list = list.filter((t) => {
 				const d = truckDistanceKm(t);
 				return d != null && d <= transporterRadiusKm;
@@ -1021,9 +1109,11 @@
 		fleetCatalogTrucks.slice((fleetPage - 1) * FLEET_PAGE_SIZE, fleetPage * FLEET_PAGE_SIZE)
 	);
 	let vendorPage = $state(1);
-	const pagedVendorCatalog = $derived(vendors.slice((vendorPage - 1) * VENDOR_PAGE_SIZE, vendorPage * VENDOR_PAGE_SIZE));
+	const pagedVendorCatalog = $derived(
+		vendors.slice((vendorPage - 1) * VENDOR_PAGE_SIZE, vendorPage * VENDOR_PAGE_SIZE)
+	);
 	$effect(() => {
-		void truckStatusFilter, findTransporterOpen, transporterTypeFilter, transporterRadiusKm;
+		(void truckStatusFilter, findTransporterOpen, transporterTypeFilter, transporterRadiusKm);
 		fleetPage = 1;
 	});
 
@@ -1051,7 +1141,9 @@
 		if (targets.length > 1) {
 			const cap = capacityKgForTruckType(typeLabel(t));
 			if (cap && ltlCombinedTotals.kg > cap) {
-				toast(`Muatan gabungan ${formatThousands(String(Math.round(ltlCombinedTotals.kg)))} Kg melebihi kapasitas ${typeLabel(t)} (${formatThousands(String(cap))} Kg)`);
+				toast(
+					`Muatan gabungan ${formatThousands(String(Math.round(ltlCombinedTotals.kg)))} Kg melebihi kapasitas ${typeLabel(t)} (${formatThousands(String(cap))} Kg)`
+				);
 			}
 		}
 		confirming = { truck: t, orders: targets };
@@ -1065,10 +1157,17 @@
 			// ltlShipmentLabel) — what Control Tower's "Order LTL" tab groups on.
 			const ltlGroupId = targets.length > 1 ? `ltl-${Date.now().toString(36)}` : null;
 			for (const [i, o] of targets.entries()) {
-				await api.put(ENDPOINTS.orders.assign(o.raw.id), { driverId: truck.currentDriverId, truckId: truck.id });
+				await api.put(ENDPOINTS.orders.assign(o.raw.id), {
+					driverId: truck.currentDriverId,
+					truckId: truck.id
+				});
 				if (ltlGroupId) {
 					await api
-						.patch(`${ENDPOINTS.orders.one(o.raw.id)}/detail`, { isLtl: true, ltlGroupId, ltlShipmentLabel: `Shipment ${i + 1}` })
+						.patch(`${ENDPOINTS.orders.one(o.raw.id)}/detail`, {
+							isLtl: true,
+							ltlGroupId,
+							ltlShipmentLabel: `Shipment ${i + 1}`
+						})
 						.catch(() => {});
 				}
 			}
@@ -1092,9 +1191,14 @@
 	// ---------------------------------------------------------------------
 	let flyTo = $state<[number, number] | null>(null);
 	const filteredTrucks = $derived.by(() => {
-		let list = truckStatusFilter === 'all' ? vehicles : vehicles.filter((t) => truckStatusOf(t) === truckStatusFilter);
+		let list =
+			truckStatusFilter === 'all' ? vehicles : vehicles.filter((t) => truckStatusOf(t) === truckStatusFilter);
 		const q = truckSearchQuery.trim().toLowerCase();
-		if (q) list = list.filter((t) => t.licensePlate.toLowerCase().includes(q) || (t.driver?.fullName ?? '').toLowerCase().includes(q));
+		if (q)
+			list = list.filter(
+				(t) =>
+					t.licensePlate.toLowerCase().includes(q) || (t.driver?.fullName ?? '').toLowerCase().includes(q)
+			);
 		return list;
 	});
 	const markers = $derived.by<MapMarker[]>(() => {
@@ -1125,7 +1229,9 @@
 				lat: v.lat,
 				lng: v.lng,
 				color: '#fff',
-				style: 'width:16px; height:16px; border:3px solid #0B57D0; box-shadow:0 0 0 2px #fff, 0 1px 4px rgba(0,0,0,.35); cursor:' + (customRouteMode ? 'grab' : 'default'),
+				style:
+					'width:16px; height:16px; border:3px solid #0B57D0; box-shadow:0 0 0 2px #fff, 0 1px 4px rgba(0,0,0,.35); cursor:' +
+					(customRouteMode ? 'grab' : 'default'),
 				draggable: customRouteMode,
 				onDragEnd: (c) => moveViaPointTo(i, c),
 				onContextMenu: () => customRouteMode && removeViaPointAt(i)
@@ -1147,9 +1253,16 @@
 	});
 	const lines = $derived.by<MapLine[]>(() => {
 		const out: MapLine[] = [];
-		if (haulRoute.geometry.length) out.push({ id: 'haul', coordinates: haulRoute.geometry, color: '#0B57D0', width: 4 });
+		if (haulRoute.geometry.length)
+			out.push({ id: 'haul', coordinates: haulRoute.geometry, color: '#0B57D0', width: 4 });
 		if (approachRoute.geometry.length)
-			out.push({ id: 'approach', coordinates: approachRoute.geometry, color: '#146C2E', width: 3, dashed: true });
+			out.push({
+				id: 'approach',
+				coordinates: approachRoute.geometry,
+				color: '#146C2E',
+				width: 3,
+				dashed: true
+			});
 		return out;
 	});
 	// Fit once per selection or route change, not on every position refresh.
@@ -1177,12 +1290,22 @@
 			<input type="text" bind:value={truckSearchQuery} placeholder="Cari nomor polisi atau pengemudi" />
 		</div>
 		<div class="ct-topbar-legend">
-			<button type="button" class="ct-topbar-legend-item" class:ct-topbar-legend-item--active={truckStatusFilter === 'all'} onclick={() => (truckStatusFilter = 'all')}>
+			<button
+				type="button"
+				class="ct-topbar-legend-item"
+				class:ct-topbar-legend-item--active={truckStatusFilter === 'all'}
+				onclick={() => (truckStatusFilter = 'all')}
+			>
 				<span class="ct-topbar-legend-label">Semua Status</span>
 				<span class="ct-topbar-legend-count">{vehicles.length}</span>
 			</button>
 			{#each TRUCK_STATUS_LIST as s (s.key)}
-				<button type="button" class="ct-topbar-legend-item" class:ct-topbar-legend-item--active={truckStatusFilter === s.key} onclick={() => (truckStatusFilter = truckStatusFilter === s.key ? 'all' : s.key)}>
+				<button
+					type="button"
+					class="ct-topbar-legend-item"
+					class:ct-topbar-legend-item--active={truckStatusFilter === s.key}
+					onclick={() => (truckStatusFilter = truckStatusFilter === s.key ? 'all' : s.key)}
+				>
 					<span class="ct-topbar-legend-dot" style="background:{s.color}"></span>
 					<span class="ct-topbar-legend-label">{s.label}</span>
 					<span class="ct-topbar-legend-count">{truckStatusCounts[s.key]}</span>
@@ -1193,408 +1316,809 @@
 	</div>
 
 	<div class="planner-shell">
-	{#if selectedOrder || viewedTruck || ltlPanelActive}
-		<div bind:this={sidePanelEl} class="card planner-side-panel" class:planner-side-panel-minimized={sidePanelMinimized} style="width:{sidePanelMinimized ? 56 : sidePanelWidth}px">
-			{#if !sidePanelMinimized}
-				<!-- svelte-ignore a11y_no_static_element_interactions -->
-				<div class="planner-side-resize-handle" title="Geser untuk mengubah lebar" onmousedown={startSideResize}></div>
-			{/if}
-			<button type="button" class="planner-side-minimize" title={sidePanelMinimized ? 'Perbesar' : 'Perkecil'} onclick={() => (sidePanelMinimized = !sidePanelMinimized)}>
-				<ChevronDown size={16} />
-			</button>
-			{#if !sidePanelMinimized}
-				<button type="button" class="planner-side-close" title="Tutup Detail" onclick={closeOrderDetail}><X size={16} /></button>
-			{/if}
-
-			{#if !sidePanelMinimized && viewedTruck}
-				{@const st = truckStatusOf(viewedTruck)}
-				<div class="planner-order-header">
-					<div class="planner-order-title-row">
-						<div class="planner-order-company">{viewedTruck.licensePlate}</div>
-						<span class="planner-truck-status-badge">
-							<span class="planner-truck-legend-dot" style="background:{TRUCK_STATUS_META[st].color}"></span>
-							{TRUCK_STATUS_META[st].label}
-						</span>
-					</div>
-					<div class="planner-order-meta">{typeLabel(viewedTruck)}{#if viewedTruck.attributes?.noLambung} · No. Lambung {viewedTruck.attributes.noLambung}{/if}</div>
-				</div>
-				<div class="planner-td-grid">
-					<div class="planner-td-item"><div class="planner-td-label">Driver</div><div class="planner-td-value">{viewedTruck.driver?.fullName ?? 'Belum Ada Driver'}</div></div>
-					<div class="planner-td-item"><div class="planner-td-label">Lokasi</div><div class="planner-td-value">{truckLocation(viewedTruck)}</div></div>
-					<div class="planner-td-item"><div class="planner-td-label">Last Update GPS</div><div class="planner-td-value">{formatLastGpsUpdate(viewedTruck)}</div></div>
-					<div class="planner-td-item"><div class="planner-td-label">Axle</div><div class="planner-td-value">{attr(viewedTruck, 'axle')}</div></div>
-					<div class="planner-td-item"><div class="planner-td-label">Brand · Warna</div><div class="planner-td-value">{attr(viewedTruck, 'brand', 'merk')} · {attr(viewedTruck, 'color', 'warna')}</div></div>
-					<div class="planner-td-item"><div class="planner-td-label">Dimensi (P×L×T, m)</div><div class="planner-td-value">{attr(viewedTruck, 'dimP', 'lengthM')} × {attr(viewedTruck, 'dimL', 'widthM')} × {attr(viewedTruck, 'dimT', 'heightM')}</div></div>
-					<div class="planner-td-item"><div class="planner-td-label">Max Berat / Volume</div><div class="planner-td-value">{attr(viewedTruck, 'maxWeight', 'maxWeightKg')} Kg · {attr(viewedTruck, 'maxVolume', 'maxVolumeM3')} m³</div></div>
-					<div class="planner-td-item"><div class="planner-td-label">No STNK</div><div class="planner-td-value">{attr(viewedTruck, 'noStnk', 'stnkNumber')}</div></div>
-					<div class="planner-td-item"><div class="planner-td-label">No KIR</div><div class="planner-td-value">{attr(viewedTruck, 'noKir', 'kirNumber')}</div></div>
-				</div>
-				<div style="display:flex; gap:8px; margin-top:16px;">
-					<button type="button" class="btn btn-outline" style="flex:1;" onclick={openFullTruckDetail}>Lihat Detail Lengkap</button>
-					<button type="button" class="btn btn-outline" onclick={closeTruckDetail}>{selectedOrder || ltlPanelActive ? 'Kembali ke Order' : 'Tutup'}</button>
-				</div>
-			{:else if !sidePanelMinimized && (selectedOrder || ltlPanelActive)}
-				{#if ltlPanelActive}
-					<div class="planner-order-header">
-						<div class="planner-order-title-row"><div class="planner-order-company">Pengiriman Gabungan (LTL)</div></div>
-						<div class="planner-order-meta">{ltlShipments.length} order digabungkan</div>
-					</div>
-
-					<div class="planner-ltl-sim">
-						<button type="button" class="planner-ltl-sim-head" onclick={() => (ltlSimCollapsed = !ltlSimCollapsed)}>
-							<span class="planner-stops-label planner-ltl-sim-title">Simulasi Muatan</span>
-							{#if ltlSimCapacityKg}<span class="planner-ltl-sim-head-percent" class:planner-ltl-sim-head-percent--overload={ltlIsOverload}>{ltlLoadPercent}%</span>{/if}
-							<span class="planner-ltl-shipment-toggle" style="transform:{ltlSimCollapsed ? 'none' : 'rotate(180deg)'}"><ChevronDown size={14} /></span>
-						</button>
-						{#if !ltlSimCollapsed}
-							<FieldSelect bind:value={ltlSimTruckType} options={ltlSimTruckTypeOptions} compact placeholder="Pilih Jenis Truck" />
-							{#if ltlSimCapacityKg}
-								<div class="planner-ltl-sim-truck" class:planner-ltl-sim-truck--overload={ltlIsOverload}>
-									<div class="planner-ltl-sim-truck-visual">
-										<svg viewBox="0 0 54 36" xmlns="http://www.w3.org/2000/svg">
-											<defs>
-												<linearGradient id="ltlSimTruckBody" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color={ltlSimVisual.light} /><stop offset="100%" stop-color={ltlSimVisual.color} /></linearGradient>
-												<linearGradient id="ltlSimTruckCab" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color={ltlSimVisual.light} /><stop offset="100%" stop-color={ltlSimVisual.dark} /></linearGradient>
-												<linearGradient id="ltlSimTruckGlass" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#e0f2fe" /><stop offset="100%" stop-color="#7dd3fc" /></linearGradient>
-												<clipPath id="ltlSimTruckBedClip"><rect x="2" y="4" width="31" height="18" rx="2.5" /></clipPath>
-											</defs>
-											<ellipse cx="27" cy="30.5" rx="23" ry="2.8" fill="rgba(15,23,42,0.25)" />
-											<rect x="2" y="21.5" width="48" height="3" rx="1.5" fill="#1e293b" />
-											<rect x="2" y="4" width="31" height="18" rx="2.5" fill="url(#ltlSimTruckBody)" stroke={ltlSimVisual.dark} stroke-width="0.8" />
-											<rect x="4" y="6" width="27" height="3" rx="1.5" fill="#ffffff" opacity="0.35" />
-											<line x1="11" y1="9" x2="11" y2="20" stroke={ltlSimVisual.dark} stroke-width="0.7" opacity="0.35" />
-											<line x1="19" y1="9" x2="19" y2="20" stroke={ltlSimVisual.dark} stroke-width="0.7" opacity="0.35" />
-											<line x1="27" y1="9" x2="27" y2="20" stroke={ltlSimVisual.dark} stroke-width="0.7" opacity="0.35" />
-											<rect class="planner-ltl-sim-truck-fill" x="2" width="31" y={ltlSimVisual.fillY} height={ltlSimVisual.fillH} fill={ltlSimVisual.fillColor} clip-path="url(#ltlSimTruckBedClip)" />
-											<path d="M33 9.5 h10.5 a3 3 0 0 1 2.4 1.2 l5 6.8 a2 2 0 0 1 .4 1.2 v3.8 a1.5 1.5 0 0 1 -1.5 1.5 h-16.8 z" fill="url(#ltlSimTruckCab)" stroke={ltlSimVisual.dark} stroke-width="0.8" />
-											<path d="M32.5 7.5 h11 a1.5 1.5 0 0 1 1.4 1 l.6 1 h-13 z" fill={ltlSimVisual.light} opacity="0.9" />
-											<path d="M36 11.5 h7 l3.5 5.5 h-10.5 z" fill="url(#ltlSimTruckGlass)" stroke="#38bdf8" stroke-width="0.5" />
-											<path d="M36.5 12 h4.5 l-1.8 4.5 h-2.7 z" fill="#ffffff" opacity="0.6" />
-											<path d="M50 19 h1.8 a1 1 0 0 1 1 1 v1.2 h-2.8 z" fill="#fef08a" stroke="#ca8a04" stroke-width="0.5" />
-											<rect x="48" y="22" width="4.5" height="2.5" rx="1" fill="#475569" />
-											{#each [8.5, 19, 42] as wx (wx)}
-												<g class="planner-ltl-sim-wheel">
-													<circle cx={wx} cy="26" r="4.8" fill="#0f172a" />
-													<circle cx={wx} cy="26" r="2.2" fill="#94a3b8" />
-													<g class="planner-ltl-sim-wheel-spin" style="transform-origin:{wx}px 26px">
-														<line x1={wx} y1="26" x2={wx} y2="23.3" stroke="#0f172a" stroke-width="0.9" />
-														<circle cx={wx} cy="26" r="0.9" fill="#0f172a" />
-													</g>
-												</g>
-											{/each}
-										</svg>
-									</div>
-									<div class="planner-ltl-sim-percent">{ltlLoadPercent}%</div>
-								</div>
-								<div class="planner-ltl-sim-meta">
-									{formatThousands(String(Math.round(ltlCombinedTotals.kg)))} Kg dari {formatThousands(String(ltlSimCapacityKg))} Kg kapasitas {ltlSimTruckType}
-								</div>
-								{#if ltlIsOverload}
-									<div class="planner-ltl-sim-alert"><AlertCircle size={14} /> Muatan melebihi kapasitas truck yang dipilih.</div>
-								{/if}
-							{:else}
-								<div class="hint">Pilih jenis truck untuk melihat simulasi kapasitas muatan.</div>
-							{/if}
-						{/if}
-					</div>
-
-					<div class="planner-ltl-shipments">
-						{#each ltlShipments as sh (sh.order.key)}
-							<div class="planner-ltl-shipment-card" class:planner-ltl-shipment-card--collapsed={ltlCollapsedCards.includes(sh.order.key)}>
-								<button type="button" class="planner-ltl-shipment-head" onclick={() => toggleLtlCard(sh.order.key)}>
-									<span class="planner-order-company planner-ltl-shipment-company">{sh.order.shipperName}</span>
-									<span class="planner-ltl-shipment-badge">{sh.label}</span>
-									<span class="planner-ltl-shipment-toggle" style="transform:{ltlCollapsedCards.includes(sh.order.key) ? 'none' : 'rotate(180deg)'}"><ChevronDown size={14} /></span>
-								</button>
-								{#if !ltlCollapsedCards.includes(sh.order.key)}
-									<div class="planner-order-meta">{sh.order.orderId} · {sh.order.tanggalPickup || '-'}</div>
-									<div class="planner-item-name">{sh.order.itemNames}</div>
-									<div class="planner-muatan-strip">
-										<div class="planner-muatan-item"><div class="planner-muatan-label">Tonase</div><div class="planner-muatan-value">{sh.order.totalTonase}</div></div>
-										<div class="planner-muatan-item"><div class="planner-muatan-label">Qty</div><div class="planner-muatan-value">{sh.order.totalQty}</div></div>
-										<div class="planner-muatan-item"><div class="planner-muatan-label">Volume</div><div class="planner-muatan-value">{sh.order.totalVolume}</div></div>
-									</div>
-								{/if}
-							</div>
-						{/each}
-						{#if !ltlShipments.length}<div class="hint">Pilih order dari daftar Open Orders untuk digabungkan.</div>{/if}
-					</div>
-					<div class="planner-stops-label">Total Gabungan</div>
-					<div class="planner-muatan-strip">
-						<div class="planner-muatan-item"><div class="planner-muatan-label">Tonase</div><div class="planner-muatan-value">{ltlCombinedTotals.tonase}</div></div>
-						<div class="planner-muatan-item"><div class="planner-muatan-label">Qty</div><div class="planner-muatan-value">{ltlCombinedTotals.qty}</div></div>
-						<div class="planner-muatan-item"><div class="planner-muatan-label">Volume</div><div class="planner-muatan-value">{ltlCombinedTotals.volume}</div></div>
-					</div>
-					{#if !customRouteMode}
-					<div class="planner-stops-label">Susunan Rute Gabungan</div>
-					<div class="planner-custom-stops">
-						{#each ltlActiveStops as s, i (i)}
-							<div class="planner-custom-stop">
-								<div class="planner-custom-stop-num planner-custom-stop-num--{s.type}">{i + 1}</div>
-								<div class="planner-custom-stop-pill" title={s.label}>
-									<span class="planner-ltl-stop-tag">{s.shipmentLabel}</span>
-									{s.type === 'muat' ? 'Muat' : 'Bongkar'} · {s.label}
-								</div>
-							</div>
-						{/each}
-						{#if !ltlActiveStops.length}<div class="hint">Titik rute belum tersedia.</div>{/if}
-					</div>
-					{/if}
-				{:else if selectedOrder}
-					<div class="planner-order-header">
-						<div class="planner-order-title-row"><div class="planner-order-company">{selectedOrder.shipperName}</div></div>
-						<div class="planner-order-meta">{selectedOrder.orderId} · {selectedOrder.tanggalPickup || '-'}</div>
-					</div>
-					<div class="planner-item-name">{selectedOrder.itemNames}</div>
-					<div class="planner-muatan-strip">
-						<div class="planner-muatan-item"><div class="planner-muatan-label">Tonase</div><div class="planner-muatan-value">{selectedOrder.totalTonase}</div></div>
-						<div class="planner-muatan-item"><div class="planner-muatan-label">Qty</div><div class="planner-muatan-value">{selectedOrder.totalQty}</div></div>
-						<div class="planner-muatan-item"><div class="planner-muatan-label">Volume</div><div class="planner-muatan-value">{selectedOrder.totalVolume}</div></div>
-					</div>
-					<div class="planner-truck-options">
-						<div class="planner-truck-options-head">
-							<span class="planner-stops-label">Truck Options</span>
-							<span class="planner-truck-options-count">{selectedTruckOptions.length}/{MAX_TRUCK_OPTIONS}</span>
-						</div>
-						{#each selectedTruckOptions as opt, i (opt.key)}
-							<div class="planner-truck-option">
-								<span class="planner-truck-option-num">{i + 1}</span>
-								<span class="planner-truck-option-icon"><TruckIcon size={20} /></span>
-								<span class="planner-truck-option-label">{opt.label}</span>
-								{#if opt.size}<span class="planner-truck-option-size" style="background:{opt.color}">{opt.size}</span>{/if}
-							</div>
-						{/each}
-						{#if !selectedTruckOptions.length}<div class="planner-truck-options-empty">Belum ada pilihan truck pada order ini.</div>{/if}
-					</div>
-					{#if !customRouteMode}
-					<button type="button" class="planner-stops-label planner-stops-toggle" onclick={() => (stopsAccordionOpen = !stopsAccordionOpen)}>
-						Stops <span style="display:inline-flex; transform:{stopsAccordionOpen ? 'rotate(180deg)' : 'none'}"><ChevronDown size={14} /></span>
-					</button>
-					<div class="planner-stops">
-						{#each stops as s, i (i)}
-							<div class="planner-stop">
-								<div class="planner-stop-marker">
-									<span class="planner-stop-icon" class:planner-stop-icon--muat={s.type === 'muat'} class:planner-stop-icon--bongkar={s.type === 'bongkar'}><MapPin size={14} /></span>
-									{#if i < stops.length - 1}<span class="planner-stop-line"></span>{/if}
-								</div>
-								<div class="planner-stop-body">
-									<div class="planner-stop-type">{s.type === 'muat' ? 'Muat' : 'Bongkar'}</div>
-									<div class="planner-stop-city">{s.kota || '-'}</div>
-									{#if stopsAccordionOpen}
-										<div class="planner-stop-name">{s.label}</div>
-										<div class="planner-stop-address">{s.alamat}</div>
-										{#if s.pic}
-											<div class="planner-stop-contact"><User size={12} /> {s.pic}{#if s.telepon} · <Phone size={12} /> {s.telepon}{/if}</div>
-										{/if}
-									{/if}
-								</div>
-							</div>
-						{/each}
-						{#if !stops.length}<div class="hint">Alamat belum tersedia.</div>{/if}
-					</div>
-					{/if}
+		{#if selectedOrder || viewedTruck || ltlPanelActive}
+			<div
+				bind:this={sidePanelEl}
+				class="card planner-side-panel"
+				class:planner-side-panel-minimized={sidePanelMinimized}
+				style="width:{sidePanelMinimized ? 56 : sidePanelWidth}px"
+			>
+				{#if !sidePanelMinimized}
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div
+						class="planner-side-resize-handle"
+						title="Geser untuk mengubah lebar"
+						onmousedown={startSideResize}
+					></div>
+				{/if}
+				<button
+					type="button"
+					class="planner-side-minimize"
+					title={sidePanelMinimized ? 'Perbesar' : 'Perkecil'}
+					onclick={() => (sidePanelMinimized = !sidePanelMinimized)}
+				>
+					<ChevronDown size={16} />
+				</button>
+				{#if !sidePanelMinimized}
+					<button type="button" class="planner-side-close" title="Tutup Detail" onclick={closeOrderDetail}
+						><X size={16} /></button
+					>
 				{/if}
 
-				{#if customRouteMode}
-					<div class="planner-stops-label">Stops</div>
-					<div class="planner-custom-stops">
-						{#each customStopsList as row, i (row.kind + (row.viaIndex ?? row.stopIndex ?? i))}
-							{@const draggable = row.kind === 'via' || row.stopIndex != null}
-							<div
-								class="planner-custom-stop"
-								class:planner-custom-stop--dragging={(row.kind === 'via' && draggingViaIndex === row.viaIndex) || (row.stopIndex != null && draggingStopIndex === row.stopIndex)}
-								role="listitem"
-								ondragover={(e) => e.preventDefault()}
-								ondrop={(e) => onRowDrop(row, e)}
+				{#if !sidePanelMinimized && viewedTruck}
+					{@const st = truckStatusOf(viewedTruck)}
+					<div class="planner-order-header">
+						<div class="planner-order-title-row">
+							<div class="planner-order-company">{viewedTruck.licensePlate}</div>
+							<span class="planner-truck-status-badge">
+								<span class="planner-truck-legend-dot" style="background:{TRUCK_STATUS_META[st].color}"
+								></span>
+								{TRUCK_STATUS_META[st].label}
+							</span>
+						</div>
+						<div class="planner-order-meta">
+							{typeLabel(viewedTruck)}{#if viewedTruck.attributes?.noLambung}
+								· No. Lambung {viewedTruck.attributes.noLambung}{/if}
+						</div>
+					</div>
+					<div class="planner-td-grid">
+						<div class="planner-td-item">
+							<div class="planner-td-label">Driver</div>
+							<div class="planner-td-value">{viewedTruck.driver?.fullName ?? 'Belum Ada Driver'}</div>
+						</div>
+						<div class="planner-td-item">
+							<div class="planner-td-label">Lokasi</div>
+							<div class="planner-td-value">{truckLocation(viewedTruck)}</div>
+						</div>
+						<div class="planner-td-item">
+							<div class="planner-td-label">Last Update GPS</div>
+							<div class="planner-td-value">{formatLastGpsUpdate(viewedTruck)}</div>
+						</div>
+						<div class="planner-td-item">
+							<div class="planner-td-label">Axle</div>
+							<div class="planner-td-value">{attr(viewedTruck, 'axle')}</div>
+						</div>
+						<div class="planner-td-item">
+							<div class="planner-td-label">Brand · Warna</div>
+							<div class="planner-td-value">
+								{attr(viewedTruck, 'brand', 'merk')} · {attr(viewedTruck, 'color', 'warna')}
+							</div>
+						</div>
+						<div class="planner-td-item">
+							<div class="planner-td-label">Dimensi (P×L×T, m)</div>
+							<div class="planner-td-value">
+								{attr(viewedTruck, 'dimP', 'lengthM')} × {attr(viewedTruck, 'dimL', 'widthM')} × {attr(
+									viewedTruck,
+									'dimT',
+									'heightM'
+								)}
+							</div>
+						</div>
+						<div class="planner-td-item">
+							<div class="planner-td-label">Max Berat / Volume</div>
+							<div class="planner-td-value">
+								{attr(viewedTruck, 'maxWeight', 'maxWeightKg')} Kg · {attr(
+									viewedTruck,
+									'maxVolume',
+									'maxVolumeM3'
+								)} m³
+							</div>
+						</div>
+						<div class="planner-td-item">
+							<div class="planner-td-label">No STNK</div>
+							<div class="planner-td-value">{attr(viewedTruck, 'noStnk', 'stnkNumber')}</div>
+						</div>
+						<div class="planner-td-item">
+							<div class="planner-td-label">No KIR</div>
+							<div class="planner-td-value">{attr(viewedTruck, 'noKir', 'kirNumber')}</div>
+						</div>
+					</div>
+					<div style="display:flex; gap:8px; margin-top:16px;">
+						<button type="button" class="btn btn-outline" style="flex:1;" onclick={openFullTruckDetail}
+							>Lihat Detail Lengkap</button
+						>
+						<button type="button" class="btn btn-outline" onclick={closeTruckDetail}
+							>{selectedOrder || ltlPanelActive ? 'Kembali ke Order' : 'Tutup'}</button
+						>
+					</div>
+				{:else if !sidePanelMinimized && (selectedOrder || ltlPanelActive)}
+					{#if ltlPanelActive}
+						<div class="planner-order-header">
+							<div class="planner-order-title-row">
+								<div class="planner-order-company">Pengiriman Gabungan (LTL)</div>
+							</div>
+							<div class="planner-order-meta">{ltlShipments.length} order digabungkan</div>
+						</div>
+
+						<div class="planner-ltl-sim">
+							<button
+								type="button"
+								class="planner-ltl-sim-head"
+								onclick={() => (ltlSimCollapsed = !ltlSimCollapsed)}
 							>
+								<span class="planner-stops-label planner-ltl-sim-title">Simulasi Muatan</span>
+								{#if ltlSimCapacityKg}<span
+										class="planner-ltl-sim-head-percent"
+										class:planner-ltl-sim-head-percent--overload={ltlIsOverload}>{ltlLoadPercent}%</span
+									>{/if}
 								<span
-									class="planner-custom-stop-drag"
-									class:planner-custom-stop-drag--hidden={!draggable}
-									{draggable}
-									title="Geser untuk mengurutkan"
-									role="button"
-									tabindex="-1"
-									ondragstart={(e) => onRowDragStart(row, e)}
-									ondragend={onRowDragEnd}
-								>{#if draggable}<GripVertical size={14} />{/if}</span>
-								<div class="planner-custom-stop-num planner-custom-stop-num--{row.kind}">{i + 1}</div>
-								<div class="planner-custom-stop-pill" title={row.label}>
-									{#if row.shipmentLabel}<span class="planner-ltl-stop-tag">{row.shipmentLabel}</span>{/if}
-									{row.kind === 'via' ? '' : row.kind === 'muat' ? 'Muat · ' : 'Bongkar · '}{row.label}
-								</div>
-								<div class="planner-custom-stop-btns">
-									{#if row.kind === 'via'}
-										<button type="button" class="planner-custom-stop-btn" title="Naikkan urutan" disabled={row.viaIndex === 0} onclick={() => moveViaPoint(row.viaIndex!, -1)}><ChevronUp size={12} /></button>
-										<button type="button" class="planner-custom-stop-btn" title="Turunkan urutan" disabled={row.viaIndex === customViaPoints.length - 1} onclick={() => moveViaPoint(row.viaIndex!, 1)}><ChevronDown size={12} /></button>
-									{/if}
-									<button type="button" class="planner-custom-stop-btn planner-custom-stop-btn-add" title="Tambah titik di sini" disabled={!row.coords} onclick={() => addViaPointNear(row)}><Plus size={12} /></button>
-									{#if row.kind === 'via'}
-										<button type="button" class="planner-custom-stop-btn planner-custom-stop-btn-remove" title="Hapus titik" onclick={() => removeViaPointAt(row.viaIndex!)}><X size={12} /></button>
-									{/if}
-								</div>
-							</div>
-						{/each}
-						{#if !customStopsList.length}<div class="hint">Alamat belum tersedia.</div>{/if}
-					</div>
-				{/if}
-
-				<div class="planner-route-strip-label">Rute Menuju Lokasi Muat</div>
-				{#if selectedTruck}
-					<div class="planner-muatan-strip">
-						<div class="planner-muatan-item"><div class="planner-muatan-label">Jarak</div><div class="planner-muatan-value">{approachLoading ? '…' : approachRoute.distanceKm != null ? `${approachRoute.distanceKm} Km` : '-'}</div></div>
-						<div class="planner-muatan-item"><div class="planner-muatan-label">ETA</div><div class="planner-muatan-value">{approachLoading ? '…' : formatDurationMin(approachRoute.durationMin)}</div></div>
-						<div class="planner-muatan-item"><div class="planner-muatan-label">Truck</div><div class="planner-muatan-value">{selectedTruck.licensePlate}</div></div>
-					</div>
-				{:else}
-					<div class="hint planner-route-strip-hint">Pilih truck terlebih dahulu untuk melihat rute menuju lokasi muat.</div>
-				{/if}
-				<div class="planner-route-strip-label">Rute Pengiriman</div>
-				<div class="planner-muatan-strip">
-					<div class="planner-muatan-item"><div class="planner-muatan-label">Jarak</div><div class="planner-muatan-value">{haulRoute.distanceKm != null ? `${haulRoute.distanceKm} Km` : '-'}</div></div>
-					<div class="planner-muatan-item"><div class="planner-muatan-label">ETA</div><div class="planner-muatan-value">{formatDurationMin(haulRoute.durationMin)}</div></div>
-					<div class="planner-muatan-item"><div class="planner-muatan-label">Biaya Toll</div><div class="planner-muatan-value">{tollFare(haulRoute) != null ? formatIDR(tollFare(haulRoute)) : haulRoute.tollKm === 0 ? 'Tidak ada' : '-'}</div></div>
-				</div>
-				{#if haulRoute.toll?.prices}
-					<div class="planner-toll-fare">
-						<div class="planner-toll-fare-label">Toll Fare Estimate</div>
-						<div class="planner-toll-fare-row">
-							<FieldSelect bind:value={selectedGolongan} options={GOLONGAN_OPTIONS} compact placeholder="Golongan" />
-							<div class="planner-toll-fare-value">{formatIDR(tollFare(haulRoute) ?? 0)}</div>
-						</div>
-						<div class="planner-toll-fare-note">
-							{selectedTruck ? `${GOLONGAN_OPTIONS.find((o) => o.value === selectedGolongan)?.label} mengikuti truck ${selectedTruck.licensePlate}. ` : ''}Tarif dari MAPID untuk {haulRoute.toll.gates.length} gerbang{haulRoute.tollKm ? ` · ${haulRoute.tollKm} km ruas tol` : ''}{approachRoute.toll?.prices && tollFare(approachRoute) ? `; belum termasuk ${formatIDR(tollFare(approachRoute) ?? 0)} menuju lokasi muat` : ''}.
-						</div>
-					</div>
-					{#if haulRoute.toll.gates.length}
-						<div class="planner-toll-summary">
-							<button type="button" class="planner-toll-summary-head" onclick={() => (tollSummaryOpen = !tollSummaryOpen)}>
-								Toll Summary <span style="display:inline-flex; transform:{tollSummaryOpen ? 'rotate(180deg)' : 'none'}"><ChevronDown size={14} /></span>
+									class="planner-ltl-shipment-toggle"
+									style="transform:{ltlSimCollapsed ? 'none' : 'rotate(180deg)'}"
+									><ChevronDown size={14} /></span
+								>
 							</button>
-							{#if tollSummaryOpen}
-								<div class="planner-toll-summary-body">
-									{#each haulRoute.toll.gates as g, i (i)}
-										<div class="planner-toll-summary-gate">
-											<div class="planner-toll-summary-gate-name">{g.name}</div>
-											{#if g.gate}<div class="planner-toll-summary-gate-row"><span>Gate:</span><span>{g.gate === 'in' ? 'Masuk' : 'Keluar'}</span></div>{/if}
-											<div class="planner-toll-summary-gate-row"><span>Price:</span><span>{formatIDR(g.prices?.[`golongan_${selectedGolongan}`] ?? 0)}</span></div>
+							{#if !ltlSimCollapsed}
+								<FieldSelect
+									bind:value={ltlSimTruckType}
+									options={ltlSimTruckTypeOptions}
+									compact
+									placeholder="Pilih Jenis Truck"
+								/>
+								{#if ltlSimCapacityKg}
+									<div class="planner-ltl-sim-truck" class:planner-ltl-sim-truck--overload={ltlIsOverload}>
+										<div class="planner-ltl-sim-truck-visual">
+											<svg viewBox="0 0 54 36" xmlns="http://www.w3.org/2000/svg">
+												<defs>
+													<linearGradient id="ltlSimTruckBody" x1="0" y1="0" x2="0" y2="1"
+														><stop offset="0%" stop-color={ltlSimVisual.light} /><stop
+															offset="100%"
+															stop-color={ltlSimVisual.color}
+														/></linearGradient
+													>
+													<linearGradient id="ltlSimTruckCab" x1="0" y1="0" x2="0" y2="1"
+														><stop offset="0%" stop-color={ltlSimVisual.light} /><stop
+															offset="100%"
+															stop-color={ltlSimVisual.dark}
+														/></linearGradient
+													>
+													<linearGradient id="ltlSimTruckGlass" x1="0" y1="0" x2="1" y2="1"
+														><stop offset="0%" stop-color="#e0f2fe" /><stop
+															offset="100%"
+															stop-color="#7dd3fc"
+														/></linearGradient
+													>
+													<clipPath id="ltlSimTruckBedClip"
+														><rect x="2" y="4" width="31" height="18" rx="2.5" /></clipPath
+													>
+												</defs>
+												<ellipse cx="27" cy="30.5" rx="23" ry="2.8" fill="rgba(15,23,42,0.25)" />
+												<rect x="2" y="21.5" width="48" height="3" rx="1.5" fill="#1e293b" />
+												<rect
+													x="2"
+													y="4"
+													width="31"
+													height="18"
+													rx="2.5"
+													fill="url(#ltlSimTruckBody)"
+													stroke={ltlSimVisual.dark}
+													stroke-width="0.8"
+												/>
+												<rect x="4" y="6" width="27" height="3" rx="1.5" fill="#ffffff" opacity="0.35" />
+												<line
+													x1="11"
+													y1="9"
+													x2="11"
+													y2="20"
+													stroke={ltlSimVisual.dark}
+													stroke-width="0.7"
+													opacity="0.35"
+												/>
+												<line
+													x1="19"
+													y1="9"
+													x2="19"
+													y2="20"
+													stroke={ltlSimVisual.dark}
+													stroke-width="0.7"
+													opacity="0.35"
+												/>
+												<line
+													x1="27"
+													y1="9"
+													x2="27"
+													y2="20"
+													stroke={ltlSimVisual.dark}
+													stroke-width="0.7"
+													opacity="0.35"
+												/>
+												<rect
+													class="planner-ltl-sim-truck-fill"
+													x="2"
+													width="31"
+													y={ltlSimVisual.fillY}
+													height={ltlSimVisual.fillH}
+													fill={ltlSimVisual.fillColor}
+													clip-path="url(#ltlSimTruckBedClip)"
+												/>
+												<path
+													d="M33 9.5 h10.5 a3 3 0 0 1 2.4 1.2 l5 6.8 a2 2 0 0 1 .4 1.2 v3.8 a1.5 1.5 0 0 1 -1.5 1.5 h-16.8 z"
+													fill="url(#ltlSimTruckCab)"
+													stroke={ltlSimVisual.dark}
+													stroke-width="0.8"
+												/>
+												<path
+													d="M32.5 7.5 h11 a1.5 1.5 0 0 1 1.4 1 l.6 1 h-13 z"
+													fill={ltlSimVisual.light}
+													opacity="0.9"
+												/>
+												<path
+													d="M36 11.5 h7 l3.5 5.5 h-10.5 z"
+													fill="url(#ltlSimTruckGlass)"
+													stroke="#38bdf8"
+													stroke-width="0.5"
+												/>
+												<path d="M36.5 12 h4.5 l-1.8 4.5 h-2.7 z" fill="#ffffff" opacity="0.6" />
+												<path
+													d="M50 19 h1.8 a1 1 0 0 1 1 1 v1.2 h-2.8 z"
+													fill="#fef08a"
+													stroke="#ca8a04"
+													stroke-width="0.5"
+												/>
+												<rect x="48" y="22" width="4.5" height="2.5" rx="1" fill="#475569" />
+												{#each [8.5, 19, 42] as wx (wx)}
+													<g class="planner-ltl-sim-wheel">
+														<circle cx={wx} cy="26" r="4.8" fill="#0f172a" />
+														<circle cx={wx} cy="26" r="2.2" fill="#94a3b8" />
+														<g class="planner-ltl-sim-wheel-spin" style="transform-origin:{wx}px 26px">
+															<line x1={wx} y1="26" x2={wx} y2="23.3" stroke="#0f172a" stroke-width="0.9" />
+															<circle cx={wx} cy="26" r="0.9" fill="#0f172a" />
+														</g>
+													</g>
+												{/each}
+											</svg>
 										</div>
-									{/each}
-								</div>
+										<div class="planner-ltl-sim-percent">{ltlLoadPercent}%</div>
+									</div>
+									<div class="planner-ltl-sim-meta">
+										{formatThousands(String(Math.round(ltlCombinedTotals.kg)))} Kg dari {formatThousands(
+											String(ltlSimCapacityKg)
+										)} Kg kapasitas {ltlSimTruckType}
+									</div>
+									{#if ltlIsOverload}
+										<div class="planner-ltl-sim-alert">
+											<AlertCircle size={14} /> Muatan melebihi kapasitas truck yang dipilih.
+										</div>
+									{/if}
+								{:else}
+									<div class="hint">Pilih jenis truck untuk melihat simulasi kapasitas muatan.</div>
+								{/if}
 							{/if}
 						</div>
-					{/if}
-				{/if}
 
-				{#if findTransporterOpen}
-					<div class="planner-find-transporter">
-						<div class="planner-ft-filter-group">
-							<div class="planner-ft-filter-label">Jenis Truck</div>
-							<FieldSelect bind:value={transporterTypeFilter} options={truckTypeOptions} multiple compact chipsBelow placeholder="Semua Jenis Truck" />
-						</div>
-						<div class="planner-ft-filter-group">
-							<div class="planner-ft-filter-label">Radius dari Lokasi Muat</div>
-							<div class="planner-ft-radius-row">
-								<input type="range" min="10" max="300" step="10" bind:value={transporterRadiusKm} />
-								<span class="planner-ft-radius-value">{transporterRadiusKm} km</span>
-							</div>
-						</div>
-						<label class="planner-ft-idle-toggle"><input type="checkbox" bind:checked={transporterSortIdle} /> Prioritaskan truck paling lama idle</label>
-						<div class="planner-ft-results-label">Rekomendasi Teratas</div>
-						<div class="planner-ft-results">
-							{#each transporterShortlist as t (t.id)}
-								<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-								<div class="planner-ft-result" class:planner-ft-result-selected={selectedTruckId === t.id} onclick={() => selectTruck(t)}>
-									<div class="planner-ft-result-body">
-										<div class="planner-ft-result-name">{t.driver?.fullName ?? 'Belum Ada Driver'}</div>
-										<div class="planner-ft-result-sub">{t.licensePlate} · {typeLabel(t)} · {truckLocation(t)}</div>
-										<div class="planner-ft-result-tags">
-											{#if truckDistanceKm(t) != null}<span class="planner-ft-tag">{truckDistanceKm(t)} km dari lokasi muat</span>{/if}
-											{#if truckEtaMinutes(t) != null}<span class="planner-ft-tag">~{truckEtaMinutes(t)} menit ke lokasi muat</span>{/if}
-											{#if transporterSortIdle}<span class="planner-ft-tag">{truckIdleDays(t) != null ? `${truckIdleDays(t)} hari idle` : 'Belum pernah kirim'}</span>{/if}
-											{#if equipmentMatch(t)}<span class="planner-ft-tag planner-ft-tag-good">Sesuai jenis truck order</span>{/if}
+						<div class="planner-ltl-shipments">
+							{#each ltlShipments as sh (sh.order.key)}
+								<div
+									class="planner-ltl-shipment-card"
+									class:planner-ltl-shipment-card--collapsed={ltlCollapsedCards.includes(sh.order.key)}
+								>
+									<button
+										type="button"
+										class="planner-ltl-shipment-head"
+										onclick={() => toggleLtlCard(sh.order.key)}
+									>
+										<span class="planner-order-company planner-ltl-shipment-company"
+											>{sh.order.shipperName}</span
+										>
+										<span class="planner-ltl-shipment-badge">{sh.label}</span>
+										<span
+											class="planner-ltl-shipment-toggle"
+											style="transform:{ltlCollapsedCards.includes(sh.order.key) ? 'none' : 'rotate(180deg)'}"
+											><ChevronDown size={14} /></span
+										>
+									</button>
+									{#if !ltlCollapsedCards.includes(sh.order.key)}
+										<div class="planner-order-meta">{sh.order.orderId} · {sh.order.tanggalPickup || '-'}</div>
+										<div class="planner-item-name">{sh.order.itemNames}</div>
+										<div class="planner-muatan-strip">
+											<div class="planner-muatan-item">
+												<div class="planner-muatan-label">Tonase</div>
+												<div class="planner-muatan-value">{sh.order.totalTonase}</div>
+											</div>
+											<div class="planner-muatan-item">
+												<div class="planner-muatan-label">Qty</div>
+												<div class="planner-muatan-value">{sh.order.totalQty}</div>
+											</div>
+											<div class="planner-muatan-item">
+												<div class="planner-muatan-label">Volume</div>
+												<div class="planner-muatan-value">{sh.order.totalVolume}</div>
+											</div>
 										</div>
-									</div>
-									<button type="button" class="planner-ft-assign-btn" onclick={(e) => confirmAssign(t, e)}>Assign</button>
+									{/if}
 								</div>
 							{/each}
-							{#if !transporterShortlist.length}<div class="hint">Tidak ada truck available dengan posisi diketahui dalam radius ini.</div>{/if}
+							{#if !ltlShipments.length}<div class="hint">
+									Pilih order dari daftar Open Orders untuk digabungkan.
+								</div>{/if}
 						</div>
-					</div>
-				{/if}
-
-				<div style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">
-					{#if !findTransporterOpen}
-						<button
-							type="button"
-							class="btn {customRouteMode ? 'btn-primary' : 'btn-outline'}"
-							style="width:100%; justify-content:center;"
-							title="Klik di mana saja pada map untuk menambah titik rute, lalu geser titik itu untuk menyesuaikan rute"
-							onclick={toggleCustomRoute}
-						>
-							<LocateFixed size={14} /> {customRouteMode ? 'Selesai Custom' : 'Custom Rute'}
-						</button>
-					{/if}
-					{#if !customRouteMode}
-						<button type="button" class="btn btn-outline" style="width:100%; justify-content:center;" onclick={() => (findTransporterOpen ? (findTransporterOpen = false) : openFindTransporter())}>
-							<Search size={14} /> {findTransporterOpen ? 'Tutup Find Truck' : 'Find Truck'}
-						</button>
-					{/if}
-				</div>
-				{#if customRouteMode}
-					<div class="planner-custom-route-hint">
-						<span>Klik di map untuk menambah titik rute yang ingin dilewati, geser untuk menyesuaikan, klik kanan untuk menghapus.</span>
-						{#if multiShipmentOrder}<span>Geser urutan Muat dan Bongkar di bawah untuk mengubah urutan kunjungan. Bongkar sebuah shipment tidak bisa sebelum Muat-nya.</span>{/if}
-						{#if customViaPoints.length || stopOrderOverride}<button type="button" class="planner-custom-route-reset" onclick={resetCustomRoute}>Reset Rute</button>{/if}
-					</div>
-					<!-- Only a single order's own visit order can be saved: an LTL
-					     group's combined order spans several orders and none of
-					     them owns it, so that stays a preview. -->
-					{#if multiShipmentOrder && stopOrderOverride}
-						<button
-							type="button"
-							class="btn btn-primary"
-							style="width:100%; justify-content:center;"
-							disabled={savingSequence}
-							onclick={saveStopSequence}
-						>{savingSequence ? 'Menyimpan urutan...' : 'Simpan Urutan Rute'}</button>
-					{/if}
-				{/if}
-
-				{#if selectedTruck && !findTransporterOpen}
-					<div class="planner-ft-result planner-selected-truck-card">
-						<div class="planner-ft-result-body">
-							<div class="planner-ft-result-name">{selectedTruck.driver?.fullName ?? 'Belum Ada Driver'}</div>
-							<div class="planner-ft-result-sub">{selectedTruck.licensePlate} · {typeLabel(selectedTruck)} · {truckLocation(selectedTruck)}</div>
-							<div class="planner-ft-result-tags">
-								{#if truckDistanceKm(selectedTruck) != null}<span class="planner-ft-tag">{truckDistanceKm(selectedTruck)} km dari lokasi muat</span>{/if}
-								{#if truckEtaMinutes(selectedTruck) != null}<span class="planner-ft-tag">~{truckEtaMinutes(selectedTruck)} menit ke lokasi muat</span>{/if}
-								{#if equipmentMatch(selectedTruck)}<span class="planner-ft-tag planner-ft-tag-good">Sesuai jenis truck order</span>{/if}
+						<div class="planner-stops-label">Total Gabungan</div>
+						<div class="planner-muatan-strip">
+							<div class="planner-muatan-item">
+								<div class="planner-muatan-label">Tonase</div>
+								<div class="planner-muatan-value">{ltlCombinedTotals.tonase}</div>
+							</div>
+							<div class="planner-muatan-item">
+								<div class="planner-muatan-label">Qty</div>
+								<div class="planner-muatan-value">{ltlCombinedTotals.qty}</div>
+							</div>
+							<div class="planner-muatan-item">
+								<div class="planner-muatan-label">Volume</div>
+								<div class="planner-muatan-value">{ltlCombinedTotals.volume}</div>
 							</div>
 						</div>
-						<button type="button" class="planner-ft-assign-btn" disabled={!canPair || pairing} onclick={() => confirmAssign(selectedTruck!)}>{pairing ? 'Menugaskan...' : 'Assign'}</button>
-					</div>
-				{/if}
-			{/if}
-		</div>
-	{/if}
+						{#if !customRouteMode}
+							<div class="planner-stops-label">Susunan Rute Gabungan</div>
+							<div class="planner-custom-stops">
+								{#each ltlActiveStops as s, i (i)}
+									<div class="planner-custom-stop">
+										<div class="planner-custom-stop-num planner-custom-stop-num--{s.type}">{i + 1}</div>
+										<div class="planner-custom-stop-pill" title={s.label}>
+											<span class="planner-ltl-stop-tag">{s.shipmentLabel}</span>
+											{s.type === 'muat' ? 'Muat' : 'Bongkar'} · {s.label}
+										</div>
+									</div>
+								{/each}
+								{#if !ltlActiveStops.length}<div class="hint">Titik rute belum tersedia.</div>{/if}
+							</div>
+						{/if}
+					{:else if selectedOrder}
+						<div class="planner-order-header">
+							<div class="planner-order-title-row">
+								<div class="planner-order-company">{selectedOrder.shipperName}</div>
+							</div>
+							<div class="planner-order-meta">
+								{selectedOrder.orderId} · {selectedOrder.tanggalPickup || '-'}
+							</div>
+						</div>
+						<div class="planner-item-name">{selectedOrder.itemNames}</div>
+						<div class="planner-muatan-strip">
+							<div class="planner-muatan-item">
+								<div class="planner-muatan-label">Tonase</div>
+								<div class="planner-muatan-value">{selectedOrder.totalTonase}</div>
+							</div>
+							<div class="planner-muatan-item">
+								<div class="planner-muatan-label">Qty</div>
+								<div class="planner-muatan-value">{selectedOrder.totalQty}</div>
+							</div>
+							<div class="planner-muatan-item">
+								<div class="planner-muatan-label">Volume</div>
+								<div class="planner-muatan-value">{selectedOrder.totalVolume}</div>
+							</div>
+						</div>
+						<div class="planner-truck-options">
+							<div class="planner-truck-options-head">
+								<span class="planner-stops-label">Truck Options</span>
+								<span class="planner-truck-options-count"
+									>{selectedTruckOptions.length}/{MAX_TRUCK_OPTIONS}</span
+								>
+							</div>
+							{#each selectedTruckOptions as opt, i (opt.key)}
+								<div class="planner-truck-option">
+									<span class="planner-truck-option-num">{i + 1}</span>
+									<span class="planner-truck-option-icon"><TruckIcon size={20} /></span>
+									<span class="planner-truck-option-label">{opt.label}</span>
+									{#if opt.size}<span class="planner-truck-option-size" style="background:{opt.color}"
+											>{opt.size}</span
+										>{/if}
+								</div>
+							{/each}
+							{#if !selectedTruckOptions.length}<div class="planner-truck-options-empty">
+									Belum ada pilihan truck pada order ini.
+								</div>{/if}
+						</div>
+						{#if !customRouteMode}
+							<button
+								type="button"
+								class="planner-stops-label planner-stops-toggle"
+								onclick={() => (stopsAccordionOpen = !stopsAccordionOpen)}
+							>
+								Stops <span
+									style="display:inline-flex; transform:{stopsAccordionOpen ? 'rotate(180deg)' : 'none'}"
+									><ChevronDown size={14} /></span
+								>
+							</button>
+							<div class="planner-stops">
+								{#each stops as s, i (i)}
+									<div class="planner-stop">
+										<div class="planner-stop-marker">
+											<span
+												class="planner-stop-icon"
+												class:planner-stop-icon--muat={s.type === 'muat'}
+												class:planner-stop-icon--bongkar={s.type === 'bongkar'}><MapPin size={14} /></span
+											>
+											{#if i < stops.length - 1}<span class="planner-stop-line"></span>{/if}
+										</div>
+										<div class="planner-stop-body">
+											<div class="planner-stop-type">{s.type === 'muat' ? 'Muat' : 'Bongkar'}</div>
+											<div class="planner-stop-city">{s.kota || '-'}</div>
+											{#if stopsAccordionOpen}
+												<div class="planner-stop-name">{s.label}</div>
+												<div class="planner-stop-address">{s.alamat}</div>
+												{#if s.pic}
+													<div class="planner-stop-contact">
+														<User size={12} />
+														{s.pic}{#if s.telepon}
+															· <Phone size={12} /> {s.telepon}{/if}
+													</div>
+												{/if}
+											{/if}
+										</div>
+									</div>
+								{/each}
+								{#if !stops.length}<div class="hint">Alamat belum tersedia.</div>{/if}
+							</div>
+						{/if}
+					{/if}
 
-	<div class="card planner-map-panel">
-		<MapView {markers} {lines} {fitKey} {flyTo} onPick={addViaPointAt} pickMode={customRouteMode} class="planner-map-canvas" />
-		<div class="planner-map-legends">
-			<div class="planner-map-legend">
-				<span><span class="planner-legend-icon planner-legend-icon--pickup"><MapPin size={16} /></span> Muat</span>
-				<span><span class="planner-legend-icon planner-legend-icon--dropoff"><MapPin size={16} /></span> Bongkar</span>
+					{#if customRouteMode}
+						<div class="planner-stops-label">Stops</div>
+						<div class="planner-custom-stops">
+							{#each customStopsList as row, i (row.kind + (row.viaIndex ?? row.stopIndex ?? i))}
+								{@const draggable = row.kind === 'via' || row.stopIndex != null}
+								<div
+									class="planner-custom-stop"
+									class:planner-custom-stop--dragging={(row.kind === 'via' &&
+										draggingViaIndex === row.viaIndex) ||
+										(row.stopIndex != null && draggingStopIndex === row.stopIndex)}
+									role="listitem"
+									ondragover={(e) => e.preventDefault()}
+									ondrop={(e) => onRowDrop(row, e)}
+								>
+									<span
+										class="planner-custom-stop-drag"
+										class:planner-custom-stop-drag--hidden={!draggable}
+										{draggable}
+										title="Geser untuk mengurutkan"
+										role="button"
+										tabindex="-1"
+										ondragstart={(e) => onRowDragStart(row, e)}
+										ondragend={onRowDragEnd}
+										>{#if draggable}<GripVertical size={14} />{/if}</span
+									>
+									<div class="planner-custom-stop-num planner-custom-stop-num--{row.kind}">{i + 1}</div>
+									<div class="planner-custom-stop-pill" title={row.label}>
+										{#if row.shipmentLabel}<span class="planner-ltl-stop-tag">{row.shipmentLabel}</span>{/if}
+										{row.kind === 'via' ? '' : row.kind === 'muat' ? 'Muat · ' : 'Bongkar · '}{row.label}
+									</div>
+									<div class="planner-custom-stop-btns">
+										{#if row.kind === 'via'}
+											<button
+												type="button"
+												class="planner-custom-stop-btn"
+												title="Naikkan urutan"
+												disabled={row.viaIndex === 0}
+												onclick={() => moveViaPoint(row.viaIndex!, -1)}><ChevronUp size={12} /></button
+											>
+											<button
+												type="button"
+												class="planner-custom-stop-btn"
+												title="Turunkan urutan"
+												disabled={row.viaIndex === customViaPoints.length - 1}
+												onclick={() => moveViaPoint(row.viaIndex!, 1)}><ChevronDown size={12} /></button
+											>
+										{/if}
+										<button
+											type="button"
+											class="planner-custom-stop-btn planner-custom-stop-btn-add"
+											title="Tambah titik di sini"
+											disabled={!row.coords}
+											onclick={() => addViaPointNear(row)}><Plus size={12} /></button
+										>
+										{#if row.kind === 'via'}
+											<button
+												type="button"
+												class="planner-custom-stop-btn planner-custom-stop-btn-remove"
+												title="Hapus titik"
+												onclick={() => removeViaPointAt(row.viaIndex!)}><X size={12} /></button
+											>
+										{/if}
+									</div>
+								</div>
+							{/each}
+							{#if !customStopsList.length}<div class="hint">Alamat belum tersedia.</div>{/if}
+						</div>
+					{/if}
+
+					<div class="planner-route-strip-label">Rute Menuju Lokasi Muat</div>
+					{#if selectedTruck}
+						<div class="planner-muatan-strip">
+							<div class="planner-muatan-item">
+								<div class="planner-muatan-label">Jarak</div>
+								<div class="planner-muatan-value">
+									{approachLoading
+										? '…'
+										: approachRoute.distanceKm != null
+											? `${approachRoute.distanceKm} Km`
+											: '-'}
+								</div>
+							</div>
+							<div class="planner-muatan-item">
+								<div class="planner-muatan-label">ETA</div>
+								<div class="planner-muatan-value">
+									{approachLoading ? '…' : formatDurationMin(approachRoute.durationMin)}
+								</div>
+							</div>
+							<div class="planner-muatan-item">
+								<div class="planner-muatan-label">Truck</div>
+								<div class="planner-muatan-value">{selectedTruck.licensePlate}</div>
+							</div>
+						</div>
+					{:else}
+						<div class="hint planner-route-strip-hint">
+							Pilih truck terlebih dahulu untuk melihat rute menuju lokasi muat.
+						</div>
+					{/if}
+					<div class="planner-route-strip-label">Rute Pengiriman</div>
+					<div class="planner-muatan-strip">
+						<div class="planner-muatan-item">
+							<div class="planner-muatan-label">Jarak</div>
+							<div class="planner-muatan-value">
+								{haulRoute.distanceKm != null ? `${haulRoute.distanceKm} Km` : '-'}
+							</div>
+						</div>
+						<div class="planner-muatan-item">
+							<div class="planner-muatan-label">ETA</div>
+							<div class="planner-muatan-value">{formatDurationMin(haulRoute.durationMin)}</div>
+						</div>
+						<div class="planner-muatan-item">
+							<div class="planner-muatan-label">Biaya Toll</div>
+							<div class="planner-muatan-value">
+								{tollFare(haulRoute) != null
+									? formatIDR(tollFare(haulRoute))
+									: haulRoute.tollKm === 0
+										? 'Tidak ada'
+										: '-'}
+							</div>
+						</div>
+					</div>
+					{#if haulRoute.toll?.prices}
+						<div class="planner-toll-fare">
+							<div class="planner-toll-fare-label">Toll Fare Estimate</div>
+							<div class="planner-toll-fare-row">
+								<FieldSelect
+									bind:value={selectedGolongan}
+									options={GOLONGAN_OPTIONS}
+									compact
+									placeholder="Golongan"
+								/>
+								<div class="planner-toll-fare-value">{formatIDR(tollFare(haulRoute) ?? 0)}</div>
+							</div>
+							<div class="planner-toll-fare-note">
+								{selectedTruck
+									? `${GOLONGAN_OPTIONS.find((o) => o.value === selectedGolongan)?.label} mengikuti truck ${selectedTruck.licensePlate}. `
+									: ''}Tarif dari MAPID untuk {haulRoute.toll.gates.length} gerbang{haulRoute.tollKm
+									? ` · ${haulRoute.tollKm} km ruas tol`
+									: ''}{approachRoute.toll?.prices && tollFare(approachRoute)
+									? `; belum termasuk ${formatIDR(tollFare(approachRoute) ?? 0)} menuju lokasi muat`
+									: ''}.
+							</div>
+						</div>
+						{#if haulRoute.toll.gates.length}
+							<div class="planner-toll-summary">
+								<button
+									type="button"
+									class="planner-toll-summary-head"
+									onclick={() => (tollSummaryOpen = !tollSummaryOpen)}
+								>
+									Toll Summary <span
+										style="display:inline-flex; transform:{tollSummaryOpen ? 'rotate(180deg)' : 'none'}"
+										><ChevronDown size={14} /></span
+									>
+								</button>
+								{#if tollSummaryOpen}
+									<div class="planner-toll-summary-body">
+										{#each haulRoute.toll.gates as g, i (i)}
+											<div class="planner-toll-summary-gate">
+												<div class="planner-toll-summary-gate-name">{g.name}</div>
+												{#if g.gate}<div class="planner-toll-summary-gate-row">
+														<span>Gate:</span><span>{g.gate === 'in' ? 'Masuk' : 'Keluar'}</span>
+													</div>{/if}
+												<div class="planner-toll-summary-gate-row">
+													<span>Price:</span><span
+														>{formatIDR(g.prices?.[`golongan_${selectedGolongan}`] ?? 0)}</span
+													>
+												</div>
+											</div>
+										{/each}
+									</div>
+								{/if}
+							</div>
+						{/if}
+					{/if}
+
+					{#if findTransporterOpen}
+						<div class="planner-find-transporter">
+							<div class="planner-ft-filter-group">
+								<div class="planner-ft-filter-label">Jenis Truck</div>
+								<FieldSelect
+									bind:value={transporterTypeFilter}
+									options={truckTypeOptions}
+									multiple
+									compact
+									chipsBelow
+									placeholder="Semua Jenis Truck"
+								/>
+							</div>
+							<div class="planner-ft-filter-group">
+								<div class="planner-ft-filter-label">Radius dari Lokasi Muat</div>
+								<div class="planner-ft-radius-row">
+									<input type="range" min="10" max="300" step="10" bind:value={transporterRadiusKm} />
+									<span class="planner-ft-radius-value">{transporterRadiusKm} km</span>
+								</div>
+							</div>
+							<label class="planner-ft-idle-toggle"
+								><input type="checkbox" bind:checked={transporterSortIdle} /> Prioritaskan truck paling lama idle</label
+							>
+							<div class="planner-ft-results-label">Rekomendasi Teratas</div>
+							<div class="planner-ft-results">
+								{#each transporterShortlist as t (t.id)}
+									<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+									<div
+										class="planner-ft-result"
+										class:planner-ft-result-selected={selectedTruckId === t.id}
+										onclick={() => selectTruck(t)}
+									>
+										<div class="planner-ft-result-body">
+											<div class="planner-ft-result-name">{t.driver?.fullName ?? 'Belum Ada Driver'}</div>
+											<div class="planner-ft-result-sub">
+												{t.licensePlate} · {typeLabel(t)} · {truckLocation(t)}
+											</div>
+											<div class="planner-ft-result-tags">
+												{#if truckDistanceKm(t) != null}<span class="planner-ft-tag"
+														>{truckDistanceKm(t)} km dari lokasi muat</span
+													>{/if}
+												{#if truckEtaMinutes(t) != null}<span class="planner-ft-tag"
+														>~{truckEtaMinutes(t)} menit ke lokasi muat</span
+													>{/if}
+												{#if transporterSortIdle}<span class="planner-ft-tag"
+														>{truckIdleDays(t) != null
+															? `${truckIdleDays(t)} hari idle`
+															: 'Belum pernah kirim'}</span
+													>{/if}
+												{#if equipmentMatch(t)}<span class="planner-ft-tag planner-ft-tag-good"
+														>Sesuai jenis truck order</span
+													>{/if}
+											</div>
+										</div>
+										<button type="button" class="planner-ft-assign-btn" onclick={(e) => confirmAssign(t, e)}
+											>Assign</button
+										>
+									</div>
+								{/each}
+								{#if !transporterShortlist.length}<div class="hint">
+										Tidak ada truck available dengan posisi diketahui dalam radius ini.
+									</div>{/if}
+							</div>
+						</div>
+					{/if}
+
+					<div style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">
+						{#if !findTransporterOpen}
+							<button
+								type="button"
+								class="btn {customRouteMode ? 'btn-primary' : 'btn-outline'}"
+								style="width:100%; justify-content:center;"
+								title="Klik di mana saja pada map untuk menambah titik rute, lalu geser titik itu untuk menyesuaikan rute"
+								onclick={toggleCustomRoute}
+							>
+								<LocateFixed size={14} />
+								{customRouteMode ? 'Selesai Custom' : 'Custom Rute'}
+							</button>
+						{/if}
+						{#if !customRouteMode}
+							<button
+								type="button"
+								class="btn btn-outline"
+								style="width:100%; justify-content:center;"
+								onclick={() => (findTransporterOpen ? (findTransporterOpen = false) : openFindTransporter())}
+							>
+								<Search size={14} />
+								{findTransporterOpen ? 'Tutup Find Truck' : 'Find Truck'}
+							</button>
+						{/if}
+					</div>
+					{#if customRouteMode}
+						<div class="planner-custom-route-hint">
+							<span
+								>Klik di map untuk menambah titik rute yang ingin dilewati, geser untuk menyesuaikan, klik
+								kanan untuk menghapus.</span
+							>
+							{#if multiShipmentOrder}<span
+									>Geser urutan Muat dan Bongkar di bawah untuk mengubah urutan kunjungan. Bongkar sebuah
+									shipment tidak bisa sebelum Muat-nya.</span
+								>{/if}
+							{#if customViaPoints.length || stopOrderOverride}<button
+									type="button"
+									class="planner-custom-route-reset"
+									onclick={resetCustomRoute}>Reset Rute</button
+								>{/if}
+						</div>
+						<!-- Only a single order's own visit order can be saved: an LTL
+					     group's combined order spans several orders and none of
+					     them owns it, so that stays a preview. -->
+						{#if multiShipmentOrder && stopOrderOverride}
+							<button
+								type="button"
+								class="btn btn-primary"
+								style="width:100%; justify-content:center;"
+								disabled={savingSequence}
+								onclick={saveStopSequence}
+								>{savingSequence ? 'Menyimpan urutan...' : 'Simpan Urutan Rute'}</button
+							>
+						{/if}
+					{/if}
+
+					{#if selectedTruck && !findTransporterOpen}
+						<div class="planner-ft-result planner-selected-truck-card">
+							<div class="planner-ft-result-body">
+								<div class="planner-ft-result-name">
+									{selectedTruck.driver?.fullName ?? 'Belum Ada Driver'}
+								</div>
+								<div class="planner-ft-result-sub">
+									{selectedTruck.licensePlate} · {typeLabel(selectedTruck)} · {truckLocation(selectedTruck)}
+								</div>
+								<div class="planner-ft-result-tags">
+									{#if truckDistanceKm(selectedTruck) != null}<span class="planner-ft-tag"
+											>{truckDistanceKm(selectedTruck)} km dari lokasi muat</span
+										>{/if}
+									{#if truckEtaMinutes(selectedTruck) != null}<span class="planner-ft-tag"
+											>~{truckEtaMinutes(selectedTruck)} menit ke lokasi muat</span
+										>{/if}
+									{#if equipmentMatch(selectedTruck)}<span class="planner-ft-tag planner-ft-tag-good"
+											>Sesuai jenis truck order</span
+										>{/if}
+								</div>
+							</div>
+							<button
+								type="button"
+								class="planner-ft-assign-btn"
+								disabled={!canPair || pairing}
+								onclick={() => confirmAssign(selectedTruck!)}>{pairing ? 'Menugaskan...' : 'Assign'}</button
+							>
+						</div>
+					{/if}
+				{/if}
+			</div>
+		{/if}
+
+		<div class="card planner-map-panel">
+			<MapView
+				{markers}
+				{lines}
+				{fitKey}
+				{flyTo}
+				onPick={addViaPointAt}
+				pickMode={customRouteMode}
+				class="planner-map-canvas"
+			/>
+			<div class="planner-map-legends">
+				<div class="planner-map-legend">
+					<span
+						><span class="planner-legend-icon planner-legend-icon--pickup"><MapPin size={16} /></span> Muat</span
+					>
+					<span
+						><span class="planner-legend-icon planner-legend-icon--dropoff"><MapPin size={16} /></span> Bongkar</span
+					>
+				</div>
 			</div>
 		</div>
-	</div>
 	</div>
 
 	<div class="card planner-orders-panel">
 		<div class="planner-orders-head">
 			<div class="method-tabs">
-				<button class="method-tab" class:active={activeTab === 'orders'} onclick={() => (activeTab = 'orders')}>Open Orders ({openOrders.length})</button>
-				<button class="method-tab" class:active={activeTab === 'fleet'} onclick={() => (activeTab = 'fleet')}>Fleet Catalog ({fleetCatalogTrucks.length})</button>
-				<button class="method-tab" class:active={activeTab === 'vendor'} onclick={() => (activeTab = 'vendor')}>Transporter Catalog ({vendors.length})</button>
+				<button
+					class="method-tab"
+					class:active={activeTab === 'orders'}
+					onclick={() => (activeTab = 'orders')}>Open Orders ({openOrders.length})</button
+				>
+				<button class="method-tab" class:active={activeTab === 'fleet'} onclick={() => (activeTab = 'fleet')}
+					>Fleet Catalog ({fleetCatalogTrucks.length})</button
+				>
+				<button
+					class="method-tab"
+					class:active={activeTab === 'vendor'}
+					onclick={() => (activeTab = 'vendor')}>Transporter Catalog ({vendors.length})</button
+				>
 			</div>
 		</div>
 		<div class="planner-orders-scroll">
@@ -1617,31 +2141,62 @@
 									</label>
 								</th>
 							{/if}
-							<th>Type Pengiriman</th><th>ID Order</th><th>Klien</th><th>Rute</th><th>Status</th><th>Kontrol</th>
+							<th>Type Pengiriman</th><th>ID Order</th><th>Klien</th><th>Rute</th><th>Status</th><th
+								>Kontrol</th
+							>
 						</tr>
 					</thead>
 					<tbody>
 						{#if loading}
 							<tr><td colspan={orderColumnCount}><div class="empty">Memuat…</div></td></tr>
 						{:else if !openOrders.length}
-							<tr><td colspan={orderColumnCount}><div class="empty"><div class="eic">📦</div>Tidak ada order terbuka.</div></td></tr>
+							<tr
+								><td colspan={orderColumnCount}
+									><div class="empty">
+										<div class="eic">📦</div>
+										Tidak ada order terbuka.
+									</div></td
+								></tr
+							>
 						{/if}
 						{#each pagedOpenOrders as o (o.key)}
-							<tr class="planner-row" class:planner-row-selected={selectedOrderKey === o.key || ltlSelectedKeys.includes(o.key)} onclick={() => selectOrder(o)}>
+							<tr
+								class="planner-row"
+								class:planner-row-selected={selectedOrderKey === o.key || ltlSelectedKeys.includes(o.key)}
+								onclick={() => selectOrder(o)}
+							>
 								{#if LTL_ENABLED}
 									<td class="planner-ltl-col">
-										<input type="checkbox" class="planner-ltl-check" disabled={!ltlSelectMode} checked={ltlSelectedKeys.includes(o.key)} onclick={(e) => toggleLtlOrder(o, e)} />
+										<input
+											type="checkbox"
+											class="planner-ltl-check"
+											disabled={!ltlSelectMode}
+											checked={ltlSelectedKeys.includes(o.key)}
+											onclick={(e) => toggleLtlOrder(o, e)}
+										/>
 									</td>
 								{/if}
-								<td><span class="badge" class:badge-active={o.shipmentType === 'Multi Shipment'} class:badge-planner={o.shipmentType !== 'Multi Shipment'}>{o.shipmentType}</span></td>
+								<td
+									><span
+										class="badge"
+										class:badge-active={o.shipmentType === 'Multi Shipment'}
+										class:badge-planner={o.shipmentType !== 'Multi Shipment'}>{o.shipmentType}</span
+									></td
+								>
 								<td><b>{o.orderId}</b></td>
 								<td>{o.shipperName}</td>
 								<td>{o.rute || '-'}</td>
 								<td><span class="badge {o.statusBadgeClass}">{o.statusLabel}</span></td>
 								<td>
 									<div class="action-cell">
-										<button class="mini-icon-btn" title="Lihat detail" onclick={(e) => viewOrder(o, e)}><Search size={14} /></button>
-										<button class="mini-icon-btn" title="Salin kode order" onclick={(e) => copyOrderCode(o, e)}><Copy size={14} /></button>
+										<button class="mini-icon-btn" title="Lihat detail" onclick={(e) => viewOrder(o, e)}
+											><Search size={14} /></button
+										>
+										<button
+											class="mini-icon-btn"
+											title="Salin kode order"
+											onclick={(e) => copyOrderCode(o, e)}><Copy size={14} /></button
+										>
 									</div>
 								</td>
 							</tr>
@@ -1652,18 +2207,32 @@
 				<table class="planner-table">
 					<thead>
 						<tr>
-							<th>No Polisi</th><th>Tipe Truck</th><th>Driver</th><th>Lokasi</th><th>Last Update GPS</th><th>Ngosong</th><th>Status</th>
+							<th>No Polisi</th><th>Tipe Truck</th><th>Driver</th><th>Lokasi</th><th>Last Update GPS</th><th
+								>Ngosong</th
+							><th>Status</th>
 							{#if findTransporterOpen}<th>Jarak</th>{/if}
 							<th>Kontrol</th>
 						</tr>
 					</thead>
 					<tbody>
 						{#if !fleetCatalogTrucks.length}
-							<tr><td colspan={findTransporterOpen ? 9 : 8}><div class="empty"><div class="eic">🚚</div>Tidak ada truck pada status ini.</div></td></tr>
+							<tr
+								><td colspan={findTransporterOpen ? 9 : 8}
+									><div class="empty">
+										<div class="eic">🚚</div>
+										Tidak ada truck pada status ini.
+									</div></td
+								></tr
+							>
 						{/if}
 						{#each pagedFleetCatalogTrucks as t (t.id)}
 							{@const st = truckStatusOf(t)}
-							<tr class="planner-row" class:planner-row-selected={selectedTruckId === t.id} class:planner-row-disabled={st !== 'available'} onclick={() => selectTruck(t)}>
+							<tr
+								class="planner-row"
+								class:planner-row-selected={selectedTruckId === t.id}
+								class:planner-row-disabled={st !== 'available'}
+								onclick={() => selectTruck(t)}
+							>
 								<td><b>{t.licensePlate}</b></td>
 								<td>{typeLabel(t)}</td>
 								<td>{t.driver?.fullName ?? '-'}</td>
@@ -1672,15 +2241,27 @@
 								<td>{formatNgosong(t)}</td>
 								<td>
 									<span class="planner-truck-status-badge">
-										<span class="planner-truck-legend-dot" style="background:{TRUCK_STATUS_META[st].color}"></span>
+										<span class="planner-truck-legend-dot" style="background:{TRUCK_STATUS_META[st].color}"
+										></span>
 										{TRUCK_STATUS_META[st].label}
 									</span>
 								</td>
-								{#if findTransporterOpen}<td>{truckDistanceKm(t) != null ? `${truckDistanceKm(t)} km` : '-'}</td>{/if}
+								{#if findTransporterOpen}<td
+										>{truckDistanceKm(t) != null ? `${truckDistanceKm(t)} km` : '-'}</td
+									>{/if}
 								<td>
 									<div class="action-cell" style="align-items:center;">
-										<button class="mini-icon-btn" title="Lihat detail truck" onclick={(e) => viewTruckDetail(t, e)}><TruckIcon size={14} /></button>
-										<button type="button" class="planner-ft-assign-btn planner-ft-assign-btn-sm" disabled={st !== 'available'} onclick={(e) => confirmAssign(t, e)}>Assign</button>
+										<button
+											class="mini-icon-btn"
+											title="Lihat detail truck"
+											onclick={(e) => viewTruckDetail(t, e)}><TruckIcon size={14} /></button
+										>
+										<button
+											type="button"
+											class="planner-ft-assign-btn planner-ft-assign-btn-sm"
+											disabled={st !== 'available'}
+											onclick={(e) => confirmAssign(t, e)}>Assign</button
+										>
 									</div>
 								</td>
 							</tr>
@@ -1694,17 +2275,36 @@
 					</thead>
 					<tbody>
 						{#if !vendors.length}
-							<tr><td colspan="5"><div class="empty"><div class="eic">🤝</div>Belum ada vendor transporter terdaftar. Hubungi Customer Support Karlo untuk menambahkan.</div></td></tr>
+							<tr
+								><td colspan="5"
+									><div class="empty">
+										<div class="eic">🤝</div>
+										Belum ada vendor transporter terdaftar. Hubungi Customer Support Karlo untuk menambahkan.
+									</div></td
+								></tr
+							>
 						{/if}
 						{#each pagedVendorCatalog as v (v.id)}
 							<tr class="planner-row" class:planner-row-disabled={v.status && v.status !== 'active'}>
 								<td><b>{v.name ?? v.companyName ?? '-'}</b></td>
 								<td>{v.profile?.picName ?? v.picName ?? '-'}</td>
 								<td>{v.profile?.industrySector ?? v.industrySector ?? '-'}</td>
-								<td><span class="badge" class:badge-active={!v.status || v.status === 'active'} class:badge-fail={v.status && v.status !== 'active'}>{!v.status || v.status === 'active' ? 'Aktif' : 'Nonaktif'}</span></td>
+								<td
+									><span
+										class="badge"
+										class:badge-active={!v.status || v.status === 'active'}
+										class:badge-fail={v.status && v.status !== 'active'}
+										>{!v.status || v.status === 'active' ? 'Aktif' : 'Nonaktif'}</span
+									></td
+								>
 								<td>
 									<div class="action-cell" style="align-items:center;">
-										<button type="button" class="planner-ft-assign-btn planner-ft-assign-btn-sm" disabled title="Penugasan ke vendor transporter dilakukan dari halaman order">Assign</button>
+										<button
+											type="button"
+											class="planner-ft-assign-btn planner-ft-assign-btn-sm"
+											disabled
+											title="Penugasan ke vendor transporter dilakukan dari halaman order">Assign</button
+										>
 									</div>
 								</td>
 							</tr>
@@ -1714,11 +2314,17 @@
 			{/if}
 		</div>
 		{#if activeTab === 'orders' && openOrders.length}
-			<div class="planner-orders-foot"><Pagination totalItems={openOrders.length} pageSize={ORDERS_PAGE_SIZE} bind:page={ordersPage} /></div>
+			<div class="planner-orders-foot">
+				<Pagination totalItems={openOrders.length} pageSize={ORDERS_PAGE_SIZE} bind:page={ordersPage} />
+			</div>
 		{:else if activeTab === 'fleet' && fleetCatalogTrucks.length}
-			<div class="planner-orders-foot"><Pagination totalItems={fleetCatalogTrucks.length} pageSize={FLEET_PAGE_SIZE} bind:page={fleetPage} /></div>
+			<div class="planner-orders-foot">
+				<Pagination totalItems={fleetCatalogTrucks.length} pageSize={FLEET_PAGE_SIZE} bind:page={fleetPage} />
+			</div>
 		{:else if activeTab === 'vendor' && vendors.length}
-			<div class="planner-orders-foot"><Pagination totalItems={vendors.length} pageSize={VENDOR_PAGE_SIZE} bind:page={vendorPage} /></div>
+			<div class="planner-orders-foot">
+				<Pagination totalItems={vendors.length} pageSize={VENDOR_PAGE_SIZE} bind:page={vendorPage} />
+			</div>
 		{/if}
 	</div>
 </div>
@@ -1728,7 +2334,12 @@
 	title={confirming && confirming.orders.length > 1 ? 'Tugaskan Pengiriman Gabungan?' : 'Tugaskan Truck?'}
 	message={confirming
 		? confirming.orders.length > 1
-			? `${confirming.orders.length} order (${confirming.orders.map((o) => o.orderId).join(', ')}) akan ditugaskan ke truck <b>${confirming.truck.licensePlate}</b> dengan driver <b>${confirming.truck.driver?.fullName ?? '-'}</b> sebagai satu pengiriman LTL.${(() => { const cap = capacityKgForTruckType(typeLabel(confirming.truck)); return cap && ltlCombinedTotals.kg > cap ? `<br><br><b style="color:var(--error)">⚠ Overload:</b> muatan gabungan ${formatThousands(String(Math.round(ltlCombinedTotals.kg)))} Kg melebihi kapasitas ${typeLabel(confirming.truck)} (${formatThousands(String(cap))} Kg).` : ''; })()}`
+			? `${confirming.orders.length} order (${confirming.orders.map((o) => o.orderId).join(', ')}) akan ditugaskan ke truck <b>${confirming.truck.licensePlate}</b> dengan driver <b>${confirming.truck.driver?.fullName ?? '-'}</b> sebagai satu pengiriman LTL.${(() => {
+					const cap = capacityKgForTruckType(typeLabel(confirming.truck));
+					return cap && ltlCombinedTotals.kg > cap
+						? `<br><br><b style="color:var(--error)">⚠ Overload:</b> muatan gabungan ${formatThousands(String(Math.round(ltlCombinedTotals.kg)))} Kg melebihi kapasitas ${typeLabel(confirming.truck)} (${formatThousands(String(cap))} Kg).`
+						: '';
+				})()}`
 			: `Order <b>${confirming.orders[0].orderId}</b> akan ditugaskan ke truck <b>${confirming.truck.licensePlate}</b> dengan driver <b>${confirming.truck.driver?.fullName ?? '-'}</b>. Driver akan menerima notifikasi penugasan.`
 		: ''}
 	confirmLabel="Ya, Tugaskan"
