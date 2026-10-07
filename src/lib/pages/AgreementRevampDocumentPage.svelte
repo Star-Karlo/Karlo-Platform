@@ -15,7 +15,7 @@
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { formatIDR } from '$lib/revamp/currency.js';
 	import { pricingTypeLabel } from '$lib/revamp/pricingType.js';
-	import { agreementTypeLabel } from '$lib/revamp/agreementType.js';
+	import { agreementTypeLabel, billingSplitLabel } from '$lib/revamp/agreementType.js';
 	import { truckTypeLabel } from '$lib/revamp/truckTypes.js';
 	import { formatTimestampLabel } from '$lib/revamp/date.js';
 	import { toAgreementRow, type AgreementRow, type AgreementRouteEntry } from '$lib/revamp/agreementView';
@@ -312,6 +312,18 @@
 		<div class="agreement-doc-section">
 			<h2>Rute Pengiriman</h2>
 			{#if isMultiCustomerDoc}
+				<!-- How the one agreed price is divided between these parties.
+				     A contract covering several customers is also a contract
+				     about who pays what, and the document stated the price
+				     without ever saying how it splits. -->
+				<table class="agreement-doc-table" style="margin-bottom:16px;">
+					<tbody>
+						<tr>
+							<td>Pembagian Tagihan</td>
+							<td>{billingSplitLabel(terms.billingSplit)}</td>
+						</tr>
+					</tbody>
+				</table>
 				<!-- One block per customer: a lane belongs to the client whose
 				     goods it carries, and a single pair of columns would read
 				     as though they all shared it. -->

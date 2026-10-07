@@ -11,7 +11,11 @@
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { formatIDR } from '$lib/revamp/currency.js';
 	import { pricingTypeLabel } from '$lib/revamp/pricingType.js';
-	import { AGREEMENT_TYPE_OPTIONS, agreementTypeLabel } from '$lib/revamp/agreementType.js';
+	import {
+		AGREEMENT_TYPE_OPTIONS,
+		MULTI_CUSTOMER_OPTION,
+		agreementTypeLabel
+	} from '$lib/revamp/agreementType.js';
 	import Pagination from './Pagination.svelte';
 
 	const PAGE_SIZE = 5;
@@ -59,17 +63,36 @@
 		return a?.detail ?? {};
 	}
 
+	/** Does this contract cover the customer the picker is scoped to?
+	 *
+	 *  A multi-customer contract covers several, and matching only the first
+	 *  hid it from the planner the moment they started from any of the
+	 *  others — their customer's own contract, missing from the list offered
+	 *  for that customer. */
+	function coversCustomer(a: any): boolean {
+		if (customerFilter && detailOf(a).customerNama === customerFilter) return true;
+		if (customerId && a.shipperCompanyId === customerId) return true;
+		const extras = Array.isArray(detailOf(a).multiCustomers) ? detailOf(a).multiCustomers : [];
+		return extras.some(
+			(e: any) =>
+				(customerId && e?.customerId === customerId) || (customerFilter && e?.customerName === customerFilter)
+		);
+	}
+
 	let scoped = $derived.by(() => {
 		if (!customerFilter && !customerId) return items;
-		return items.filter(
-			(a) =>
-				(customerFilter && detailOf(a).customerNama === customerFilter) ||
-				(customerId && a.shipperCompanyId === customerId)
-		);
+		return items.filter(coversCustomer);
 	});
 	let filterTabs = $derived([
 		{ value: 'all', label: 'Semua', count: scoped.length },
-		...AGREEMENT_TYPE_OPTIONS.map((o: { value: string; label: string }) => ({
+		// Multi Customer only once such a contract is on offer, so a company
+		// that does not write them is not shown a tab that can never fill.
+		...[
+			...AGREEMENT_TYPE_OPTIONS,
+			...(scoped.some((a) => detailOf(a).agreementType === MULTI_CUSTOMER_OPTION.value)
+				? [MULTI_CUSTOMER_OPTION]
+				: [])
+		].map((o: { value: string; label: string }) => ({
 			value: o.value,
 			label: o.label,
 			count: scoped.filter((a) => detailOf(a).agreementType === o.value).length

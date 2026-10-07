@@ -1347,10 +1347,6 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 
    Centred and gapped to match .search-field-row, so the three read as one
    row. min-width:0 so a long warehouse name cannot push the buttons off. */
-/* The customer a shipment card belongs to, beside its number: the number
-   orders the cards, the name says which contract party they are for. */
-.shipment-block-subtitle{margin-left:8px; font-weight:500; color:var(--on-surface-variant);}
-
 .warehouse-pick-row{display:flex; align-items:center; gap:10px;}
 .warehouse-pick-row > .warehouse-search-field{flex:1; min-width:0;}
 

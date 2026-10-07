@@ -412,9 +412,7 @@
 			     invites the reader to look for the second. -->
 			<span class="shipment-block-title">
 				{#if wizard.shipments.length > 1}
-					Customer {i + 1}{#if sp.customerNama}
-						<span class="shipment-block-subtitle">{sp.customerNama}</span>
-					{/if}
+					Customer {i + 1}
 				{:else}
 					Data Shipment
 				{/if}

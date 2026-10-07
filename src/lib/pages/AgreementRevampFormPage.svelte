@@ -21,7 +21,7 @@
 	import { PAYMENT_TYPE_OPTIONS, INCOME_TAX_OPTIONS } from '$lib/revamp/paymentType.js';
 	import { INDONESIAN_CITY_OPTIONS } from '$lib/revamp/indonesianCities.js';
 	import { kecamatanOptionsFor } from '$lib/revamp/kecamatanData.js';
-	import { agreementTypeOptions } from '$lib/revamp/agreementType.js';
+	import { agreementTypeOptions, BILLING_SPLIT_OPTIONS } from '$lib/revamp/agreementType.js';
 	import { fieldConfigActions, isEnabled, type FieldConfig } from '$lib/stores/fieldconfig';
 	import { computeUangSangu, seedTripAllowance } from '$lib/revamp/uangSangu.js';
 	import { formatIDR } from '$lib/revamp/currency.js';
@@ -227,10 +227,6 @@
 	/** How one agreed price is divided between those customers. By tonnage is
 	 *  the default because it is the one that survives an uneven load. */
 	let billingSplit = $state('proportional');
-	const BILLING_SPLIT_OPTIONS = [
-		{ value: 'proportional', label: 'Proporsional (berdasarkan tonase)' },
-		{ value: 'equal', label: 'Rata (dibagi sama rata)' }
-	];
 	let isMultiCustomer = $derived(form.agreementType === 'multi-customer');
 	function addExtraCustomer() {
 		extraCustomers.push(newExtraCustomer());
