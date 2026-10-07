@@ -1820,10 +1820,19 @@
 		<!-- The company's own geofencing switch, as the old console had it:
 		     on, an arrival reported outside the warehouse's fence is
 		     refused; off, it is recorded with the distance and let through. -->
-		<span class="hint" style="margin-left:auto;">
-			{#if liveAt}GPS dari FMS · {liveAt.toLocaleTimeString('id-ID')}{:else if liveError}{liveError}{/if}
-		</span>
-		<span class="ct-topbar-clock"><Clock size={13} /> {clockLabel}</span>
+		<!-- One time, not two. The wall clock said what the operating system
+		     already says; what matters here is how fresh the positions are, so
+		     that is what the clock now shows. -->
+		{#if liveError}
+			<span class="hint ct2-live-error" style="margin-left:auto;">{liveError}</span>
+		{:else}
+			<span
+				class="ct-topbar-clock"
+				style="margin-left:auto;"
+				title="Waktu posisi GPS terakhir diterima dari FMS"
+				><Clock size={13} /> {liveAt ? liveAt.toLocaleTimeString('id-ID') : clockLabel}</span
+			>
+		{/if}
 	</div>
 
 	<div class="ct2-main">

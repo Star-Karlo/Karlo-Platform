@@ -2480,7 +2480,11 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
    pushed the table below the fold, so reading the orders — the thing an
    operator watches — meant scrolling the map out of sight. The floor keeps a
    very short window usable by letting the page scroll as it used to. */
-.ct2{display:flex; flex-direction:column; gap:12px; height:calc(100vh - 140px); min-height:560px;}
+.ct2{display:flex; flex-direction:column; gap:12px; height:calc(100vh - 108px); min-height:560px;}
+/* The page's 64px bottom padding is breathing room for pages that scroll.
+   Control Tower does not — it fills the window — so that padding read as a
+   band of empty canvas under the order table. Scoped to this page only. */
+.content:has(.ct2){padding-bottom:24px;}
 .ct2-toolbar{display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:#fff; border:1px solid var(--outline-variant); border-radius:12px; padding:8px 12px;}
 .ct2-client{min-width:200px; height:36px; border:2px solid var(--primary); border-radius:10px; padding:0 12px; font-weight:600; font-size:13px; background:#fff;}
 .ct2-client--fixed{display:inline-flex; align-items:center;}
@@ -2488,6 +2492,9 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .ct2-search input{border:none; outline:none; flex:1; font-size:13px; background:transparent;}
 .ct2-legend{display:flex; gap:4px; flex-wrap:wrap;}
 .ct2-legend-item{display:inline-flex; align-items:center; gap:6px; border:1px solid transparent; background:transparent; border-radius:999px; padding:4px 10px; font-size:12px; color:var(--on-surface-variant); cursor:pointer;}
+/* The client selector sat taller and heavier than everything beside it, so
+   the toolbar read as a title followed by controls rather than one row. */
+.ct2-client{height:32px; font-size:12px; border-radius:999px; padding:0 12px;}
 .ct2-legend-item.active{border-color:var(--primary); color:var(--primary); background:var(--primary-container, #e8f0fe);}
 .ct2-legend-item b{font-weight:700;}
 .ct2-dot{display:inline-block; width:9px; height:9px; border-radius:50%; flex-shrink:0;}
@@ -2539,7 +2546,7 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 /* The order table keeps a fixed share of the window and scrolls its own rows,
    so the map above it never shrinks to nothing on a short screen. */
 .ct2-orders{background:#fff; border:1px solid var(--outline-variant); border-radius:12px; padding:0 12px 8px;
-  flex:0 0 auto; max-height:40vh; min-height:200px; overflow:auto;}
+  flex:0 0 auto; max-height:46vh; min-height:240px; overflow:auto;}
 .ct2-empty{padding:28px; text-align:center; color:var(--on-surface-variant); font-size:13px;}
 .ct2-row-active td{background:var(--primary-container, #e8f0fe);}
 @media (max-width: 1100px){ .ct2-main{grid-template-columns:1fr;} .ct2-panel{width:auto;} .ct2-list{max-height:260px;} }

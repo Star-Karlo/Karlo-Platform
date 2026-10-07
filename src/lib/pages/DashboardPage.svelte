@@ -28,8 +28,10 @@
 		Check,
 		GripVertical,
 		X,
-		Plus
+		Plus,
+		LayoutGrid
 	} from 'lucide-svelte';
+	import { FINANCE_ENABLED } from '$lib/revamp/features';
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { toast } from '$lib/stores/ui';
@@ -178,7 +180,15 @@
 	});
 
 	// ---------- Persona templates ----------
+	/* A general view, and the default one.
+	   The per-persona templates are guesses until the business decides what
+	   each role needs to see, and a dashboard that opens on somebody else's
+	   guess is worse than one that opens on everything: an operator reading
+	   Ringkasan Keuangan at zero cannot tell a quiet month from a template
+	   that was never meant for them. General stays selected until those
+	   conversations have happened; the personas remain, unchanged. */
 	const PERSONAS = [
+		{ key: 'general', label: 'Umum', icon: LayoutGrid },
 		{ key: 'management', label: 'Management/Director', icon: Lightbulb },
 		{ key: 'sales', label: 'Sales', icon: Users },
 		{ key: 'operation', label: 'Operation/Planner', icon: MonitorDot },
@@ -186,6 +196,19 @@
 	] as const;
 	type PersonaKey = (typeof PERSONAS)[number]['key'];
 	const PERSONA_TEMPLATE_DEFAULT: Record<PersonaKey, string[]> = {
+		// Everything that stands on its own without the Finance module, which
+		// is currently hidden — see $lib/revamp/features.
+		general: [
+			'orderStatusOverview',
+			'orderVolume',
+			'orderValue',
+			'orderFunnel',
+			'fleetUtilization',
+			'driverStatus',
+			'podBacklog',
+			'agreementOverview',
+			'agreementExpiring'
+		],
 		management: ['orderStatusOverview', 'customerTable', 'vendorTable'],
 		sales: [
 			'orderStatusOverview',
@@ -206,7 +229,7 @@
 		finance: ['orderStatusOverview', 'financeSummary', 'cashFlow', 'receivablesPayables', 'invoiceStatus']
 	};
 	const PERSONA_STORAGE_KEY = 'dashboard-active-persona';
-	let activePersona = $state<PersonaKey>('management');
+	let activePersona = $state<PersonaKey>('general');
 	let activePersonaMeta = $derived(PERSONAS.find((p) => p.key === activePersona) ?? PERSONAS[0]);
 	let personaMenuOpen = $state(false);
 
@@ -315,7 +338,10 @@
 	function loadPersonaState() {
 		try {
 			const saved = localStorage.getItem(PERSONA_STORAGE_KEY);
-			if (saved && PERSONAS.some((p) => p.key === saved)) activePersona = saved as PersonaKey;
+			// A browser still on the Finance persona would open on four cards
+			// of zeros from a module that is no longer in the sidebar.
+			const usable = saved === 'finance' && !FINANCE_ENABLED ? 'general' : saved;
+			if (usable && PERSONAS.some((p) => p.key === usable)) activePersona = usable as PersonaKey;
 		} catch {
 			/* ignore — keep the default persona */
 		}
