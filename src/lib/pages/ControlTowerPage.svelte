@@ -2218,7 +2218,7 @@
 													<FileText size={14} />
 													<div>
 														<small>{d.label}</small>
-														<b class="ct-doc-standing ct-doc-standing--{standing.state}">{standing.label}</b>
+														<b class="ct-doc-standing--{standing.state}">{standing.label}</b>
 													</div>
 												</div>
 											{/each}

@@ -1056,7 +1056,7 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .route-shipment-head{display:flex; align-items:center; justify-content:space-between; gap:12px; margin:18px 0 8px;}
 .route-shipment-head:first-of-type{margin-top:0;}
 .route-shipment-title{font-size:14px; font-weight:700; color:var(--on-surface);}
-.route-shipment-remove{border:0; background:none; padding:0; font:inherit; font-size:13px; font-weight:600; color:var(--error, #b3261e); cursor:pointer;}
+.route-shipment-remove{border:0; background:none; padding:0; font:inherit; font-size:13px; font-weight:600; color:var(--error); cursor:pointer;}
 .route-shipment-remove:hover{text-decoration:underline;}
 
 /* The value can be long — a status now names its stop, "Pengecekan POD Muat
@@ -1351,8 +1351,7 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
    planner is looking, with what to do about it, rather than leaving the form
    to look merely unfinished. */
 .contract-warning{margin:0 0 14px; padding:10px 12px; border-radius:8px; font-size:12px; line-height:1.5;
-  background:var(--warning-container, #fff4e5); color:var(--on-warning-container, #7a4b00);
-  border:1px solid var(--warning, #e8a33d);}
+  background:var(--warning-container); color:var(--warning); border:1px solid var(--warning);}
 
 /* The truck's own state, one fact per row: icon, what it is, the value. Read
    down the column rather than across, because the values have no common unit
@@ -1364,7 +1363,7 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .ct-fleet-status-row b{font-size:13px; color:var(--on-surface); overflow-wrap:anywhere;}
 /* A lapsed STNK or KIR grounds the truck, so it is not left reading like any
    other line. Unknown is said as unknown rather than shown as valid. */
-.ct-doc-standing--expired{color:var(--error, #b3261e);}
+.ct-doc-standing--expired{color:var(--error);}
 .ct-doc-standing--unknown{color:var(--on-surface-variant); font-weight:500;}
 
 .warehouse-pick-row{display:flex; align-items:center; gap:10px;}
@@ -1399,7 +1398,7 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .margin-profit-card{display:flex; flex-direction:column; align-items:center; gap:4px; text-align:center;}
 .margin-profit-label{font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--on-surface-variant);}
 .margin-profit-value{font-size:30px; font-weight:800; font-variant-numeric:tabular-nums; color:var(--on-surface);}
-.margin-profit-value.negative{color:var(--error, #b3261e);}
+.margin-profit-value.negative{color:var(--error);}
 
 .agreement-doc-table{width:100%; border-collapse:collapse;}
 .agreement-doc-table td{padding:6px 0; vertical-align:top;}
@@ -2466,7 +2465,7 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .maplibregl-ctrl-attrib{font-size:10px;}
 
 /* Control Tower — live telemetry rows and the whole-fleet toggle */
-.ct-telemetry-row{display:flex; flex-direction:column; gap:2px; padding:8px 10px; background:var(--surface-container-low, #f4f6fa); border-radius:8px; font-size:12px;}
+.ct-telemetry-row{display:flex; flex-direction:column; gap:2px; padding:8px 10px; background:var(--surface-alt); border-radius:8px; font-size:12px;}
 .ct-telemetry-row span{color:var(--on-surface-variant); font-size:11px;}
 .ct-telemetry-row b{font-weight:600; word-break:break-word;}
 .ct-telemetry-wide{grid-column:1 / -1;}
@@ -2507,7 +2506,12 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .recon-extra-row input[type='number']{width:150px; flex:none; text-align:right; font-variant-numeric:tabular-nums;}
 .recon-extra-remove{display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; flex:none;
   border:1px solid var(--outline-variant); border-radius:7px; background:transparent; color:var(--on-surface-variant); cursor:pointer;}
-.recon-extra-remove:hover{color:var(--error, #b3261e); border-color:var(--error, #b3261e);}
+.recon-extra-remove:hover{color:var(--error); border-color:var(--error);}
+
+/* The fleet feed has failed. Said in the error colour rather than the muted
+   grey of .hint, which reads as an aside — this is the page telling you the
+   positions on it are not arriving. */
+.ct2-live-error{color:var(--error); font-weight:600;}
 
 .ct2-legend-item--incident{margin-left:6px; padding-left:14px; border-left:1px solid var(--outline-variant); border-radius:0 999px 999px 0;}
 .ct2-legend-item--incident:not(.active) b{color:var(--on-surface);}
@@ -2517,7 +2521,7 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .ct2-main{display:grid; grid-template-columns:300px minmax(0,1fr) auto; gap:12px; flex:1 1 auto; min-height:0;}
 .ct2-list{background:#fff; border:1px solid var(--outline-variant); border-radius:12px; overflow:auto; min-height:0; height:100%;}
 .ct2-vehicle{display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:transparent; border:none; border-bottom:1px solid var(--outline-variant); padding:10px 12px; cursor:pointer;}
-.ct2-vehicle:hover{background:var(--surface-container-low, #f4f6fa);}
+.ct2-vehicle:hover{background:var(--surface-alt);}
 .ct2-vehicle.active{background:var(--primary-container, #e8f0fe);}
 .ct2-vehicle-main{display:flex; flex-direction:column; min-width:0; flex:1;}
 .ct2-vehicle-main b{font-size:13px;}
@@ -2745,7 +2749,7 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .map-picker-results{list-style:none; margin:0 0 8px; padding:0; border:1px solid var(--outline-variant); border-radius:10px; overflow:hidden; background:var(--surface);}
 .map-picker-results li + li{border-top:1px solid var(--outline-variant);}
 .map-picker-results button{display:block; width:100%; text-align:left; background:none; border:none; padding:9px 12px; font-size:12.5px; color:var(--on-surface); cursor:pointer;}
-.map-picker-results button:hover{background:var(--surface-container);}
+.map-picker-results button:hover{background:var(--surface-alt);}
 
 /* ---------- Master data two-pane layout (MyAgreement; the shape MyCargo and MyWarehouse use) ---------- */
 .md-layout{display:grid; grid-template-columns:260px minmax(0,1fr); gap:16px; align-items:start;}
@@ -2754,7 +2758,7 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .md-side-head{padding:12px 16px; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--on-surface-variant); border-bottom:1px solid var(--outline-variant);}
 .md-side ul{list-style:none; margin:0; padding:6px; display:grid; gap:2px;}
 .md-side-row{width:100%; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 10px; border:0; background:transparent; border-radius:8px; font-size:13px; color:var(--on-surface); cursor:pointer; text-align:left;}
-.md-side-row:hover{background:var(--surface-container);}
+.md-side-row:hover{background:var(--surface-alt);}
 .md-side-row.active{background:var(--primary-container); color:var(--on-primary-container); font-weight:600;}
 .md-side-count{font-size:11px; color:var(--on-surface-variant); font-variant-numeric:tabular-nums;}
 .md-side-note{padding:12px 16px; font-size:12px; color:var(--on-surface-variant); margin:0;}
@@ -3313,7 +3317,7 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 }
 .ct-topbar-search{
   flex:0 1 280px; min-width:160px; display:flex; align-items:center; gap:8px;
-  padding:7px 12px; border:1px solid var(--outline-variant); border-radius:8px; background:var(--surface-container-low);
+  padding:7px 12px; border:1px solid var(--outline-variant); border-radius:8px; background:var(--surface-alt);
 }
 .ct-topbar-search svg{width:14px; height:14px; flex-shrink:0; color:var(--on-surface-variant);}
 .ct-topbar-search input{flex:1 1 auto; min-width:0; border:none; background:none; font-size:12px; color:var(--on-surface);}
@@ -3321,7 +3325,7 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .ct-topbar-legend{flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
 .ct-topbar-legend-item{
   display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border-radius:999px;
-  border:1px solid var(--outline-variant); background:var(--surface-container-low); cursor:pointer; font-size:11px; color:var(--on-surface-variant);
+  border:1px solid var(--outline-variant); background:var(--surface-alt); cursor:pointer; font-size:11px; color:var(--on-surface-variant);
 }
 .ct-topbar-legend-item--active{border-color:var(--primary); background:var(--primary-container); color:var(--on-primary-container);}
 .ct-topbar-legend-dot{width:8px; height:8px; border-radius:50%; flex-shrink:0;}
