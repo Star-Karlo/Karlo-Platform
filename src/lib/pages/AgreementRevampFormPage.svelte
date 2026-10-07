@@ -512,7 +512,13 @@
 	}
 
 	/** True when the two city fields are not on the form at all. */
-	let lanesWithoutCityFields = $derived(lanesByWarehouse || (multiCustomerEnabled && isMultiCustomer));
+	/* True when this form's lanes are WAREHOUSES rather than cities.
+	   Two ways that happens: the company prices every contract by warehouse
+	   (lanes.loadingPoints), or this is a multi-customer contract, where each
+	   customer names its own two warehouses whatever the company's usual
+	   style. Keeping them apart matters: a company can switch warehouse lanes
+	   off for its ordinary contracts and still write multi-customer ones. */
+	let lanesAreWarehouses = $derived(lanesByWarehouse || (multiCustomerEnabled && isMultiCustomer));
 
 	/** Every warehouse lane the contract covers: the contract's own, plus
 	 *  each further customer's when it covers several. */
@@ -542,12 +548,12 @@
 	}
 
 	let kotaAsalSummary = $derived(
-		lanesWithoutCityFields
+		lanesAreWarehouses
 			? warehouseCitySummary('from')
 			: form.initialRoutes.map(routeDisplayValue).filter(Boolean).join(' + ')
 	);
 	let kotaTujuanSummary = $derived(
-		lanesWithoutCityFields
+		lanesAreWarehouses
 			? warehouseCitySummary('to')
 			: form.destinationRoutes.map(routeDisplayValue).filter(Boolean).join(' + ')
 	);
@@ -797,7 +803,7 @@
 			}
 			if (!billingSplit) return 'Pembagian Tagihan wajib dipilih';
 		}
-		if (lanesWithoutCityFields) {
+		if (lanesAreWarehouses) {
 			// The city lanes are not on the form here, so holding the contract
 			// to them would refuse it for a field nobody can see. On a
 			// multi-customer contract that is true whatever the company's lane
@@ -840,7 +846,13 @@
 				// Sent only by a company that prices lanes by warehouse. Absent
 				// otherwise, so nothing changes for a contract priced city to
 				// city — and the server stores what it is given.
-				...(lanesByWarehouse
+				// The warehouses this contract names. Sent whenever the lanes ARE
+				// warehouses — a company that prices by warehouse, or any
+				// multi-customer contract, where Customer 1's own lanes live in
+				// these two fields. Reading the company flag alone dropped them
+				// from every multi-customer contract written by a company that
+				// prices its ordinary ones city to city.
+				...(lanesAreWarehouses
 					? {
 							loadingPoints: loadingPoints.filter(Boolean),
 							unloadingPoints: unloadingPoints.filter(Boolean)
@@ -939,7 +951,7 @@
 			// agreement covers each origin against each destination at the
 			// one price it names.
 			const rates = [];
-			if (lanesWithoutCityFields) {
+			if (lanesAreWarehouses) {
 				// The two cities were never asked for, so each lane's pair is
 				// the pair of warehouses chosen for it — lane k's origin with
 				// lane k's destination, not every origin against every
@@ -983,7 +995,7 @@
 			}
 			if (rates.length === 0) {
 				toast(
-					lanesWithoutCityFields
+					lanesAreWarehouses
 						? 'Warehouse yang dipilih belum punya data kota — lengkapi dulu di Master Data > Warehouse'
 						: 'Pilih minimal satu rute asal dan satu rute tujuan'
 				);
@@ -1630,7 +1642,7 @@
      out. Computed by the same function an order uses, from the real road
      distance between the two warehouses named above, so the figure agreed
      here and the figure it replaces cannot drift apart. -->
-{#if allowanceEnabled && lanesByWarehouse}
+{#if allowanceEnabled && lanesAreWarehouses}
 	<div class="card card-pad" style="margin-top:16px;">
 		<div class="route-shipment-head">
 			<span class="route-shipment-title">Uang Sangu Driver</span>
@@ -1736,7 +1748,7 @@
      allowance because that is the figure it is subtracted from, and shown
      even when negative: a lane priced below what it costs to drive is the
      thing this number exists to reveal. -->
-{#if allowanceEnabled && lanesByWarehouse && laneKm}
+{#if allowanceEnabled && lanesAreWarehouses && laneKm}
 	<div class="card card-pad margin-profit-card" style="margin-top:16px;">
 		<span class="margin-profit-label">Margin Profit</span>
 		<span class="margin-profit-value" class:negative={marginProfit < 0}>{formatIDR(marginProfit)}</span>
