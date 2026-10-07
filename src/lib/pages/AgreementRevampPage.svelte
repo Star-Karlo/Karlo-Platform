@@ -15,7 +15,11 @@
 	import { ENDPOINTS } from '$lib/constants/endpoints';
 	import { formatIDR } from '$lib/revamp/currency.js';
 	import { pricingTypeLabel } from '$lib/revamp/pricingType.js';
-	import { AGREEMENT_TYPE_OPTIONS, agreementTypeLabel } from '$lib/revamp/agreementType.js';
+	import {
+		AGREEMENT_TYPE_OPTIONS,
+		MULTI_CUSTOMER_OPTION,
+		agreementTypeLabel
+	} from '$lib/revamp/agreementType.js';
 	import { toAgreementRow, isAgreementExpired, type AgreementRow } from '$lib/revamp/agreementView';
 
 	let { basePath = '/t' }: { basePath?: string } = $props();
@@ -53,12 +57,43 @@
 
 	const isExpired = isAgreementExpired;
 
+	/* ---------- Which customers an agreement belongs to ----------
+	   Usually one, and shipperCompanyId is it. A multi-customer contract
+	   covers several, and listing it under the first alone hid it from every
+	   other client it binds — their own agreement, missing from their own
+	   list.
+
+	   Extra customers written before the form recorded their id carry only a
+	   name, so that is matched too; a name is weaker than an id, but the
+	   alternative is leaving those contracts invisible. */
+	let customerIdByName = $derived.by(() => {
+		const m: Record<string, string> = {};
+		for (const c of customers) m[(c.name ?? '').trim().toLowerCase()] = c.id;
+		return m;
+	});
+
+	function coveredCustomerIds(a: AgreementRow): string[] {
+		const ids = [a.shipperCompanyId];
+		const extras = Array.isArray((a as any).multiCustomers) ? (a as any).multiCustomers : [];
+		for (const e of extras) {
+			const id =
+				e?.customerId ||
+				customerIdByName[
+					String(e?.customerName ?? '')
+						.trim()
+						.toLowerCase()
+				];
+			if (id) ids.push(id);
+		}
+		return [...new Set(ids.filter(Boolean))];
+	}
+
 	/** Live agreements per customer, for the counts down the left. */
 	let liveCounts = $derived.by(() => {
 		const c: Record<string, number> = {};
 		for (const a of agreements) {
 			if (a.isArchived || isExpired(a)) continue;
-			c[a.shipperCompanyId] = (c[a.shipperCompanyId] ?? 0) + 1;
+			for (const id of coveredCustomerIds(a)) c[id] = (c[id] ?? 0) + 1;
 		}
 		return c;
 	});
@@ -72,7 +107,7 @@
 	});
 	/** With a search, every customer is a candidate; without, the selected one. */
 	let customerRows = $derived(
-		agreements.filter((a) => (search.trim() ? matchesSearch(a) : a.shipperCompanyId === selected))
+		agreements.filter((a) => (search.trim() ? matchesSearch(a) : coveredCustomerIds(a).includes(selected)))
 	);
 	let liveAgreements = $derived(customerRows.filter((a) => !a.isArchived));
 	let activeAgreements = $derived(liveAgreements.filter((a) => !isExpired(a)));
@@ -87,7 +122,14 @@
 	let activeFilter = $state('all');
 	let filterTabs = $derived([
 		{ value: 'all', label: 'Semua', count: activeAgreements.length },
-		...AGREEMENT_TYPE_OPTIONS.map((o: { value: string; label: string }) => ({
+		// Multi Customer only once such a contract exists, so a company that
+		// does not write them is not offered a tab that can never fill.
+		...[
+			...AGREEMENT_TYPE_OPTIONS,
+			...(agreements.some((a) => a.agreementType === MULTI_CUSTOMER_OPTION.value)
+				? [MULTI_CUSTOMER_OPTION]
+				: [])
+		].map((o: { value: string; label: string }) => ({
 			value: o.value,
 			label: o.label,
 			count: activeAgreements.filter((a) => a.agreementType === o.value).length

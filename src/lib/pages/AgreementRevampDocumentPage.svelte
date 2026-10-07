@@ -52,7 +52,7 @@
 		} catch {
 			transporterName = '';
 		}
-		if (Array.isArray(terms?.loadingPoints) && terms.loadingPoints.length) {
+		if (parties.some((p) => p.loadingPoints.length || p.unloadingPoints.length)) {
 			try {
 				warehouses = (await api.get(ENDPOINTS.warehouses.list)).data?.data ?? [];
 			} catch {
@@ -123,6 +123,42 @@
 			to: to.map(name).filter(Boolean)
 		};
 	});
+
+	/* ---------- Every customer this contract binds ----------
+	   A contract covering several clients named only the first in its own
+	   document: the other parties were bound by a paper that did not mention
+	   them, and the lanes shown were the first customer's alone. Each party is
+	   listed with the cargo and the lanes agreed for them. */
+	let parties = $derived.by(() => {
+		const naming = (ids: unknown) => (Array.isArray(ids) ? (ids as string[]) : []);
+		const first = {
+			name: terms?.customerNama ?? '',
+			cargoType: terms?.cargoTypeSpecific ?? '',
+			cargoItem: terms?.namaBarang ?? '',
+			loadingPoints: naming(terms?.loadingPoints),
+			unloadingPoints: naming(terms?.unloadingPoints)
+		};
+		const extras = Array.isArray(terms?.multiCustomers) ? (terms.multiCustomers as any[]) : [];
+		return [
+			first,
+			...extras.map((c) => ({
+				name: c?.customerName ?? '',
+				cargoType: c?.cargoTypeId ?? '',
+				cargoItem: c?.cargoItemId ?? '',
+				loadingPoints: naming(c?.loadingPoints),
+				unloadingPoints: naming(c?.unloadingPoints)
+			}))
+		];
+	});
+	let isMultiCustomerDoc = $derived(parties.length > 1);
+
+	/** A warehouse named as the document should read it, or its id when the
+	 *  register no longer holds it. */
+	function warehouseName(id: string) {
+		const w = warehouses.find((x: any) => x.id === id);
+		if (!w) return id ? '—' : '';
+		return w.city ? `${w.name} — ${w.city}` : w.name;
+	}
 
 	/* ---------- What the contract agreed the driver is paid ----------
 	   A contract that fixes the allowance is agreeing a sum of money, which
@@ -235,8 +271,16 @@
 				<div class="agreement-doc-party-name">{transporterName}</div>
 			</div>
 			<div class="agreement-doc-party">
-				<div class="agreement-doc-party-label">Pihak Kedua (Customer)</div>
-				<div class="agreement-doc-party-name">{terms.customerNama}</div>
+				<div class="agreement-doc-party-label">
+					Pihak Kedua (Customer){#if isMultiCustomerDoc}
+						— {parties.length} customer{/if}
+				</div>
+				{#each parties as p, i (i)}
+					<div class="agreement-doc-party-name">
+						{#if isMultiCustomerDoc}{i + 1}.
+						{/if}{p.name}
+					</div>
+				{/each}
 			</div>
 		</div>
 
@@ -267,36 +311,72 @@
 
 		<div class="agreement-doc-section">
 			<h2>Rute Pengiriman</h2>
-			<div class="agreement-doc-routes">
-				<div>
-					<div class="agreement-doc-route-label">Titik Muat (Initial Route)</div>
-					<ul>
-						{#if warehouseLanes}
-							{#each warehouseLanes.from as w, i (i)}
-								<li>{w}</li>
-							{/each}
-						{:else}
-							{#each initialRoutes as r, i (i)}
-								<li>{routeLabel(r)}</li>
-							{/each}
-						{/if}
-					</ul>
+			{#if isMultiCustomerDoc}
+				<!-- One block per customer: a lane belongs to the client whose
+				     goods it carries, and a single pair of columns would read
+				     as though they all shared it. -->
+				{#each parties as p, i (i)}
+					<div class="agreement-doc-party-routes">
+						<div class="agreement-doc-route-party">
+							{i + 1}. {p.name}
+							{#if p.cargoItem || p.cargoType}
+								<span class="agreement-doc-basis"
+									>{[p.cargoType, p.cargoItem].filter(Boolean).join(' · ')}</span
+								>
+							{/if}
+						</div>
+						<div class="agreement-doc-routes">
+							<div>
+								<div class="agreement-doc-route-label">Titik Muat (Initial Route)</div>
+								<ul>
+									{#each p.loadingPoints as w, k (k)}
+										<li>{warehouseName(w)}</li>
+									{/each}
+								</ul>
+							</div>
+							<div>
+								<div class="agreement-doc-route-label">Titik Bongkar (Destination Route)</div>
+								<ul>
+									{#each p.unloadingPoints as w, k (k)}
+										<li>{warehouseName(w)}</li>
+									{/each}
+								</ul>
+							</div>
+						</div>
+					</div>
+				{/each}
+			{:else}
+				<div class="agreement-doc-routes">
+					<div>
+						<div class="agreement-doc-route-label">Titik Muat (Initial Route)</div>
+						<ul>
+							{#if warehouseLanes}
+								{#each warehouseLanes.from as w, i (i)}
+									<li>{w}</li>
+								{/each}
+							{:else}
+								{#each initialRoutes as r, i (i)}
+									<li>{routeLabel(r)}</li>
+								{/each}
+							{/if}
+						</ul>
+					</div>
+					<div>
+						<div class="agreement-doc-route-label">Titik Bongkar (Destination Route)</div>
+						<ul>
+							{#if warehouseLanes}
+								{#each warehouseLanes.to as w, i (i)}
+									<li>{w}</li>
+								{/each}
+							{:else}
+								{#each destinationRoutes as r, i (i)}
+									<li>{routeLabel(r)}</li>
+								{/each}
+							{/if}
+						</ul>
+					</div>
 				</div>
-				<div>
-					<div class="agreement-doc-route-label">Titik Bongkar (Destination Route)</div>
-					<ul>
-						{#if warehouseLanes}
-							{#each warehouseLanes.to as w, i (i)}
-								<li>{w}</li>
-							{/each}
-						{:else}
-							{#each destinationRoutes as r, i (i)}
-								<li>{routeLabel(r)}</li>
-							{/each}
-						{/if}
-					</ul>
-				</div>
-			</div>
+			{/if}
 		</div>
 
 		{#if allowance}

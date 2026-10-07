@@ -458,6 +458,12 @@
 		unloadingPoints = unloadingPoints.map(() => '');
 	}
 	function onExtraCustomerChange(c: ExtraCustomer) {
+		// The picker binds the NAME, because that is what the card shows. The
+		// id is what every reader needs — which customers a contract covers,
+		// whose warehouses a lane may use — and resolving it from a name later
+		// fails the moment a customer is renamed. So it is recorded here, at
+		// the one moment both are known.
+		c.customerId = customerIdOf(c.customerName);
 		c.loadingPoints = c.loadingPoints.map(() => '');
 		c.unloadingPoints = c.unloadingPoints.map(() => '');
 	}
@@ -485,6 +491,18 @@
 		warehouses = [...warehouses, { ...w, customerCompanyId: warehouseTargetCustomerId || undefined }];
 		applyCreatedWarehouse?.(w.id);
 		applyCreatedWarehouse = null;
+	}
+
+	/** Every customer id this contract covers: its own, plus each further
+	 *  customer on a multi-customer contract. Deduped, blanks dropped. */
+	function coveredCustomerIds(primaryId: string): string[] {
+		const ids = [primaryId];
+		if (multiCustomerEnabled && isMultiCustomer) {
+			for (const c of extraCustomers) {
+				ids.push(c.customerId || customerIdOf(c.customerName));
+			}
+		}
+		return [...new Set(ids.filter(Boolean))];
 	}
 
 	/** An extra customer is chosen by name, so its id comes from the list. */
@@ -995,7 +1013,10 @@
 					validUntil: isoAtMidnight(payload.tanggalBerakhir),
 					paymentTypeId: payload.paymentType,
 					currencyId: 'IDR',
-					customers: [{ companyId: customerCompanyId }],
+					// Every customer this contract covers, not only the first.
+					// The agreement is one bargain over several clients, and a
+					// client it covers but does not name cannot find it.
+					customers: coveredCustomerIds(customerCompanyId).map((companyId) => ({ companyId })),
 					rates,
 					detail: payload
 				});

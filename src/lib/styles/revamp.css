@@ -1391,6 +1391,11 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 /* How a component was worked out, under its name: "448.5 Km / 6 x IDR 6.800".
    A reader who disputes the figure needs the arithmetic, not just the total. */
 .agreement-doc-basis{display:block; font-weight:400; font-size:11px; color:var(--on-surface-variant); margin-top:2px;}
+/* On a contract covering several clients, each gets its own routes block
+   headed by the party it belongs to, so no lane reads as shared. */
+.agreement-doc-party-routes{margin-bottom:16px;}
+.agreement-doc-party-routes:last-child{margin-bottom:0;}
+.agreement-doc-route-party{font-weight:700; margin-bottom:8px;}
 .agreement-doc-routes{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
 .agreement-doc-route-label{font-weight:700; margin-bottom:6px;}
 .agreement-doc-routes ul{margin:0; padding-left:18px;}

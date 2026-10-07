@@ -488,7 +488,7 @@
 									/>
 									{#if sp.loadingPoints[k]}
 										<div class="point-pic">
-											<span class="point-pic-label">PIC muat</span>
+											<span class="point-pic-label">PIC Loading Point</span>
 											<select
 												class="point-pic-select"
 												value={picValue(sp.loadingPics[k] ?? null, sp.loadingPoints[k])}
@@ -500,6 +500,17 @@
 													<option value={o.value}>{o.label}</option>
 												{/each}
 												<option value="__new__">+ PIC baru…</option>
+											</select>
+										</div>
+									{:else}
+										<!-- The row stands whether or not a point is chosen, so the
+										     card keeps its shape and the planner can see that a PIC
+										     is asked for. It fills once the point names a warehouse,
+										     since the people on it are that warehouse's own. -->
+										<div class="point-pic">
+											<span class="point-pic-label">PIC Loading Point</span>
+											<select class="point-pic-select" disabled>
+												<option>Pilih PIC (opsional)</option>
 											</select>
 										</div>
 									{/if}
@@ -528,7 +539,7 @@
 									/>
 									{#if sp.unloadingPoints[k]}
 										<div class="point-pic">
-											<span class="point-pic-label">PIC bongkar</span>
+											<span class="point-pic-label">PIC Unloading Point</span>
 											<select
 												class="point-pic-select"
 												value={picValue(sp.unloadingPics[k] ?? null, sp.unloadingPoints[k])}
@@ -540,6 +551,17 @@
 													<option value={o.value}>{o.label}</option>
 												{/each}
 												<option value="__new__">+ PIC baru…</option>
+											</select>
+										</div>
+									{:else}
+										<!-- The row stands whether or not a point is chosen, so the
+										     card keeps its shape and the planner can see that a PIC
+										     is asked for. It fills once the point names a warehouse,
+										     since the people on it are that warehouse's own. -->
+										<div class="point-pic">
+											<span class="point-pic-label">PIC Unloading Point</span>
+											<select class="point-pic-select" disabled>
+												<option>Pilih PIC (opsional)</option>
 											</select>
 										</div>
 									{/if}
