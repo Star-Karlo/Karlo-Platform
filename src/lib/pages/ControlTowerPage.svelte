@@ -48,6 +48,7 @@
 	import { toast } from '$lib/stores/ui';
 	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
 	import { kontrakStatus } from '$lib/revamp/kontrakStatus';
+	import { trucksWithIncidents } from '$lib/fms/incidents';
 	import { LTL_ENABLED } from '$lib/revamp/features';
 	import { statusLabel, statusBadgeClass } from '$lib/revamp/spotOrderStatus.js';
 	import { shipmentTypeLabel } from '$lib/revamp/shipmentType.js';
@@ -1553,10 +1554,26 @@
 	// ------------------------------------------------------------------------
 	let search = $state('');
 	let stateFilter = $state<DriveState | ''>('');
+
+	/* ---------- Status Insiden ----------
+	   Trucks misbehaving RIGHT NOW, worked out from the fleet feed already on
+	   hand: over the limit while moving, or stopped or idling past the
+	   tolerances the Pantau Armada panel sets. Changing a threshold there
+	   changes this count, because it is the same question asked of the same
+	   data.
+
+	   It is a snapshot, not a day's tally, and it carries no harsh driving —
+	   nothing in the live payload reports that. A per-truck count of today's
+	   events needs an aggregate endpoint FMS does not expose; asking sixty
+	   times a refresh is not a substitute and inventing it is worse. */
+	let incidentFilter = $state(false);
+	let incidentTrucks = $derived(trucksWithIncidents(live, monitorConfig));
+	let incidentIds = $derived(new Set(incidentTrucks.map((v) => v.vehicle_id)));
 	const ORDER: DriveState[] = ['moving', 'idle', 'parking', 'offline'];
 	let listed = $derived.by(() => {
 		const q = search.trim().toLowerCase();
 		return live
+			.filter((v) => !incidentFilter || incidentIds.has(v.vehicle_id))
 			.filter((v) => !stateFilter || v.drive_state === stateFilter)
 			.filter(
 				(v) =>
@@ -1816,6 +1833,19 @@
 					<b>{fleetSummary[s]}</b>
 				</button>
 			{/each}
+			<!-- Set apart from the drive states: those partition the fleet,
+			     this cuts across them. A truck is parked OR moving, but either
+			     may be in an incident. -->
+			<button
+				type="button"
+				class="ct2-legend-item ct2-legend-item--incident {incidentFilter ? 'active' : ''}"
+				title={incidentTrucks.length
+					? `${incidentTrucks.length} armada sedang melanggar ambang batas di panel Pantau Armada`
+					: 'Tidak ada armada yang melewati ambang batas saat ini'}
+				onclick={() => (incidentFilter = !incidentFilter)}
+			>
+				<AlertCircle size={13} /> Status Insiden <b>{incidentTrucks.length}</b>
+			</button>
 		</div>
 		<!-- The company's own geofencing switch, as the old console had it:
 		     on, an arrival reported outside the warehouse's fence is

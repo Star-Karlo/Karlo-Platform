@@ -2495,6 +2495,11 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 /* The client selector sat taller and heavier than everything beside it, so
    the toolbar read as a title followed by controls rather than one row. */
 .ct2-client{height:32px; font-size:12px; border-radius:999px; padding:0 12px;}
+/* Status Insiden cuts across the drive states rather than partitioning with
+   them, so it is separated by a rule and coloured only once it has something
+   to report — a zero in warning colours trains people to ignore the colour. */
+.ct2-legend-item--incident{margin-left:6px; padding-left:14px; border-left:1px solid var(--outline-variant); border-radius:0 999px 999px 0;}
+.ct2-legend-item--incident:not(.active) b{color:var(--on-surface);}
 .ct2-legend-item.active{border-color:var(--primary); color:var(--primary); background:var(--primary-container, #e8f0fe);}
 .ct2-legend-item b{font-weight:700;}
 .ct2-dot{display:inline-block; width:9px; height:9px; border-radius:50%; flex-shrink:0;}
