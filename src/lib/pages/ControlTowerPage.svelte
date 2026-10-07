@@ -758,18 +758,51 @@
 	let flyTo = $state<[number, number] | null>(null);
 	let tab = $state<'order' | 'fleet' | 'notifikasi'>('order');
 
+	/* ---------- Selecting one thing selects all three ----------
+	   The fleet list, the order table and the map show the same journey from
+	   three sides. Picking it in one now moves the other two: the vehicle and
+	   its order resolve together, the order table switches to a tab that
+	   contains the row and scrolls to it, and the map frames the whole trip.
+
+	   Flying to the truck is for a truck with no order. With one, the map
+	   fits the journey instead — zooming to the cab showed a rooftop where
+	   the planner wanted the route. */
 	function selectVehicle(v: LiveVehicle) {
 		selectedVehicleId = v.vehicle_id;
 		selectedOrderId = '';
-		if (hasFix(v.position)) flyTo = [v.position.lon, v.position.lat];
+		flyTo = orderFor(v) ? null : hasFix(v.position) ? [v.position.lon, v.position.lat] : null;
 	}
 	function selectOrderRow(o: any) {
 		selectedOrderId = o.id;
 		const v = liveFor(o);
 		selectedVehicleId = v?.vehicle_id ?? null;
-		if (v && hasFix(v.position)) flyTo = [v.position.lon, v.position.lat];
-		else toast('Truck ini tidak mengirim posisi GPS — tidak ada yang bisa ditampilkan di peta');
+		flyTo = null;
+		if (!v || !hasFix(v.position))
+			toast('Truck ini tidak mengirim posisi GPS — tidak ada yang bisa ditampilkan di peta');
 	}
+	/* The order table shows one category at a time, so the row for the truck
+	   just picked is often on a tab nobody is looking at — the highlight was
+	   real and invisible. When the selection is not in the open tab, switch to
+	   one that holds it and bring the row into view. The tab a user chose is
+	   left alone when it already contains the row. */
+	$effect(() => {
+		const id = selectedOrder?.id;
+		if (!id) return;
+		const here = activeCategory ? categorized[activeCategory] : [];
+		if (!here.some((s) => s.key === id)) {
+			const found = KPI_CARDS.map((c) => c.key).find((k) =>
+				categorized[k as CategoryKey].some((s) => s.key === id)
+			);
+			if (found) activeCategory = found as CategoryKey;
+		}
+		// After the switch has rendered, not before it.
+		requestAnimationFrame(() => {
+			document
+				.querySelector(`[data-order-row="${CSS.escape(id)}"]`)
+				?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+		});
+	});
+
 	function clearSelection() {
 		selectedVehicleId = null;
 		selectedOrderId = '';
@@ -1496,7 +1529,9 @@
 				iconHeight: sel ? 56 : 36,
 				heading: v.position.bearing ?? 0,
 				title: v.license_plate,
-				subtitle: `${STATE_LABEL[v.drive_state]}${v.position.speed != null ? ` · ${Math.round(v.position.speed)} km/j` : ''}${v.driver?.name ? ` · ${v.driver.name}` : ''}`
+				subtitle: `${STATE_LABEL[v.drive_state]}${v.position.speed != null ? ` · ${Math.round(v.position.speed)} km/j` : ''}${v.driver?.name ? ` · ${v.driver.name}` : ''}`,
+				// The map was the one surface you could not select from.
+				onClick: () => selectVehicle(v)
 			});
 		}
 		// A truck with no GPS fix is not guessed onto the map (it used to be
@@ -1660,6 +1695,17 @@
 		return out;
 	});
 
+	/** Re-frame when the selection changes, and again when its route lands —
+	 *  the route is fetched after the click, so fitting only on selection
+	 *  framed the points without the road between them. */
+	let mapFitKey = $derived(
+		selectedOrder
+			? `o-${selectedOrder.id}-${lines.length}`
+			: selectedVehicleId
+				? `v-${selectedVehicleId}`
+				: ''
+	);
+
 	let needsClient = $derived(isStaff && !$actingFor.companyId);
 	let num = (v: any) => (v === undefined || v === null || v === '' ? undefined : Number(v));
 	/** Numbers in the panel tables; one dash style ("—") for a missing figure. */
@@ -1757,6 +1803,7 @@
 				{lines}
 				{flyTo}
 				fitToMarkers={!selectedVehicleId && markers.length > 0}
+				fitKey={mapFitKey}
 				class="ct-map-canvas"
 			/>
 			<div class="planner-map-legends" style="right:56px;">
@@ -2556,7 +2603,8 @@
 							{#each filteredCategoryOrders as s (s.key)}
 								<tr
 									class="planner-row"
-									class:planner-row-selected={selectedOrderId === s.key}
+									class:planner-row-selected={selectedOrder?.id === s.key}
+									data-order-row={s.key}
 									onclick={() => selectOrderRow(s.raw)}
 								>
 									{#if exportSelectMode}
