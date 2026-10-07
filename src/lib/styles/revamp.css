@@ -1347,6 +1347,13 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 
    Centred and gapped to match .search-field-row, so the three read as one
    row. min-width:0 so a long warehouse name cannot push the buttons off. */
+/* A contract that cannot give the card what it promised. Stated where the
+   planner is looking, with what to do about it, rather than leaving the form
+   to look merely unfinished. */
+.contract-warning{margin:0 0 14px; padding:10px 12px; border-radius:8px; font-size:12px; line-height:1.5;
+  background:var(--warning-container, #fff4e5); color:var(--on-warning-container, #7a4b00);
+  border:1px solid var(--warning, #e8a33d);}
+
 .warehouse-pick-row{display:flex; align-items:center; gap:10px;}
 .warehouse-pick-row > .warehouse-search-field{flex:1; min-width:0;}
 

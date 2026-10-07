@@ -18,6 +18,7 @@
 		type Wizard,
 		type WizardShipment
 	} from './wizardTypes';
+	import { contractCustomerCards, isMultiCustomerWithoutCustomers } from '$lib/revamp/multiCustomerOrder';
 	import { Modal, Field, FormGrid, Input, Button } from '$lib/components/ui';
 	import { api } from '$lib/utils/api';
 	import { ENDPOINTS } from '$lib/constants/endpoints';
@@ -88,6 +89,8 @@
 	/* ---------- Select Agreement (picker modal) ---------- */
 	let showAgreementPicker = $state(false);
 	let agreementTargetIndex = $state<number | null>(null);
+	/** Per card: the chosen contract claims several customers but names none. */
+	let contractMissingCustomers = $state<Record<number, boolean>>({});
 	let agreementModalCustomerFilter = $derived(
 		agreementTargetIndex != null ? wizard.shipments[agreementTargetIndex].customerNama : ''
 	);
@@ -117,6 +120,10 @@
 		sp.agreementType = a.agreementType ?? d.agreementType ?? '';
 		if (!allowsManyShipments(sp)) keepOnlyFirstShipment(sp);
 		applyAgreementPoints(sp, d);
+		// A contract that says multi-customer and names nobody produced a
+		// single card and no explanation, which reads exactly like the feature
+		// not working. Recorded here so the card can say what it found.
+		contractMissingCustomers[agreementTargetIndex] = isMultiCustomerWithoutCustomers(sp.agreementType, d);
 		rebuildCustomerCards(agreementTargetIndex, a, d);
 	}
 
@@ -158,7 +165,11 @@
 	 *  card each, filled from the contract, their customer and agreement
 	 *  fixed because the contract is what decided them. */
 	function rebuildCustomerCards(atIndex: number, agreement: any, detail: any) {
-		const extras: any[] = Array.isArray(detail.multiCustomers) ? detail.multiCustomers : [];
+		// Every customer the contract covers EXCEPT the one already on this
+		// card. The planner may have started the order from any of them —
+		// reading only multiCustomers gave them a second card for themselves
+		// and none for the customer the contract names.
+		const extras = contractCustomerCards(detail, wizard.shipments[atIndex]?.customerNama ?? '');
 		// Cards built from a previous choice go, whatever the new one is.
 		wizard.shipments = wizard.shipments.filter((s, i) => i <= atIndex || !s.fromAgreementCustomer);
 		if (!extras.length) return;
@@ -457,6 +468,14 @@
 					{/if}
 				</div>
 			</div>
+
+			{#if contractMissingCustomers[i]}
+				<p class="contract-warning">
+					Agreement ini bertipe Multi Customer tetapi tidak menyimpan data customer tambahan, jadi hanya satu
+					customer yang bisa ditampilkan. Buka agreement tersebut di MyAgreement dan simpan ulang agar
+					customer lainnya ikut tercatat.
+				</p>
+			{/if}
 
 			<!-- One block per shipment: its own pair of points, so a planner
 			     reads Shipment 2 as one journey rather than picking the second
