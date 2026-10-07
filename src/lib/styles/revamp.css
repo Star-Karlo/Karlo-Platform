@@ -2471,7 +2471,12 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 /* ---------------------------------------------------------------------------
    Control Tower v2 — FMS-style fleet list + K-Fleet-style vehicle panel
    --------------------------------------------------------------------------- */
-.ct2{display:flex; flex-direction:column; gap:12px; min-height:calc(100vh - 140px);}
+/* Control Tower fills the viewport and scrolls INSIDE its regions.
+   min-height let the page grow instead: a 520px map plus the order table
+   pushed the table below the fold, so reading the orders — the thing an
+   operator watches — meant scrolling the map out of sight. The floor keeps a
+   very short window usable by letting the page scroll as it used to. */
+.ct2{display:flex; flex-direction:column; gap:12px; height:calc(100vh - 140px); min-height:560px;}
 .ct2-toolbar{display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:#fff; border:1px solid var(--outline-variant); border-radius:12px; padding:8px 12px;}
 .ct2-client{min-width:200px; height:36px; border:2px solid var(--primary); border-radius:10px; padding:0 12px; font-weight:600; font-size:13px; background:#fff;}
 .ct2-client--fixed{display:inline-flex; align-items:center;}
@@ -2482,8 +2487,8 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .ct2-legend-item.active{border-color:var(--primary); color:var(--primary); background:var(--primary-container, #e8f0fe);}
 .ct2-legend-item b{font-weight:700;}
 .ct2-dot{display:inline-block; width:9px; height:9px; border-radius:50%; flex-shrink:0;}
-.ct2-main{display:grid; grid-template-columns:300px minmax(0,1fr) auto; gap:12px; min-height:520px;}
-.ct2-list{background:#fff; border:1px solid var(--outline-variant); border-radius:12px; overflow:auto; max-height:640px;}
+.ct2-main{display:grid; grid-template-columns:300px minmax(0,1fr) auto; gap:12px; flex:1 1 auto; min-height:0;}
+.ct2-list{background:#fff; border:1px solid var(--outline-variant); border-radius:12px; overflow:auto; min-height:0; height:100%;}
 .ct2-vehicle{display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:transparent; border:none; border-bottom:1px solid var(--outline-variant); padding:10px 12px; cursor:pointer;}
 .ct2-vehicle:hover{background:var(--surface-container-low, #f4f6fa);}
 .ct2-vehicle.active{background:var(--primary-container, #e8f0fe);}
@@ -2493,11 +2498,12 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .ct2-vehicle-order{color:var(--primary) !important;}
 .ct2-vehicle-speed{font-size:12px; color:var(--on-surface-variant); white-space:nowrap; display:flex; align-items:center; gap:6px;}
 .ct2-alert{display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; border:1px solid var(--on-surface-variant); font-size:10px; font-weight:700;}
-.ct2-map{position:relative; min-height:520px; border-radius:12px; overflow:hidden; border:1px solid var(--outline-variant);}
+.ct2-map{position:relative; min-height:0; height:100%; border-radius:12px; overflow:hidden; border:1px solid var(--outline-variant);}
 .ct2-map .ct-map-canvas{position:absolute; inset:0;}
-.ct2-panel{width:340px; background:#fff; border:1px solid var(--outline-variant); border-radius:12px; padding:12px; overflow:auto; max-height:640px; display:flex; flex-direction:column; gap:10px;}
+.ct2-panel{width:380px; background:#fff; border:1px solid var(--outline-variant); border-radius:12px; padding:12px; overflow:auto; min-height:0; height:100%; display:flex; flex-direction:column; gap:10px;}
 .ct2-panel-head{display:flex; justify-content:space-between; gap:8px; align-items:flex-start;}
-.ct2-panel-head h3{font-size:13px; font-weight:700; margin:0 0 4px;}
+.ct2-panel-head > div:first-child{min-width:0;}
+.ct2-panel-head h3{font-size:14px; font-weight:700; margin:0 0 4px; line-height:1.35; overflow-wrap:anywhere;}
 .ct2-panel-sub{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--on-surface-variant);}
 .ct2-panel-actions{display:flex; gap:4px;}
 .ct2-tabs{display:flex; gap:14px; border-bottom:1px solid var(--outline-variant);}
@@ -2509,7 +2515,10 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .ct2-card header small{color:var(--on-surface-variant); font-size:11px; text-align:right;}
 .ct2-card-empty{font-size:12px; color:var(--on-surface-variant); padding:6px 0;}
 .ct2-table{width:100%; border-collapse:collapse; font-size:12px;}
-.ct2-table th{font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--on-surface-variant); text-align:right; padding:2px 4px; font-weight:600;}
+/* Headings say the whole word. Uppercase at 10px with letter-spacing is wide
+   for its size, so the load table's own columns were the first thing to be
+   cut off when the panel narrowed. */
+.ct2-table th{font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--on-surface-variant); text-align:right; padding:2px 3px; font-weight:600; white-space:nowrap;}
 .ct2-table th:first-child{text-align:left;}
 .ct2-table td{padding:4px; text-align:right; font-variant-numeric:tabular-nums;}
 .ct2-table td:first-child{text-align:left; color:var(--on-surface-variant);}
@@ -2523,7 +2532,10 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .ct2-alert-row{display:flex; gap:8px; align-items:flex-start; font-size:12px;}
 .ct2-alert-row small{display:block; color:var(--on-surface-variant); font-size:11px;}
 .ct2-clip{font-size:11px; color:var(--primary);}
-.ct2-orders{background:#fff; border:1px solid var(--outline-variant); border-radius:12px; padding:0 12px 8px;}
+/* The order table keeps a fixed share of the window and scrolls its own rows,
+   so the map above it never shrinks to nothing on a short screen. */
+.ct2-orders{background:#fff; border:1px solid var(--outline-variant); border-radius:12px; padding:0 12px 8px;
+  flex:0 0 auto; max-height:40vh; min-height:200px; overflow:auto;}
 .ct2-empty{padding:28px; text-align:center; color:var(--on-surface-variant); font-size:13px;}
 .ct2-row-active td{background:var(--primary-container, #e8f0fe);}
 @media (max-width: 1100px){ .ct2-main{grid-template-columns:1fr;} .ct2-panel{width:auto;} .ct2-list{max-height:260px;} }

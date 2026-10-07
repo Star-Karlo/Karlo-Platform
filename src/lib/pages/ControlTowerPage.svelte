@@ -1330,7 +1330,11 @@
 	// ------------------------------------------------------------------------
 	const DETAIL_MIN = 280;
 	const DETAIL_MAX = 640;
-	let detailPanelWidth = $state(340);
+	/* 340px squeezed the load table until its own column headings truncated —
+	   "BONGK…" above a number is worse than no heading. 380 fits Plan, Muat
+	   and Bongkar whole, which is the width the panel was designed around.
+	   Still resizable between DETAIL_MIN and DETAIL_MAX. */
+	let detailPanelWidth = $state(380);
 	let detailPanelMinimized = $state(false);
 	let detailPanelEl = $state<HTMLElement | null>(null);
 	const OC_MIN = 180;
@@ -1811,8 +1815,8 @@
 					<button
 						type="button"
 						class="planner-truck-legend-toggle"
-						title="Pantau Armada"
-						onclick={() => (monitorPanelOpen = true)}><Radio size={16} /></button
+						title="Pantau Armada — atur tampilan rute"
+						onclick={() => (monitorPanelOpen = true)}><Filter size={16} /></button
 					>
 				{:else}
 					<div class="ct-monitor-panel">
