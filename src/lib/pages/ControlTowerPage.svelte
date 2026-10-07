@@ -259,6 +259,11 @@
 		'pengemudi_ditugaskan',
 		'pengemudi_menerima_order'
 	]);
+	/* On duty: the driver is out. From setting off for the loading point to
+	   the unloading POD being verified — one span, whether the order carries
+	   one shipment or several. Splitting the tab by shipment type asked a
+	   dispatcher to look in two places for the same question, "what is
+	   running right now", and to know which before looking. */
 	const ONDUTY_STATUSES = new Set([
 		'menuju_lokasi_muat',
 		'tiba_lokasi_muat',
@@ -269,10 +274,11 @@
 		'tiba_lokasi_bongkar',
 		'proses_bongkar_muatan',
 		'verifikasi_pod_bongkar',
-		'pod_bongkar_terverifikasi',
-		'menunggu_konfirmasi_pengiriman',
-		'pengiriman_terkonfirmasi'
+		'pod_bongkar_terverifikasi'
 	]);
+	/* Delivered. These were counted as on duty, so a finished order sat in the
+	   running list with nothing left to run. */
+	const COMPLETED_STATUSES = new Set(['menunggu_konfirmasi_pengiriman', 'pengiriman_terkonfirmasi']);
 	let tripAllowance = $state<TripAllowanceSettings>(tripAllowanceDefaults());
 	onMount(() => {
 		loadTripAllowance()
@@ -352,23 +358,23 @@
 	);
 	const KPI_CARDS = [
 		{ key: 'planned', label: 'Order Planned' },
-		{ key: 'onduty', label: 'Order Single Shipment' },
+		{ key: 'onduty', label: 'Order Onduty' },
 		// LTL is built but not shown; see $lib/revamp/features.
 		...(LTL_ENABLED ? ([{ key: 'ltl', label: 'Order LTL' }] as const) : []),
-		{ key: 'multishipment', label: 'Order Multishipment' },
 		{ key: 'podMuat', label: 'Verifikasi POD Muat' },
 		{ key: 'podBongkar', label: 'Verifikasi POD Bongkar' },
 		{ key: 'sangu', label: 'Finalisasi Uang Sangu' },
-		{ key: 'recon', label: 'Finalisasi Rekonsiliasi' }
+		{ key: 'recon', label: 'Finalisasi Rekonsiliasi' },
+		{ key: 'completed', label: 'Order Selesai' }
 	] as const;
 	type CategoryKey = (typeof KPI_CARDS)[number]['key'];
 	let categorized = $derived.by<Record<CategoryKey, Shipment[]>>(() => {
 		const list = activeShipments;
 		return {
 			planned: list.filter((s) => PLANNED_STATUSES.has(s.status)),
-			onduty: list.filter((s) => ONDUTY_STATUSES.has(s.status) && s.shipmentType === 'Single Shipment'),
+			onduty: list.filter((s) => ONDUTY_STATUSES.has(s.status)),
 			ltl: list.filter((s) => !!s.raw.detail?.isLtl),
-			multishipment: list.filter((s) => s.shipmentType === 'Multi Shipment'),
+			completed: list.filter((s) => COMPLETED_STATUSES.has(s.status)),
 			podMuat: list.filter((s) => s.status === 'verifikasi_pod_muat'),
 			podBongkar: list.filter((s) => s.status === 'verifikasi_pod_bongkar'),
 			sangu: list.filter((s) => !s.sanguFinal),
@@ -1379,11 +1385,36 @@
 				}
 			);
 		}
-		items.push({
+		/* In the order the work actually happens: the advance is settled before
+		   the driver leaves, the two PODs are verified on the road, and the
+		   reconciliation closes the trip once it is delivered. The advance was
+		   listed last, under two PODs that cannot be verified until after it is
+		   paid, so the list read backwards. */
+		items.unshift({
 			key: 'sangu',
 			label: 'Finalisasi Uang Sangu',
 			state: d.uangSanguFinalized ? 'done' : 'pending'
 		});
+		/* Reconciliation was missing from the list entirely — the one task that
+		   closes an order, and a planner had no sight of it here. It cannot be
+		   done until the trip is delivered, so before that it is upcoming
+		   rather than overdue. */
+		const delivered = cur >= idx('menunggu_konfirmasi_pengiriman');
+		// The same question the Finalisasi Rekonsiliasi tab asks, asked the
+		// same way: computePostTripReconciliation decides, not a flag read off
+		// the detail, so the tab and the tasklist cannot disagree about
+		// whether an order still needs closing.
+		let reconState: TaskState = 'upcoming';
+		if (delivered) {
+			try {
+				const us = computeUangSangu({ ...o, status }, tripAllowance);
+				const recon = computePostTripReconciliation({ ...o, status }, tripAllowance, us.uangMakan.value);
+				reconState = recon && recon.status === 'belum_diproses' ? 'pending' : 'done';
+			} catch {
+				reconState = 'pending';
+			}
+		}
+		items.push({ key: 'recon', label: 'Rekonsiliasi Uang Jalan', state: reconState });
 		return { items, pendingCount: items.filter((t) => t.state === 'pending').length };
 	});
 
@@ -1601,7 +1632,12 @@
 	// ------------------------------------------------------------------------
 	let markers = $derived.by<MapMarker[]>(() => {
 		const out: MapMarker[] = [];
-		for (const v of listed) {
+		// With one truck chosen, the map shows that truck alone. Sixty pins
+		// over a route drawn for one of them hid the very thing the selection
+		// was asking about, and on a busy depot the chosen truck was buried
+		// under its neighbours. Clearing the selection brings the fleet back.
+		const shown = selectedVehicleId ? listed.filter((v) => v.vehicle_id === selectedVehicleId) : listed;
+		for (const v of shown) {
 			if (!hasFix(v.position)) continue;
 			const sel = v.vehicle_id === selectedVehicleId;
 			out.push({
@@ -2279,16 +2315,11 @@
 													>
 												</tbody>
 											</table>
-											{#if actualTrail}
-												<small class="hint">
-													Jalur aktual ({layerOn('overspeed') ? 'hijau' : 'merah'}{actualTrail.snapped
-														? ', mengikuti jalan'
-														: ', titik GPS mentah'}) dari GPS FMS, {tripWindow
-														? `${tripWindow.from.toLocaleDateString('id-ID')} – ${tripWindow.to.toLocaleDateString('id-ID')}`
-														: ''}{#if actualTrail.partial}; sebagian belum terpetakan ke jalan — garis oranye
-														putus-putus adalah titik GPS mentah, dan jarak aktual dihitung dari titik tersebut{/if}.
-												</small>
-											{/if}
+											<!-- The paragraph explaining the trail's colour, its source,
+											     its date range and what a dashed orange line means lived
+											     here. It described the MAP, inside a table of figures,
+											     and was longer than the figures it sat under. The map
+											     says those things itself. -->
 										{:else}
 											<div class="ct2-card-empty">{addressLine(pos) || 'Posisi belum diketahui.'}</div>
 										{/if}

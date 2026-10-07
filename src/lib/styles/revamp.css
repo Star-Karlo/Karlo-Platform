@@ -2498,6 +2498,17 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 /* Status Insiden cuts across the drive states rather than partitioning with
    them, so it is separated by a rule and coloured only once it has something
    to report — a zero in warning colours trains people to ignore the colour. */
+/* Costs added during reconciliation: a name and a figure per row, sitting
+   above the total they feed so the arithmetic reads downwards. */
+.recon-extras{border-top:1px solid var(--outline-variant); margin-top:12px; padding-top:12px; display:flex; flex-direction:column; gap:8px;}
+.recon-extras-head{display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; font-weight:700;}
+.recon-extra-row{display:flex; align-items:center; gap:8px;}
+.recon-extra-row input[type='text']{flex:1; min-width:0;}
+.recon-extra-row input[type='number']{width:150px; flex:none; text-align:right; font-variant-numeric:tabular-nums;}
+.recon-extra-remove{display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; flex:none;
+  border:1px solid var(--outline-variant); border-radius:7px; background:transparent; color:var(--on-surface-variant); cursor:pointer;}
+.recon-extra-remove:hover{color:var(--error, #b3261e); border-color:var(--error, #b3261e);}
+
 .ct2-legend-item--incident{margin-left:6px; padding-left:14px; border-left:1px solid var(--outline-variant); border-radius:0 999px 999px 0;}
 .ct2-legend-item--incident:not(.active) b{color:var(--on-surface);}
 .ct2-legend-item.active{border-color:var(--primary); color:var(--primary); background:var(--primary-container, #e8f0fe);}
@@ -2530,14 +2541,20 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .ct2-card header span{font-size:13px; font-weight:700; display:inline-flex; align-items:center; gap:6px;}
 .ct2-card header small{color:var(--on-surface-variant); font-size:11px; text-align:right;}
 .ct2-card-empty{font-size:12px; color:var(--on-surface-variant); padding:6px 0;}
-.ct2-table{width:100%; border-collapse:collapse; font-size:12px;}
+/* Detail Muatan and Rute Perjalanan read as figures, not as a grid.
+   They were set at 12px with 2-4px of padding and a tinted first column,
+   which packed three numbers into a band thinner than the heading above it.
+   More room per row, a plain label column, and the values at the weight the
+   reader is actually looking for. */
+.ct2-table{width:100%; border-collapse:collapse; font-size:12.5px;}
 /* Headings say the whole word. Uppercase at 10px with letter-spacing is wide
    for its size, so the load table's own columns were the first thing to be
    cut off when the panel narrowed. */
-.ct2-table th{font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--on-surface-variant); text-align:right; padding:2px 3px; font-weight:600; white-space:nowrap;}
+.ct2-table th{font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--on-surface-variant); text-align:right; padding:0 4px 8px; font-weight:600; white-space:nowrap;}
 .ct2-table th:first-child{text-align:left;}
-.ct2-table td{padding:4px; text-align:right; font-variant-numeric:tabular-nums;}
-.ct2-table td:first-child{text-align:left; color:var(--on-surface-variant);}
+.ct2-table td{padding:7px 4px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:var(--on-surface);}
+.ct2-table td:first-child{text-align:left; font-weight:500; color:var(--on-surface-variant);}
+.ct2-table tbody tr + tr td{border-top:1px solid var(--outline-variant);}
 .ct2-fuel{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
 .ct2-fuel div{display:flex; flex-direction:column;}
 .ct2-fuel small{font-size:10px; color:var(--on-surface-variant);}

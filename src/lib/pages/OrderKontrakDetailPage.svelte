@@ -1219,10 +1219,33 @@
 	let reconModalOpen = $state(false);
 	let reconDraft = $state<{ components: any[] }>({ components: [] });
 	let reconDraftTotal = $derived(reconDraft.components.reduce((sum, c) => sum + (Number(c.nominal) || 0), 0));
+
+	/* ---------- Costs the trip turned up that nothing predicted ----------
+	   A reconciliation could only adjust the lines worked out before the trip.
+	   Real trips produce costs no template anticipates — a ferry queue, a
+	   weighbridge fine, a repair on the road — and with nowhere to record them
+	   a planner either buried the figure inside an unrelated line or settled
+	   it outside the system entirely. Either way the order's own number stops
+	   being the truth. */
+	let reconExtras = $state<{ label: string; nominal: number | string }[]>([]);
+	let reconExtrasTotal = $derived(reconExtras.reduce((sum, e) => sum + (Number(e.nominal) || 0), 0));
+	function addReconExtra() {
+		reconExtras = [...reconExtras, { label: '', nominal: '' }];
+	}
+	function removeReconExtra(i: number) {
+		reconExtras = reconExtras.filter((_, k) => k !== i);
+	}
+	/** Only the ones actually filled in; a blank row the planner thought better
+	 *  of is not a zero-rupiah cost. */
+	let reconExtrasFilled = $derived(reconExtras.filter((e) => e.label.trim() && Number(e.nominal) > 0));
 	let editingReconField = $state<string | null>(null);
 	function openReconModal() {
 		if (!postTripRecon) return;
 		reconDraft = { components: postTripRecon.components.map((c: any) => ({ ...c })) };
+		// Whatever was recorded last time, so reopening shows the reconciliation
+		// as it stands rather than losing the extra lines.
+		const saved = order?.detail?.postTrip?.extraComponents;
+		reconExtras = Array.isArray(saved) ? saved.map((e: any) => ({ ...e })) : [];
 		reconModalOpen = true;
 	}
 	function closeReconModal() {
@@ -1277,7 +1300,21 @@
 			finalized[key] = byId[key].finalized;
 			overrides[key] = byId[key].nominal;
 		}
-		await patchDetail({ postTrip: { ...basePostTrip, reimburse, finalized, overrides } });
+		await patchDetail({
+			postTrip: {
+				...basePostTrip,
+				reimburse,
+				finalized,
+				overrides,
+				// Named and kept, so the figure can be read back and questioned
+				// later. A cost recorded as an adjustment to an unrelated line
+				// cannot be.
+				extraComponents: reconExtrasFilled.map((e) => ({
+					label: e.label.trim(),
+					nominal: Number(e.nominal) || 0
+				}))
+			}
+		});
 		toast('Rekonsiliasi post-trip diperbarui');
 		reconModalOpen = false;
 	}
@@ -2812,9 +2849,36 @@
 						{/each}
 					</div>
 
+					<div class="recon-extras">
+						<div class="recon-extras-head">
+							<span>Komponen Biaya Lain</span>
+							<button type="button" class="btn btn-text btn-sm" onclick={addReconExtra}
+								>+ Tambah Komponen</button
+							>
+						</div>
+						{#each reconExtras as e, i (i)}
+							<div class="recon-extra-row">
+								<input type="text" placeholder="Nama komponen biaya" bind:value={e.label} />
+								<input type="number" min="0" placeholder="0" bind:value={e.nominal} />
+								<button
+									type="button"
+									class="recon-extra-remove"
+									aria-label="Hapus komponen"
+									onclick={() => removeReconExtra(i)}><X size={13} /></button
+								>
+							</div>
+						{/each}
+						{#if !reconExtras.length}
+							<p class="hint" style="margin:0;">
+								Biaya yang muncul di perjalanan dan belum ada di perhitungan — misalnya antrean kapal atau
+								perbaikan di jalan.
+							</p>
+						{/if}
+					</div>
+
 					<div class="recon-modal-total">
 						<span>Total Rekonsiliasi</span>
-						<b>{formatIDR(reconDraftTotal)}</b>
+						<b>{formatIDR(reconDraftTotal + reconExtrasTotal)}</b>
 					</div>
 
 					<div class="modal-actions">
