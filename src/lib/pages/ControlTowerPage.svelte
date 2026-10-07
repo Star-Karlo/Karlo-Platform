@@ -808,6 +808,69 @@
 		selectedOrderId = '';
 	}
 
+	/* ---------- STNK and KIR for the selected truck ----------
+	   The papers live in masterdata's document register, one row per document,
+	   keyed by the MASTERDATA vehicle id — while this page works in FMS
+	   vehicle ids. The plate is what the two share, so the truck register is
+	   read once and indexed by plate.
+
+	   Only the selected truck's documents are fetched. Asking for sixty
+	   trucks' papers to show two lines about one of them is a lot of request
+	   for a panel that is usually closed. */
+	let truckIdByPlate = $state<Record<string, string>>({});
+	let vehicleDocs = $state<{ stnk: any | null; kir: any | null }>({ stnk: null, kir: null });
+
+	const normalisePlate = (p: string) => (p ?? '').replace(/\s+/g, '').toUpperCase();
+
+	onMount(async () => {
+		try {
+			const res = await api.get(ENDPOINTS.trucks.list, { pageSize: 500 });
+			const map: Record<string, string> = {};
+			for (const t of res.data?.data ?? []) {
+				if (t.policeNumber && t.id) map[normalisePlate(t.policeNumber)] = t.id;
+			}
+			truckIdByPlate = map;
+		} catch {
+			/* no register: the panel simply says the papers are not known */
+		}
+	});
+
+	$effect(() => {
+		const plate = selectedVehicle?.license_plate;
+		vehicleDocs = { stnk: null, kir: null };
+		if (!plate) return;
+		const truckId = truckIdByPlate[normalisePlate(plate)];
+		if (!truckId) return;
+		let cancelled = false;
+		api
+			.get(ENDPOINTS.documents.list, { vehicleId: truckId, pageSize: 50 })
+			.then((res) => {
+				if (cancelled) return;
+				const rows = res.data?.data ?? [];
+				vehicleDocs = {
+					stnk: rows.find((d: any) => d.docType === 'STNK') ?? null,
+					kir: rows.find((d: any) => d.docType === 'KIR') ?? null
+				};
+			})
+			.catch(() => {
+				/* leave both unknown rather than claiming a document is missing */
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	/** A document's standing: valid until a date, expired, or not recorded. */
+	function docStanding(d: any | null): { label: string; state: 'active' | 'expired' | 'unknown' } {
+		if (!d?.expiresOn) return { label: 'Belum tercatat', state: 'unknown' };
+		const until = new Date(d.expiresOn);
+		if (Number.isNaN(until.getTime())) return { label: 'Belum tercatat', state: 'unknown' };
+		const text = until.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+		return until.getTime() < Date.now()
+			? { label: `Kedaluwarsa ${text}`, state: 'expired' }
+			: { label: `Active s/d ${text}`, state: 'active' };
+	}
+
 	// Per-vehicle detail: sensors from FMS, shipment from the business service.
 	let detail = $state<LiveVehicle | null>(null);
 	let sensors = $state<SensorReading[]>([]);
@@ -2074,6 +2137,16 @@
 												<Radio size={14} />
 												<div><small>Phone</small><b>{v.driver?.phone ?? '—'}</b></div>
 											</div>
+											{#each [{ label: 'Status STNK', doc: vehicleDocs.stnk }, { label: 'Status KIR', doc: vehicleDocs.kir }] as d (d.label)}
+												{@const standing = docStanding(d.doc)}
+												<div class="ct-fleet-status-row">
+													<FileText size={14} />
+													<div>
+														<small>{d.label}</small>
+														<b class="ct-doc-standing ct-doc-standing--{standing.state}">{standing.label}</b>
+													</div>
+												</div>
+											{/each}
 										</div>
 									</section>
 								{:else if key === 'cargo'}
