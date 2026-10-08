@@ -1965,11 +1965,19 @@
 					? 'Data insiden belum tersedia'
 					: incidentsUnconfigured
 						? 'Pengaturan SOP belum diatur di FMS, sehingga insiden belum terdeteksi'
-						: `${incidentTrucks.length} armada punya insiden hari ini`}
+						: incidents.truncated
+							? `Minimal ${incidentTrucks.length} armada punya insiden hari ini — jumlah alert melebihi yang bisa dibaca sekali muat`
+							: `${incidentTrucks.length} armada punya insiden hari ini`}
 				onclick={() => (incidentFilter = !incidentFilter)}
 			>
 				<AlertCircle size={13} /> Status Insiden
-				<b>{!incidents ? '—' : incidentsUnconfigured ? 'belum diatur' : incidentTrucks.length}</b>
+				<b
+					>{!incidents
+						? '—'
+						: incidentsUnconfigured
+							? 'belum diatur'
+							: `${incidentTrucks.length}${incidents.truncated ? '+' : ''}`}</b
+				>
 			</button>
 		</div>
 		<!-- The company's own geofencing switch, as the old console had it:

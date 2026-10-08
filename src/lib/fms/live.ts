@@ -466,6 +466,13 @@ export interface IncidentSummary {
 	/** Trucks with at least one incident in the window. */
 	affected: number;
 	/**
+	 * True when more alerts matched the window than we read, so the counts are
+	 * a floor rather than a total. The UI must say so: undercounting is most
+	 * likely on a busy day, which is the day somebody is looking at the chip
+	 * because something went wrong.
+	 */
+	truncated: boolean;
+	/**
 	 * True when the company has SOP settings, so a zero means "nothing
 	 * happened". Without them FMS raises no SOP_* alerts at all, and a zero
 	 * would mean "nobody configured it" — a different thing, and not one to
@@ -484,7 +491,8 @@ const EMPTY_COUNTS = (): Record<IncidentKind, number> => ({
 /** Fold a window's alerts into per-vehicle incident counts. */
 export function summariseIncidents(
 	alerts: Partial<Alert>[] | null | undefined,
-	sopConfigured: boolean
+	sopConfigured: boolean,
+	truncated = false
 ): IncidentSummary {
 	const byVehicle = new Map<number, VehicleIncidents>();
 	for (const a of alerts ?? []) {
@@ -501,22 +509,40 @@ export function summariseIncidents(
 		row.total += 1;
 		byVehicle.set(id, row);
 	}
-	return { byVehicle, affected: byVehicle.size, sopConfigured };
+	return { byVehicle, affected: byVehicle.size, sopConfigured, truncated };
 }
 
-/** Alerts can be numerous over a day; this is the ceiling we read. */
-const INCIDENT_FETCH_LIMIT = 2000;
+/* Every list endpoint in fms-api clamps to 500 and says nothing about it — no
+   error, no header — so asking for more is answered with 500 and silence. The
+   count that is NOT clamped is `total` on the response, which is a count over
+   the same filter rather than the length of what came back. That is how we
+   know whether we have the day or a slice of it. */
+const ALERTS_PAGE = 500;
+/** At most this many pages per refresh. Four covers a very busy day; beyond
+ *  it the chip says "+" rather than spending a fleet's patience on counting. */
+const ALERTS_MAX_PAGES = 4;
 
 export async function fetchIncidentSummary(from: Date, to: Date): Promise<IncidentSummary> {
-	const [res, sop] = await Promise.all([
-		fmsGet<{ items?: Alert[] }>(
-			`/alerts?from=${encodeURIComponent(rfc(from))}&to=${encodeURIComponent(rfc(to))}&limit=${INCIDENT_FETCH_LIMIT}`
-		),
-		// A company that never set its SOP produces no SOP_* alerts, so the
-		// chip must be able to say "not configured" rather than "none".
-		fmsGet<any>('/sop/settings').catch(() => null)
-	]);
-	return summariseIncidents(res.items ?? [], !!sop && Object.keys(sop).length > 0);
+	const window = `from=${encodeURIComponent(rfc(from))}&to=${encodeURIComponent(rfc(to))}`;
+	const sopPromise = fmsGet<any>('/sop/settings').catch(() => null);
+
+	const rows: Alert[] = [];
+	let total = 0;
+	let truncated = false;
+	for (let page = 0; page < ALERTS_MAX_PAGES; page++) {
+		const res = await fmsGet<{ items?: Alert[]; total?: number }>(
+			`/alerts?${window}&limit=${ALERTS_PAGE}&offset=${page * ALERTS_PAGE}`
+		);
+		const items = res.items ?? [];
+		rows.push(...items);
+		total = Number(res.total ?? rows.length);
+		// Short page means the end, whatever `total` claims.
+		if (items.length < ALERTS_PAGE || rows.length >= total) break;
+		if (page === ALERTS_MAX_PAGES - 1) truncated = rows.length < total;
+	}
+
+	const sop = await sopPromise;
+	return summariseIncidents(rows, !!sop && Object.keys(sop).length > 0, truncated);
 }
 
 export const INCIDENT_LABEL: Record<IncidentKind, string> = {

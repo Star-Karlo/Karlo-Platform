@@ -137,6 +137,14 @@ describe('incident summary', () => {
 		expect(summariseIncidents(alerts, true).sopConfigured).toBe(true);
 	});
 
+	// 500 is the server's real ceiling whatever we ask for, and it says so
+	// nowhere. A count taken from a truncated read is a floor, and the chip
+	// has to be able to say so rather than print it as a total.
+	it('carries whether the read was truncated', () => {
+		expect(summariseIncidents(alerts, true).truncated).toBe(false);
+		expect(summariseIncidents(alerts, true, true).truncated).toBe(true);
+	});
+
 	it('survives an empty or missing list', () => {
 		for (const a of [null, undefined, []]) {
 			expect(summariseIncidents(a as any, true).affected).toBe(0);
