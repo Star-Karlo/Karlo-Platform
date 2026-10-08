@@ -58,6 +58,9 @@ export interface LiveVehicle {
 	state_since?: string | null;
 	battery_v?: number | null;
 	gsm_signal?: number | null;
+	/** Tank size from FMS's own vehicle record; master data does not hold it.
+	 *  Null where nobody has set it, which is much of the migrated fleet. */
+	tank_litres?: number | null;
 }
 
 /** FMS's live map colours, per drive state. Kept identical so the two consoles read the same. */
@@ -417,4 +420,104 @@ export const SEVERITY_COLOUR: Record<Alert['severity'], string> = {
 	urgent: '#dc2626',
 	important: '#f59e0b',
 	info: '#3b82f6'
+};
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Incidents over a window, for the whole fleet, in one request.
+ *
+ * FMS's alerts are events DETECTED AT THE TIME by its notification engine,
+ * against each company's own SOP settings — nothing is recomputed on read,
+ * which is why one call can answer for sixty trucks. The consequence worth
+ * knowing: these counts use FMS's thresholds. Ours cannot be passed in, so the
+ * Pantau Armada panel must read the same SOP settings or the chip and the map
+ * will describe the same fleet differently.
+ *
+ * Harsh driving is real here. It comes from the tracker's own green-driving
+ * events, which is the one category nothing in the live feed reports.
+ */
+export type IncidentKind = 'overspeed' | 'stopOver' | 'idleOver' | 'harsh';
+
+/** FMS alert codes, grouped as the chip counts them. */
+const INCIDENT_CODES: Record<IncidentKind, string[]> = {
+	overspeed: ['OVERSPEED', 'SOP_OVERSPEED'],
+	stopOver: ['SOP_LONG_STOP'],
+	idleOver: ['EXCEEDED_IDLE'],
+	harsh: ['HARSH_BRAKING', 'HARSH_ACCEL', 'HARSH_CORNERING', 'HARSH_BUMP']
+};
+
+const KIND_OF_CODE: Record<string, IncidentKind> = Object.fromEntries(
+	Object.entries(INCIDENT_CODES).flatMap(([kind, codes]) => codes.map((c) => [c, kind as IncidentKind]))
+);
+
+export interface VehicleIncidents {
+	vehicle_id: number;
+	counts: Record<IncidentKind, number>;
+	total: number;
+}
+
+export interface IncidentSummary {
+	byVehicle: Map<number, VehicleIncidents>;
+	/** Trucks with at least one incident in the window. */
+	affected: number;
+	/**
+	 * True when the company has SOP settings, so a zero means "nothing
+	 * happened". Without them FMS raises no SOP_* alerts at all, and a zero
+	 * would mean "nobody configured it" — a different thing, and not one to
+	 * report as a confident nought.
+	 */
+	sopConfigured: boolean;
+}
+
+const EMPTY_COUNTS = (): Record<IncidentKind, number> => ({
+	overspeed: 0,
+	stopOver: 0,
+	idleOver: 0,
+	harsh: 0
+});
+
+/** Fold FMS's control-tower payload into per-vehicle incident counts. */
+export function summariseIncidents(payload: any, sopConfigured: boolean): IncidentSummary {
+	const byVehicle = new Map<number, VehicleIncidents>();
+	// The payload groups vehicles by drive state; every group holds vehicles,
+	// and every vehicle holds the alerts raised for it in the window.
+	const groups: any[] = Array.isArray(payload?.groups)
+		? payload.groups
+		: Array.isArray(payload?.items)
+			? [{ vehicles: payload.items }]
+			: [];
+	for (const g of groups) {
+		for (const v of g?.vehicles ?? g?.items ?? []) {
+			const id = Number(v?.vehicle_id ?? v?.id);
+			if (!Number.isFinite(id)) continue;
+			const counts = EMPTY_COUNTS();
+			let total = 0;
+			for (const a of v?.alerts ?? []) {
+				const kind = KIND_OF_CODE[String(a?.code ?? '').toUpperCase()];
+				if (!kind) continue;
+				counts[kind] += 1;
+				total += 1;
+			}
+			if (total > 0) byVehicle.set(id, { vehicle_id: id, counts, total });
+		}
+	}
+	return { byVehicle, affected: byVehicle.size, sopConfigured };
+}
+
+export async function fetchIncidentSummary(from: Date, to: Date): Promise<IncidentSummary> {
+	const [payload, sop] = await Promise.all([
+		fmsGet<any>(`/control-tower?from=${encodeURIComponent(rfc(from))}&to=${encodeURIComponent(rfc(to))}`),
+		// A company that never set its SOP produces no SOP_* alerts, so the
+		// chip must be able to say "not configured" rather than "none".
+		fmsGet<any>('/sop/settings').catch(() => null)
+	]);
+	return summariseIncidents(payload, !!sop && Object.keys(sop).length > 0);
+}
+
+export const INCIDENT_LABEL: Record<IncidentKind, string> = {
+	overspeed: 'Overspeed',
+	stopOver: 'Stop melebihi toleransi',
+	idleOver: 'Idle melebihi toleransi',
+	harsh: 'Harsh driving'
 };

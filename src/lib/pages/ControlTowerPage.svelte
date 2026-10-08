@@ -48,7 +48,7 @@
 	import { toast } from '$lib/stores/ui';
 	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
 	import { kontrakStatus } from '$lib/revamp/kontrakStatus';
-	import { trucksWithIncidents } from '$lib/fms/incidents';
+	import { fetchIncidentSummary, type IncidentSummary } from '$lib/fms/live';
 	import { LTL_ENABLED } from '$lib/revamp/features';
 	import { statusLabel, statusBadgeClass } from '$lib/revamp/spotOrderStatus.js';
 	import { shipmentTypeLabel } from '$lib/revamp/shipmentType.js';
@@ -905,7 +905,11 @@
 		return [
 			{ label: 'Brand', value: (t?.brandId && catalogName[t.brandId]) || '—' },
 			{ label: 'Type', value: (t?.truckTypeId && catalogName[t.truckTypeId]) || '—' },
-			{ label: 'Tank', value: '—' },
+			{
+				label: 'Tank',
+				value:
+					detail?.tank_litres != null ? `${Math.round(detail.tank_litres).toLocaleString('id-ID')} L` : '—'
+			},
 			{ label: 'Fuel ratio', value: ratio != null ? `${ratio.toFixed(1)} km/L` : '—' },
 			{
 				label: 'Engine hours (life)',
@@ -1651,8 +1655,36 @@
 	   events needs an aggregate endpoint FMS does not expose; asking sixty
 	   times a refresh is not a substitute and inventing it is worse. */
 	let incidentFilter = $state(false);
-	let incidentTrucks = $derived(trucksWithIncidents(live, monitorConfig));
+	/* Counted by FMS at the time each event happened, against that company's
+	   own SOP settings — one request for the whole fleet, and the only place
+	   harsh driving exists at all. The live reading this replaced could say
+	   what was happening at this instant but never what happened today. */
+	let incidents = $state<IncidentSummary | null>(null);
+	let incidentTrucks = $derived(incidents ? live.filter((v) => incidents!.byVehicle.has(v.vehicle_id)) : []);
 	let incidentIds = $derived(new Set(incidentTrucks.map((v) => v.vehicle_id)));
+	/* No SOP settings means FMS raises no SOP_* alerts, so a nought would say
+	   "nothing happened" when it means "nobody configured it". */
+	let incidentsUnconfigured = $derived(!!incidents && !incidents.sopConfigured);
+
+	$effect(() => {
+		// Today, which is the window the chip is understood to mean.
+		const to = new Date();
+		const from = new Date(to);
+		from.setHours(0, 0, 0, 0);
+		let cancelled = false;
+		fetchIncidentSummary(from, to)
+			.then((s) => {
+				if (!cancelled) incidents = s;
+			})
+			.catch(() => {
+				// Unreachable is not zero. The chip says nothing rather than
+				// reporting a clean day that was never checked.
+				if (!cancelled) incidents = null;
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
 	const ORDER: DriveState[] = ['moving', 'idle', 'parking', 'offline'];
 	let listed = $derived.by(() => {
 		const q = search.trim().toLowerCase();
@@ -1928,12 +1960,16 @@
 			<button
 				type="button"
 				class="ct2-legend-item ct2-legend-item--incident {incidentFilter ? 'active' : ''}"
-				title={incidentTrucks.length
-					? `${incidentTrucks.length} armada sedang melanggar ambang batas di panel Pantau Armada`
-					: 'Tidak ada armada yang melewati ambang batas saat ini'}
+				disabled={!incidents}
+				title={!incidents
+					? 'Data insiden belum tersedia'
+					: incidentsUnconfigured
+						? 'Pengaturan SOP belum diatur di FMS, sehingga insiden belum terdeteksi'
+						: `${incidentTrucks.length} armada punya insiden hari ini`}
 				onclick={() => (incidentFilter = !incidentFilter)}
 			>
-				<AlertCircle size={13} /> Status Insiden <b>{incidentTrucks.length}</b>
+				<AlertCircle size={13} /> Status Insiden
+				<b>{!incidents ? '—' : incidentsUnconfigured ? 'belum diatur' : incidentTrucks.length}</b>
 			</button>
 		</div>
 		<!-- The company's own geofencing switch, as the old console had it:

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { hasFix, plateKey, addressLine, curatedSensors, STATE_COLOUR } from './live';
+import { STATE_COLOUR, addressLine, curatedSensors, hasFix, plateKey, summariseIncidents } from './live';
 
 describe('FMS live-fleet adapter', () => {
 	it('treats a 0,0 fix as no fix — a device with no lock reports null island', () => {
@@ -71,5 +71,75 @@ describe('FMS live-fleet adapter', () => {
 	it('uses FMS’s state colours so both consoles read the same', () => {
 		expect(STATE_COLOUR.moving).toBe('#22c55e');
 		expect(STATE_COLOUR.offline).toBe('#94a3b8');
+	});
+});
+
+describe('incident summary', () => {
+	const payload = {
+		groups: [
+			{
+				drive_state: 'moving',
+				vehicles: [
+					{
+						vehicle_id: 1,
+						alerts: [
+							{ code: 'OVERSPEED' },
+							{ code: 'SOP_OVERSPEED' },
+							{ code: 'HARSH_BRAKING' },
+							{ code: 'BATTERY_LOW' } // not an incident kind
+						]
+					},
+					{ vehicle_id: 2, alerts: [] }
+				]
+			},
+			{ drive_state: 'parking', vehicles: [{ vehicle_id: 3, alerts: [{ code: 'SOP_LONG_STOP' }] }] }
+		]
+	};
+
+	it('counts each FMS code under the kind the chip shows', () => {
+		const s = summariseIncidents(payload, true);
+		expect(s.byVehicle.get(1)?.counts).toEqual({
+			overspeed: 2,
+			stopOver: 0,
+			idleOver: 0,
+			harsh: 1
+		});
+		expect(s.byVehicle.get(1)?.total).toBe(3);
+		expect(s.byVehicle.get(3)?.counts.stopOver).toBe(1);
+	});
+
+	it('leaves out trucks with nothing against them', () => {
+		const s = summariseIncidents(payload, true);
+		expect(s.byVehicle.has(2)).toBe(false);
+		expect(s.affected).toBe(2);
+	});
+
+	it('ignores alert codes that are not incidents', () => {
+		const s = summariseIncidents(payload, true);
+		// BATTERY_LOW is an alert but not one of the four kinds.
+		expect(s.byVehicle.get(1)?.total).toBe(3);
+	});
+
+	it('is case-insensitive about codes', () => {
+		const s = summariseIncidents(
+			{ groups: [{ vehicles: [{ vehicle_id: 9, alerts: [{ code: 'harsh_accel' }] }] }] },
+			true
+		);
+		expect(s.byVehicle.get(9)?.counts.harsh).toBe(1);
+	});
+
+	// A company that never configured SOP raises no SOP_* alerts, so zero
+	// means "nobody set it up", not "nothing happened". The caller has to be
+	// able to tell those apart rather than print a confident nought.
+	it('carries whether SOP is configured at all', () => {
+		expect(summariseIncidents(payload, false).sopConfigured).toBe(false);
+		expect(summariseIncidents(payload, true).sopConfigured).toBe(true);
+	});
+
+	it('survives a payload shaped differently or empty', () => {
+		for (const p of [null, {}, { items: [] }, { groups: [] }]) {
+			const s = summariseIncidents(p, true);
+			expect(s.affected).toBe(0);
+		}
 	});
 });
