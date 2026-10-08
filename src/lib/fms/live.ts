@@ -612,3 +612,108 @@ export const INCIDENT_LABEL: Record<IncidentKind, string> = {
 	idleOver: 'Idle melebihi toleransi',
 	harsh: 'Harsh driving'
 };
+
+// ---------------------------------------------------------------------------
+
+/**
+ * Fuel for the WHOLE fleet, one row per vehicle, in one request.
+ *
+ * `vehicle_id` omitted means the fleet — the same endpoint the per-vehicle
+ * panel uses, unscoped. Estimated rather than metered: distance ÷ the
+ * vehicle's configured km/L, plus idle burn. `litres` and `cost` are null
+ * wherever nobody has set km/L on the vehicle record, which is much of the
+ * migrated fleet, so a total is a total of what IS configured.
+ *
+ * FMS caps the window at 35 days. Anything longer has to be asked of them
+ * rather than stitched together here.
+ */
+export const FUEL_MAX_DAYS = 35;
+
+export interface FleetFuelRow {
+	vehicle_id: number;
+	license_plate: string;
+	vehicle_type?: string | null;
+	fleet_group?: string | null;
+	distance_km: number;
+	idle_hours: number;
+	kmpl?: number | null;
+	tank_litres?: number | null;
+	litres?: number | null;
+	cost?: number | null;
+	idle_litres: number;
+	idle_cost: number;
+	range_km?: number | null;
+	refuels?: number | null;
+}
+
+export interface FleetFuel {
+	days: number;
+	price_per_litre: number;
+	rows: FleetFuelRow[];
+	totals: {
+		vehicles: number;
+		distance_km: number;
+		litres: number;
+		cost: number;
+		idle_litres: number;
+		idle_cost: number;
+	};
+}
+
+export async function fetchFleetFuel(days: number): Promise<FleetFuel> {
+	const capped = Math.max(1, Math.min(Math.round(days), FUEL_MAX_DAYS));
+	const res = await fmsGet<any>(`/fuel/analysis?days=${capped}`);
+	return {
+		days: Number(res?.days ?? capped),
+		price_per_litre: Number(res?.price_per_litre ?? 0),
+		rows: Array.isArray(res?.rows) ? res.rows : [],
+		totals: {
+			vehicles: Number(res?.totals?.vehicles ?? 0),
+			distance_km: Number(res?.totals?.distance_km ?? 0),
+			litres: Number(res?.totals?.litres ?? 0),
+			cost: Number(res?.totals?.cost ?? 0),
+			idle_litres: Number(res?.totals?.idle_litres ?? 0),
+			idle_cost: Number(res?.totals?.idle_cost ?? 0)
+		}
+	};
+}
+
+/** Ways a planner may want the fuel list ordered. */
+export type FuelSort = 'litres' | 'cost' | 'distance' | 'efficiency' | 'idle' | 'plate';
+
+export const FUEL_SORTS: { value: FuelSort; label: string }[] = [
+	{ value: 'litres', label: 'Pemakaian tertinggi' },
+	{ value: 'cost', label: 'Biaya tertinggi' },
+	{ value: 'distance', label: 'Jarak terjauh' },
+	{ value: 'efficiency', label: 'Rasio terboros' },
+	{ value: 'idle', label: 'Idle terlama' },
+	{ value: 'plate', label: 'Nomor polisi' }
+];
+
+/**
+ * Sorted for reading, which means the interesting end first.
+ *
+ * A vehicle with no configured km/L has no litres and no cost — it sorts last
+ * on those rather than first, because an unknown is not a zero and a truck
+ * nobody has configured is not the most economical in the fleet.
+ */
+export function sortFleetFuel(rows: FleetFuelRow[], by: FuelSort): FleetFuelRow[] {
+	const out = [...rows];
+	const desc = (v: number | null | undefined) => (v == null ? -Infinity : v);
+	switch (by) {
+		case 'plate':
+			return out.sort((a, b) => (a.license_plate ?? '').localeCompare(b.license_plate ?? ''));
+		case 'cost':
+			return out.sort((a, b) => desc(b.cost) - desc(a.cost));
+		case 'distance':
+			return out.sort((a, b) => (b.distance_km ?? 0) - (a.distance_km ?? 0));
+		case 'idle':
+			return out.sort((a, b) => (b.idle_hours ?? 0) - (a.idle_hours ?? 0));
+		case 'efficiency':
+			// Worst first: the lowest km/L burns the most per kilometre. An
+			// unconfigured vehicle has no ratio to judge, so it goes last.
+			return out.sort((a, b) => (a.kmpl ?? Infinity) - (b.kmpl ?? Infinity));
+		default:
+			return out.sort((a, b) => desc(b.litres) - desc(a.litres));
+	}
+}

@@ -15,8 +15,18 @@
 	import { ENDPOINTS, ORDER_STATUS } from '$lib/constants/endpoints';
 	import FieldSelect from '$lib/components/revamp/FieldSelect.svelte';
 	import { truckDocuments, expiresWithinMonths, monthsFromToday } from '$lib/revamp/truckDocuments.js';
+	import { formatIDR } from '$lib/revamp/currency.js';
+	import {
+		fetchFleetFuel,
+		sortFleetFuel,
+		FUEL_SORTS,
+		FUEL_MAX_DAYS,
+		type FleetFuel,
+		type FuelSort
+	} from '$lib/fms/live';
 
-	let { basePath = '/t/fleet', title: _title = 'Truck Insight' }: { basePath?: string; title?: string } = $props();
+	let { basePath = '/t/fleet', title: _title = 'Truck Insight' }: { basePath?: string; title?: string } =
+		$props();
 
 	type Vehicle = {
 		id: string;
@@ -25,6 +35,81 @@
 		currentDriverId?: string | null;
 		attributes?: Record<string, any>;
 	};
+	/* ---------- Fuel Monitoring ----------
+	   One request for the whole fleet: /fuel/analysis without a vehicle_id is
+	   the same endpoint the per-vehicle panel uses, unscoped. Asking it sixty
+	   times would answer the same question sixty times over.
+
+	   Estimated, not metered — distance ÷ the vehicle's configured km/L, plus
+	   idle burn — so a vehicle nobody has configured has no litres and no
+	   cost. Those read as "belum diatur" rather than as zero, and the fleet
+	   total is a total of what IS configured. A zero there would quietly
+	   claim a truck used no fuel. */
+	const FUEL_PERIODS = [
+		{ value: 7, label: '7 Hari Terakhir' },
+		{ value: 30, label: '30 Hari Terakhir' },
+		{ value: 0, label: 'Bulan Ini' }
+	];
+	let fuelPeriod = $state(30);
+	let fuelSort = $state<FuelSort>('litres');
+	let fuelSearch = $state('');
+	let fuel = $state<FleetFuel | null>(null);
+	let fuelLoading = $state(false);
+	let fuelError = $state('');
+
+	/** Days back from today. "Bulan Ini" is month-to-date, which is at most 31
+	 *  and so inside the window FMS allows. */
+	function daysFor(period: number): number {
+		if (period > 0) return period;
+		const now = new Date();
+		return Math.max(1, now.getDate());
+	}
+
+	$effect(() => {
+		const days = daysFor(fuelPeriod);
+		fuelLoading = true;
+		fuelError = '';
+		let cancelled = false;
+		fetchFleetFuel(days)
+			.then((f) => {
+				if (!cancelled) fuel = f;
+			})
+			.catch(() => {
+				if (cancelled) return;
+				fuel = null;
+				fuelError = 'Data bahan bakar dari FMS belum bisa diambil.';
+			})
+			.finally(() => {
+				if (!cancelled) fuelLoading = false;
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	let fuelRows = $derived.by(() => {
+		const q = fuelSearch.trim().toLowerCase();
+		const rows = (fuel?.rows ?? []).filter(
+			(r) =>
+				!q ||
+				(r.license_plate ?? '').toLowerCase().includes(q) ||
+				(r.vehicle_type ?? '').toLowerCase().includes(q)
+		);
+		return sortFleetFuel(rows, fuelSort);
+	});
+
+	/** The fleet ratio, from the totals rather than averaged per vehicle: one
+	 *  truck doing 50km must not weigh the same as one doing 5000. */
+	let fuelRatio = $derived(
+		fuel && fuel.totals.litres > 0 ? fuel.totals.distance_km / fuel.totals.litres : null
+	);
+	/** Vehicles the estimate could not price, so the totals can say what they
+	 *  are a total OF. */
+	let fuelUnconfigured = $derived((fuel?.rows ?? []).filter((r) => r.litres == null).length);
+
+	const num = (v: number | null | undefined, digits = 0) =>
+		v == null ? '—' : v.toLocaleString('id-ID', { maximumFractionDigits: digits });
+
 	let vehicles = $state<Vehicle[]>([]);
 	let busyOrders = $state<any[]>([]);
 	let loaded = $state(false);
@@ -35,7 +120,9 @@
 			api.get(ENDPOINTS.orders.list, {
 				page: 0,
 				pageSize: 200,
-				filtered: JSON.stringify([{ id: 'statusCode', value: [ORDER_STATUS.ASSIGNED, ORDER_STATUS.IN_TRANSIT], type: 'in' }])
+				filtered: JSON.stringify([
+					{ id: 'statusCode', value: [ORDER_STATUS.ASSIGNED, ORDER_STATUS.IN_TRANSIT], type: 'in' }
+				])
 			})
 		]);
 		if (v.status === 'fulfilled') vehicles = v.value.data?.data ?? [];
@@ -52,8 +139,17 @@
 		{ key: 'unpaired', label: 'Unpaired', color: '#5B5F67' }
 	] as const;
 	type TruckStatus = (typeof TRUCK_STATUS_LIST)[number]['key'];
-	const TRUCK_STATUS_META = Object.fromEntries(TRUCK_STATUS_LIST.map((s) => [s.key, s])) as Record<TruckStatus, (typeof TRUCK_STATUS_LIST)[number]>;
-	const TRUCK_BODY_COLOR: Record<TruckStatus, string> = { available: '#4CAF32', planned: '#EAB308', onduty: '#2F6FDE', unavailable: '#C9463D', unpaired: '#8A8F98' };
+	const TRUCK_STATUS_META = Object.fromEntries(TRUCK_STATUS_LIST.map((s) => [s.key, s])) as Record<
+		TruckStatus,
+		(typeof TRUCK_STATUS_LIST)[number]
+	>;
+	const TRUCK_BODY_COLOR: Record<TruckStatus, string> = {
+		available: '#4CAF32',
+		planned: '#EAB308',
+		onduty: '#2F6FDE',
+		unavailable: '#C9463D',
+		unpaired: '#8A8F98'
+	};
 	let statusSets = $derived.by(() => {
 		const planned = new Set<string>();
 		const onduty = new Set<string>();
@@ -93,14 +189,27 @@
 	let orderStatusRows = $derived.by(() => {
 		const counts: Record<string, number> = {};
 		for (const t of vehicles) counts[statusOf(t)] = (counts[statusOf(t)] || 0) + 1;
-		return TRUCK_STATUS_LIST.map((s) => ({ key: s.key, label: s.label, color: s.color, count: counts[s.key] || 0, percent: percentOfTotal(counts[s.key] || 0) }));
+		return TRUCK_STATUS_LIST.map((s) => ({
+			key: s.key,
+			label: s.label,
+			color: s.color,
+			count: counts[s.key] || 0,
+			percent: percentOfTotal(counts[s.key] || 0)
+		}));
 	});
 	let activePhase = $state<string | null>(null);
 
 	// STNK / KIR come from the register's attributes (free-text periods).
 	function docSource(t: Vehicle) {
 		const a = t.attributes ?? {};
-		return { noStnk: a.noStnk, stnkFrom: a.stnkFrom, stnkTo: a.stnkTo ?? a.stnkExpiry, noKir: a.noKir, kirFrom: a.kirFrom, kirTo: a.kirTo ?? a.kirExpiry };
+		return {
+			noStnk: a.noStnk,
+			stnkFrom: a.stnkFrom,
+			stnkTo: a.stnkTo ?? a.stnkExpiry,
+			noKir: a.noKir,
+			kirFrom: a.kirFrom,
+			kirTo: a.kirTo ?? a.kirExpiry
+		};
 	}
 	let allFleetRows = $derived(
 		[...vehicles]
@@ -125,11 +234,18 @@
 		{ value: 'maintenance', label: 'Maintenance' },
 		{ value: 'inactive', label: 'Inactive' }
 	];
-	const TRUCK_STATUS_FILTER_OPTIONS = [{ value: 'all', label: 'Semua Truck Status' }, ...TRUCK_STATUS_LIST.map((s) => ({ value: s.key, label: s.label }))];
+	const TRUCK_STATUS_FILTER_OPTIONS = [
+		{ value: 'all', label: 'Semua Truck Status' },
+		...TRUCK_STATUS_LIST.map((s) => ({ value: s.key, label: s.label }))
+	];
 	let activeFilter = $state('all');
 	let truckStatusFilter = $state('all');
 	let fleetRows = $derived(
-		allFleetRows.filter((f) => (activeFilter === 'all' || f.activeLabel === activeFilter) && (truckStatusFilter === 'all' || f.statusKey === truckStatusFilter))
+		allFleetRows.filter(
+			(f) =>
+				(activeFilter === 'all' || f.activeLabel === activeFilter) &&
+				(truckStatusFilter === 'all' || f.statusKey === truckStatusFilter)
+		)
 	);
 
 	// Fleet Document card.
@@ -151,16 +267,30 @@
 	}
 	function docTest(kind: string, d: any): boolean {
 		switch (kind) {
-			case 'valid': return d.overall === 'valid';
-			case 'stnk': return d.stnk.state === 'expired';
-			case 'kir': return d.kir.state === 'expired';
-			case 'missing': return d.overall === 'missing';
-			case 'soon': return expiresWithinMonths(d.stnk, soonMonths) || expiresWithinMonths(d.kir, soonMonths);
-			default: return true;
+			case 'valid':
+				return d.overall === 'valid';
+			case 'stnk':
+				return d.stnk.state === 'expired';
+			case 'kir':
+				return d.kir.state === 'expired';
+			case 'missing':
+				return d.overall === 'missing';
+			case 'soon':
+				return expiresWithinMonths(d.stnk, soonMonths) || expiresWithinMonths(d.kir, soonMonths);
+			default:
+				return true;
 		}
 	}
-	let soonUntilLabel = $derived(monthsFromToday(soonMonths).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }));
-	let docTabs = $derived(DOC_TABS.map((tab) => ({ ...tab, count: allFleetRows.filter((f) => docTest(tab.value, f.docs)).length })));
+	let soonUntilLabel = $derived(
+		monthsFromToday(soonMonths).toLocaleDateString('id-ID', {
+			day: 'numeric',
+			month: 'long',
+			year: 'numeric'
+		})
+	);
+	let docTabs = $derived(
+		DOC_TABS.map((tab) => ({ ...tab, count: allFleetRows.filter((f) => docTest(tab.value, f.docs)).length }))
+	);
 	let docRows = $derived(allFleetRows.filter((f) => docTest(docFilter, f.docs)));
 
 	const DOC_STATES = [
@@ -169,7 +299,10 @@
 		{ key: 'missing', label: 'Belum ada data', color: '#AEB4BF' }
 	];
 	let documentStatusRows = $derived(
-		[{ key: 'stnk', label: 'STNK' }, { key: 'kir', label: 'KIR' }].map((d) => ({
+		[
+			{ key: 'stnk', label: 'STNK' },
+			{ key: 'kir', label: 'KIR' }
+		].map((d) => ({
 			...d,
 			states: DOC_STATES.map((st) => {
 				const count = allFleetRows.filter((f) => (f.docs as any)[d.key].state === st.key).length;
@@ -199,15 +332,110 @@
 <div class="insight-head"><div><h1>Truck Insight</h1></div></div>
 
 <div class="insight-kpis">
-	<div class="card insight-kpi"><div class="insight-kpi-label">Total Truck</div><div class="insight-kpi-value">{total}</div></div>
-	<div class="card insight-kpi"><div class="insight-kpi-label">Active</div><div class="insight-kpi-value insight-kpi-value--green">{activeCount}</div></div>
-	<div class="card insight-kpi"><div class="insight-kpi-label">Available Now</div><div class="insight-kpi-value insight-kpi-value--blue">{availableNow}</div></div>
 	<div class="card insight-kpi">
-		<div class="insight-kpi-label">In Use <span class="insight-info" title="Share of active trucks currently on an order in progress (status On Duty)"><Info size={13} /></span></div>
+		<div class="insight-kpi-label">Total Truck</div>
+		<div class="insight-kpi-value">{total}</div>
+	</div>
+	<div class="card insight-kpi">
+		<div class="insight-kpi-label">Active</div>
+		<div class="insight-kpi-value insight-kpi-value--green">{activeCount}</div>
+	</div>
+	<div class="card insight-kpi">
+		<div class="insight-kpi-label">Available Now</div>
+		<div class="insight-kpi-value insight-kpi-value--blue">{availableNow}</div>
+	</div>
+	<div class="card insight-kpi">
+		<div class="insight-kpi-label">
+			In Use <span
+				class="insight-info"
+				title="Share of active trucks currently on an order in progress (status On Duty)"
+				><Info size={13} /></span
+			>
+		</div>
 		<div class="insight-kpi-value">{inUsePercent}%</div>
 	</div>
-	<div class="card insight-kpi"><div class="insight-kpi-label">Driver Paired</div><div class="insight-kpi-value">{pairedCount} / {total}</div></div>
+	<div class="card insight-kpi">
+		<div class="insight-kpi-label">Driver Paired</div>
+		<div class="insight-kpi-value">{pairedCount} / {total}</div>
+	</div>
 </div>
+
+<!-- Fuel Monitoring — what the fleet burned over a window the planner
+     chooses, heaviest user first. -->
+<section class="card insight-panel fuel-panel">
+	<div class="fuel-head">
+		<h2>Fuel Monitoring</h2>
+		<span class="hint">
+			{#if fuel}estimasi FMS · {fuel.days} hari · {formatIDR(fuel.price_per_litre)}/L{/if}
+		</span>
+	</div>
+
+	<div class="fuel-periods">
+		{#each FUEL_PERIODS as p (p.value)}
+			<button
+				type="button"
+				class="fuel-period {fuelPeriod === p.value ? 'active' : ''}"
+				onclick={() => (fuelPeriod = p.value)}>{p.label}</button
+			>
+		{/each}
+		<span class="hint fuel-window-note">Maksimal {FUEL_MAX_DAYS} hari</span>
+	</div>
+
+	{#if fuelError}
+		<div class="fuel-empty">{fuelError}</div>
+	{:else if fuelLoading && !fuel}
+		<div class="fuel-empty">Memuat data bahan bakar…</div>
+	{:else if fuel}
+		<div class="fuel-totals">
+			<div><span>Total Penggunaan BBM</span><b>{num(fuel.totals.litres)} L</b></div>
+			<div><span>Total Biaya BBM</span><b>{formatIDR(fuel.totals.cost)}</b></div>
+			<div><span>Total Jarak Tempuh</span><b>{num(fuel.totals.distance_km)} km</b></div>
+			<div>
+				<span>Rata-rata Rasio</span><b>{fuelRatio == null ? '—' : `${num(fuelRatio, 1)} km/L`}</b>
+			</div>
+		</div>
+		{#if fuelUnconfigured}
+			<p class="hint fuel-note">
+				{fuelUnconfigured} armada belum punya rasio km/L di FMS, jadi pemakaian dan biayanya tidak ikut dihitung
+				— totalnya adalah total dari armada yang sudah diatur.
+			</p>
+		{/if}
+
+		<div class="fuel-controls">
+			<div class="search-box fuel-search">
+				<Search size={14} />
+				<input placeholder="Cari nomor polisi atau tipe" bind:value={fuelSearch} />
+			</div>
+			<FieldSelect bind:value={fuelSort} options={FUEL_SORTS} />
+		</div>
+
+		<div class="fuel-list">
+			{#each fuelRows as r (r.vehicle_id)}
+				<div class="fuel-row">
+					<div class="fuel-row-head">
+						<b>{r.license_plate}</b>
+						{#if r.vehicle_type}<span class="hint">{r.vehicle_type}</span>{/if}
+					</div>
+					<div class="fuel-row-figures">
+						<div><span>Jarak tempuh</span><b>{num(r.distance_km)} km</b></div>
+						<div><span>Idle time</span><b>{num(r.idle_hours, 1)} j</b></div>
+						<div><span>Rasio</span><b>{r.kmpl == null ? 'belum diatur' : `${num(r.kmpl, 1)} km/L`}</b></div>
+						<div><span>BBM terpakai</span><b>{r.litres == null ? '—' : `${num(r.litres)} L`}</b></div>
+						<div><span>Biaya BBM</span><b>{r.cost == null ? '—' : formatIDR(r.cost)}</b></div>
+						<div>
+							<span>Biaya idle</span><b>{formatIDR(r.idle_cost)}</b>
+						</div>
+					</div>
+				</div>
+			{/each}
+			{#if !fuelRows.length}
+				<div class="fuel-empty">
+					{fuelSearch.trim() ? 'Tidak ada armada yang cocok.' : 'Belum ada data pemakaian di periode ini.'}
+				</div>
+			{/if}
+		</div>
+	{/if}
+</section>
 
 <div class="insight-panels">
 	<section class="card insight-panel">
@@ -215,10 +443,14 @@
 		{#each statusRows as r (r.key)}
 			<div class="insight-status-row">
 				<span class="insight-status-label">
-					{#if r.key === 'active'}<CircleCheck size={16} />{:else if r.key === 'maintenance'}<Wrench size={16} />{:else}<CircleX size={16} />{/if}
+					{#if r.key === 'active'}<CircleCheck size={16} />{:else if r.key === 'maintenance'}<Wrench
+							size={16}
+						/>{:else}<CircleX size={16} />{/if}
 					{r.label}
 				</span>
-				<span class="insight-bar"><span class="insight-bar-fill" style="width:{r.percent}%; background:{r.color}"></span></span>
+				<span class="insight-bar"
+					><span class="insight-bar-fill" style="width:{r.percent}%; background:{r.color}"></span></span
+				>
 				<span class="insight-status-count">{r.count} | {r.percent}%</span>
 			</div>
 		{/each}
@@ -226,15 +458,34 @@
 		<div class="insight-subsection">
 			<h2>Fleet by Order Status</h2>
 			{#if total}
-				<div class="insight-stack" role="img" aria-label={'Fleet by order status: ' + orderStatusRows.filter((r) => r.count > 0).map((r) => `${r.label} ${r.percent}%`).join(', ')}>
+				<div
+					class="insight-stack"
+					role="img"
+					aria-label={'Fleet by order status: ' +
+						orderStatusRows
+							.filter((r) => r.count > 0)
+							.map((r) => `${r.label} ${r.percent}%`)
+							.join(', ')}
+				>
 					{#each orderStatusRows.filter((x) => x.count > 0) as r (r.key)}
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<span class="insight-stack-seg" class:is-dim={activePhase && activePhase !== r.key} style="flex-grow:{r.count}; background:{r.color}" title="{r.label}: {r.count} truck | {r.percent}%" onmouseenter={() => (activePhase = r.key)} onmouseleave={() => (activePhase = null)}></span>
+						<span
+							class="insight-stack-seg"
+							class:is-dim={activePhase && activePhase !== r.key}
+							style="flex-grow:{r.count}; background:{r.color}"
+							title="{r.label}: {r.count} truck | {r.percent}%"
+							onmouseenter={() => (activePhase = r.key)}
+							onmouseleave={() => (activePhase = null)}
+						></span>
 					{/each}
 				</div>
 				<ul class="insight-legend">
 					{#each orderStatusRows as r (r.key)}
-						<li class:is-dim={activePhase && activePhase !== r.key} onmouseenter={() => (activePhase = r.key)} onmouseleave={() => (activePhase = null)}>
+						<li
+							class:is-dim={activePhase && activePhase !== r.key}
+							onmouseenter={() => (activePhase = r.key)}
+							onmouseleave={() => (activePhase = null)}
+						>
 							<span class="insight-legend-swatch" style="background:{r.color}"></span>
 							<span class="insight-legend-label">{r.label}</span>
 							<span class="insight-legend-count">{r.count} | {r.percent}%</span>
@@ -249,10 +500,23 @@
 
 	<section class="card insight-panel insight-panel--fill">
 		<div class="insight-fill-inner">
-			<div class="insight-fleet-head"><h2>Fleet</h2><span class="insight-fleet-count">{fleetRows.length} truck</span></div>
+			<div class="insight-fleet-head">
+				<h2>Fleet</h2>
+				<span class="insight-fleet-count">{fleetRows.length} truck</span>
+			</div>
 			<div class="insight-fleet-filters">
-				<FieldSelect bind:value={activeFilter} options={ACTIVE_FILTER_OPTIONS} compact placeholder="Active Status" />
-				<FieldSelect bind:value={truckStatusFilter} options={TRUCK_STATUS_FILTER_OPTIONS} compact placeholder="Truck Status" />
+				<FieldSelect
+					bind:value={activeFilter}
+					options={ACTIVE_FILTER_OPTIONS}
+					compact
+					placeholder="Active Status"
+				/>
+				<FieldSelect
+					bind:value={truckStatusFilter}
+					options={TRUCK_STATUS_FILTER_OPTIONS}
+					compact
+					placeholder="Truck Status"
+				/>
 			</div>
 			<div class="insight-fleet-list">
 				{#each fleetRows as f (f.id)}
@@ -281,34 +545,59 @@
 							{#each [{ name: 'STNK', doc: f.docs.stnk }, { name: 'KIR', doc: f.docs.kir }] as d (d.name)}
 								<div class="insight-doc">
 									<span class="insight-doc-label">{d.name}</span>
-									<div class="insight-doc-period is-{d.doc.state}"><span class="insight-doc-dot"></span><span class="insight-doc-text">{docPeriodLabel(d.doc)}</span></div>
+									<div class="insight-doc-period is-{d.doc.state}">
+										<span class="insight-doc-dot"></span><span class="insight-doc-text"
+											>{docPeriodLabel(d.doc)}</span
+										>
+									</div>
 								</div>
 							{/each}
 						</div>
 					</div>
 				{/each}
-				{#if !fleetRows.length}<div class="insight-empty">{allFleetRows.length ? 'Tidak ada truck yang cocok dengan filter.' : loaded ? 'Belum ada truck terdaftar.' : 'Memuat…'}</div>{/if}
+				{#if !fleetRows.length}<div class="insight-empty">
+						{allFleetRows.length
+							? 'Tidak ada truck yang cocok dengan filter.'
+							: loaded
+								? 'Belum ada truck terdaftar.'
+								: 'Memuat…'}
+					</div>{/if}
 			</div>
 		</div>
 	</section>
 </div>
 
 <section class="card insight-doc-card">
-	<div class="insight-fleet-head"><h2>Fleet Document</h2><span class="insight-fleet-count">{docRows.length} truck</span></div>
+	<div class="insight-fleet-head">
+		<h2>Fleet Document</h2>
+		<span class="insight-fleet-count">{docRows.length} truck</span>
+	</div>
 
 	{#if total}
 		<div class="insight-doc-charts">
 			{#each documentStatusRows as d (d.key)}
 				<div class="insight-doc-chart">
 					<div class="insight-doc-chart-head">{d.label}</div>
-					<div class="insight-stack" role="img" aria-label={d.label + ': ' + d.states.map((st) => `${st.label} ${st.percent}%`).join(', ')}>
+					<div
+						class="insight-stack"
+						role="img"
+						aria-label={d.label + ': ' + d.states.map((st) => `${st.label} ${st.percent}%`).join(', ')}
+					>
 						{#each d.states.filter((x) => x.count > 0) as st (st.key)}
-							<span class="insight-stack-seg" style="flex-grow:{st.count}; background:{st.color}" title="{d.label} {st.label}: {st.count} truck | {st.percent}%"></span>
+							<span
+								class="insight-stack-seg"
+								style="flex-grow:{st.count}; background:{st.color}"
+								title="{d.label} {st.label}: {st.count} truck | {st.percent}%"
+							></span>
 						{/each}
 					</div>
 					<ul class="insight-legend insight-legend--inline">
 						{#each d.states as st (st.key)}
-							<li><span class="insight-legend-swatch" style="background:{st.color}"></span><span class="insight-legend-label">{st.label}</span><span class="insight-legend-count">{st.count} | {st.percent}%</span></li>
+							<li>
+								<span class="insight-legend-swatch" style="background:{st.color}"></span><span
+									class="insight-legend-label">{st.label}</span
+								><span class="insight-legend-count">{st.count} | {st.percent}%</span>
+							</li>
 						{/each}
 					</ul>
 				</div>
@@ -318,7 +607,12 @@
 
 	<div class="method-tabs insight-doc-tabs">
 		{#each docTabs as tab (tab.value)}
-			<button type="button" class="method-tab" class:active={docFilter === tab.value} onclick={() => (docFilter = tab.value)}>{tab.label} ({tab.count})</button>
+			<button
+				type="button"
+				class="method-tab"
+				class:active={docFilter === tab.value}
+				onclick={() => (docFilter = tab.value)}>{tab.label} ({tab.count})</button
+			>
 		{/each}
 	</div>
 
@@ -326,25 +620,69 @@
 		<div class="insight-soon-bar">
 			<span>Akan expired dalam</span>
 			<div class="insight-stepper">
-				<button type="button" aria-label="Kurangi periode" disabled={soonMonths <= SOON_MONTHS_MIN} onclick={() => setSoonMonths(soonMonths - 1)}>−</button>
-				<input type="number" inputmode="numeric" min={SOON_MONTHS_MIN} max={SOON_MONTHS_MAX} value={soonMonths} aria-label="Periode dalam bulan" onchange={(e) => { setSoonMonths((e.target as HTMLInputElement).value); (e.target as HTMLInputElement).value = String(soonMonths); }} />
-				<button type="button" aria-label="Tambah periode" disabled={soonMonths >= SOON_MONTHS_MAX} onclick={() => setSoonMonths(soonMonths + 1)}>+</button>
+				<button
+					type="button"
+					aria-label="Kurangi periode"
+					disabled={soonMonths <= SOON_MONTHS_MIN}
+					onclick={() => setSoonMonths(soonMonths - 1)}>−</button
+				>
+				<input
+					type="number"
+					inputmode="numeric"
+					min={SOON_MONTHS_MIN}
+					max={SOON_MONTHS_MAX}
+					value={soonMonths}
+					aria-label="Periode dalam bulan"
+					onchange={(e) => {
+						setSoonMonths((e.target as HTMLInputElement).value);
+						(e.target as HTMLInputElement).value = String(soonMonths);
+					}}
+				/>
+				<button
+					type="button"
+					aria-label="Tambah periode"
+					disabled={soonMonths >= SOON_MONTHS_MAX}
+					onclick={() => setSoonMonths(soonMonths + 1)}>+</button
+				>
 			</div>
 			<span>bulan ke depan</span>
 			<span class="insight-soon-until">(sampai {soonUntilLabel})</span>
 		</div>
 	{/if}
 
-	<div class="insight-doc-table-head"><span>Truck</span><span>STNK</span><span>KIR</span><span class="insight-doc-actions">Aksi</span></div>
+	<div class="insight-doc-table-head">
+		<span>Truck</span><span>STNK</span><span>KIR</span><span class="insight-doc-actions">Aksi</span>
+	</div>
 	<div class="insight-doc-table-body">
 		{#each docRows as f (f.id)}
 			<div class="insight-doc-row">
 				<span class="insight-doc-plate">{f.plate}</span>
-				<div class="insight-doc-period is-{f.docs.stnk.state}"><span class="insight-doc-dot"></span><span class="insight-doc-text">{docPeriodLabel(f.docs.stnk)}</span></div>
-				<div class="insight-doc-period is-{f.docs.kir.state}"><span class="insight-doc-dot"></span><span class="insight-doc-text">{docPeriodLabel(f.docs.kir)}</span></div>
-				<div class="insight-doc-actions"><button type="button" class="mini-icon-btn" title="Lihat detail truck" onclick={() => viewTruck(f.id)}><Search size={14} /></button></div>
+				<div class="insight-doc-period is-{f.docs.stnk.state}">
+					<span class="insight-doc-dot"></span><span class="insight-doc-text"
+						>{docPeriodLabel(f.docs.stnk)}</span
+					>
+				</div>
+				<div class="insight-doc-period is-{f.docs.kir.state}">
+					<span class="insight-doc-dot"></span><span class="insight-doc-text"
+						>{docPeriodLabel(f.docs.kir)}</span
+					>
+				</div>
+				<div class="insight-doc-actions">
+					<button
+						type="button"
+						class="mini-icon-btn"
+						title="Lihat detail truck"
+						onclick={() => viewTruck(f.id)}><Search size={14} /></button
+					>
+				</div>
 			</div>
 		{/each}
-		{#if !docRows.length}<div class="insight-empty">{allFleetRows.length ? 'Tidak ada truck pada filter ini.' : loaded ? 'Belum ada truck terdaftar.' : 'Memuat…'}</div>{/if}
+		{#if !docRows.length}<div class="insight-empty">
+				{allFleetRows.length
+					? 'Tidak ada truck pada filter ini.'
+					: loaded
+						? 'Belum ada truck terdaftar.'
+						: 'Memuat…'}
+			</div>{/if}
 	</div>
 </section>

@@ -6,6 +6,7 @@ import {
 	curatedSensors,
 	hasFix,
 	plateKey,
+	sortFleetFuel,
 	summariseIncidentAggregate,
 	summariseIncidents
 } from './live';
@@ -247,5 +248,77 @@ describe('incident summary from the FMS aggregate', () => {
 		for (const [id, row] of paged.byVehicle) {
 			expect(aggregate.byVehicle.get(id)?.counts).toEqual(row.counts);
 		}
+	});
+});
+
+describe('fleet fuel sorting', () => {
+	const rows = [
+		{
+			vehicle_id: 1,
+			license_plate: 'B 2000 BB',
+			distance_km: 500,
+			idle_hours: 2,
+			kmpl: 6,
+			litres: 83,
+			cost: 560000,
+			idle_litres: 5,
+			idle_cost: 34000
+		},
+		{
+			vehicle_id: 2,
+			license_plate: 'A 1000 AA',
+			distance_km: 900,
+			idle_hours: 9,
+			kmpl: 3,
+			litres: 300,
+			cost: 2040000,
+			idle_litres: 22,
+			idle_cost: 150000
+		},
+		// Nobody has set km/L on this one, so litres and cost are unknown.
+		{
+			vehicle_id: 3,
+			license_plate: 'C 3000 CC',
+			distance_km: 700,
+			idle_hours: 5,
+			kmpl: null,
+			litres: null,
+			cost: null,
+			idle_litres: 12,
+			idle_cost: 80000
+		}
+	] as any[];
+
+	it('puts the heaviest user first', () => {
+		expect(sortFleetFuel(rows, 'litres').map((r) => r.vehicle_id)).toEqual([2, 1, 3]);
+	});
+
+	// The one that matters: an unconfigured vehicle has no litres, and must not
+	// be read as the most economical truck in the fleet.
+	it('sorts an unknown last rather than as a zero', () => {
+		expect(sortFleetFuel(rows, 'litres').at(-1)?.vehicle_id).toBe(3);
+		expect(sortFleetFuel(rows, 'cost').at(-1)?.vehicle_id).toBe(3);
+		expect(sortFleetFuel(rows, 'efficiency').at(-1)?.vehicle_id).toBe(3);
+	});
+
+	it('orders the worst ratio first, not the best', () => {
+		// 3 km/L burns more per kilometre than 6 km/L.
+		expect(sortFleetFuel(rows, 'efficiency').map((r) => r.kmpl)).toEqual([3, 6, null]);
+	});
+
+	it('orders by distance, idle and plate', () => {
+		expect(sortFleetFuel(rows, 'distance').map((r) => r.vehicle_id)).toEqual([2, 3, 1]);
+		expect(sortFleetFuel(rows, 'idle').map((r) => r.vehicle_id)).toEqual([2, 3, 1]);
+		expect(sortFleetFuel(rows, 'plate').map((r) => r.license_plate)).toEqual([
+			'A 1000 AA',
+			'B 2000 BB',
+			'C 3000 CC'
+		]);
+	});
+
+	it('does not disturb the caller its own array', () => {
+		const before = rows.map((r) => r.vehicle_id);
+		sortFleetFuel(rows, 'cost');
+		expect(rows.map((r) => r.vehicle_id)).toEqual(before);
 	});
 });

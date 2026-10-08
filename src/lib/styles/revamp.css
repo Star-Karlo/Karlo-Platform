@@ -1356,6 +1356,35 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 /* The truck's own state, one fact per row: icon, what it is, the value. Read
    down the column rather than across, because the values have no common unit
    and lining them up would suggest they do. */
+/* Fuel Monitoring (Truck Insight) — the fleet's headline figures, then one
+   block per vehicle. A block rather than a table row: six figures per truck
+   is too many for columns at this width, and they read as a group about one
+   vehicle rather than a column to scan down. */
+.fuel-panel{display:flex; flex-direction:column; gap:14px;}
+.fuel-head{display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;}
+.fuel-periods{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+.fuel-period{border:1px solid var(--outline-variant); background:transparent; color:var(--on-surface-variant);
+  border-radius:999px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer;}
+.fuel-period:hover{border-color:var(--primary); color:var(--primary);}
+.fuel-period.active{background:var(--primary-container); border-color:var(--primary); color:var(--primary);}
+.fuel-window-note{margin-left:auto;}
+.fuel-totals{display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px;}
+.fuel-totals > div{display:flex; flex-direction:column; gap:3px; padding:12px 14px; border:1px solid var(--outline-variant); border-radius:10px;}
+.fuel-totals span{font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--on-surface-variant);}
+.fuel-totals b{font-size:17px; font-weight:800; font-variant-numeric:tabular-nums; overflow-wrap:anywhere;}
+.fuel-note{margin:0;}
+.fuel-controls{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.fuel-search{flex:1; min-width:200px;}
+.fuel-list{display:flex; flex-direction:column; gap:8px; max-height:460px; overflow:auto;}
+.fuel-row{border:1px solid var(--outline-variant); border-radius:10px; padding:11px 13px; display:flex; flex-direction:column; gap:9px;}
+.fuel-row-head{display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;}
+.fuel-row-head b{font-size:13px;}
+.fuel-row-figures{display:grid; grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)); gap:8px 12px;}
+.fuel-row-figures > div{display:flex; flex-direction:column; gap:1px; min-width:0;}
+.fuel-row-figures span{font-size:10px; text-transform:uppercase; letter-spacing:.03em; color:var(--on-surface-variant);}
+.fuel-row-figures b{font-size:12.5px; font-weight:700; font-variant-numeric:tabular-nums; overflow-wrap:anywhere;}
+.fuel-empty{padding:18px; text-align:center; font-size:12.5px; color:var(--on-surface-variant);}
+
 /* Specification: a label and its figure per line, the figure right-aligned so
    the column reads as a list of values rather than a paragraph. */
 .ct-spec-list{display:flex; flex-direction:column;}
