@@ -143,21 +143,19 @@ export interface SensorReading {
 	value: string;
 }
 
+// Odometer and Engine Total Hours are NOT here: they are lifetime counters,
+// not live readings, and they belong in Specification beside the brand and the
+// fuel ratio. Listing them among voltage and satellites invited them to be
+// read as something that changes while you watch.
 const CURATED: { key: string; label: string; format: (v: number) => string }[] = [
 	{ key: 'External Voltage', label: 'Tegangan Eksternal', format: (v) => `${(v / 1000).toFixed(1)} V` },
 	{ key: 'Battery Voltage', label: 'Tegangan Baterai', format: (v) => `${(v / 1000).toFixed(2)} V` },
-	{
-		key: 'Total Odometer',
-		label: 'Odometer',
-		format: (v) => `${Math.round(v / 1000).toLocaleString('id-ID')} km`
-	},
 	{ key: 'GSM Signal', label: 'Sinyal GSM', format: (v) => `${v}/5` },
 	{ key: 'satellites', label: 'Satelit', format: (v) => `${v}` },
 	{ key: 'altitude', label: 'Ketinggian', format: (v) => `${Math.round(v)} m` },
 	{ key: 'Engine Speed (CAN)', label: 'Putaran Mesin', format: (v) => `${Math.round(v)} rpm` },
 	{ key: 'Engine Oil Pressure (CAN)', label: 'Tekanan Oli', format: (v) => `${v} kPa` },
-	{ key: 'Engine Torque', label: 'Torsi Mesin', format: (v) => `${v} %` },
-	{ key: 'Engine Total Hours', label: 'Jam Mesin', format: (v) => `${v.toLocaleString('id-ID')} h` }
+	{ key: 'Engine Torque', label: 'Torsi Mesin', format: (v) => `${v} %` }
 ];
 
 const FUEL = /fuel|(^|[^a-z])lls([^a-z]|$)/i;

@@ -38,19 +38,34 @@ describe('FMS live-fleet adapter', () => {
 	it('curates only the sensors present, converting units', () => {
 		const rows = curatedSensors({
 			'External Voltage': 24500,
-			'Total Odometer': 123456789,
 			'LLS Fuel Level': 61,
 			junk: 'x'
 		});
 		expect(rows).toEqual(
 			expect.arrayContaining([
 				{ label: 'Tegangan Eksternal', value: '24.5 V' },
-				{ label: 'Odometer', value: '123.457 km' },
 				{ label: 'Bahan bakar (LLS Fuel Level)', value: '61' }
 			])
 		);
 		expect(rows.some((r) => r.label.includes('junk'))).toBe(false);
 		expect(curatedSensors(null)).toEqual([]);
+	});
+
+	// Lifetime counters are not live readings. They are read straight from the
+	// metadata by the Specification widget, which is where a reader looks for
+	// what a truck IS rather than what it is doing — listing them beside
+	// voltage and satellites invited them to be read as changing while you
+	// watch. Asserted so moving them back is a decision, not an accident.
+	it('leaves the lifetime counters to Specification', () => {
+		const rows = curatedSensors({
+			'Total Odometer': 123456789,
+			'Engine Total Hours': 14249,
+			'External Voltage': 24500
+		});
+		const labels = rows.map((r) => r.label);
+		expect(labels).toContain('Tegangan Eksternal');
+		expect(labels).not.toContain('Odometer');
+		expect(labels).not.toContain('Jam Mesin');
 	});
 
 	it('uses FMS’s state colours so both consoles read the same', () => {

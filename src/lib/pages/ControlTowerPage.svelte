@@ -824,7 +824,12 @@
 	   Only the selected truck's documents are fetched. Asking for sixty
 	   trucks' papers to show two lines about one of them is a lot of request
 	   for a panel that is usually closed. */
-	let truckIdByPlate = $state<Record<string, string>>({});
+	let truckByPlate = $state<Record<string, any>>({});
+	let truckIdByPlate = $derived(
+		Object.fromEntries(Object.entries(truckByPlate).map(([plate, t]) => [plate, t.id]))
+	);
+	/** Catalogue names for the ids a truck record carries. */
+	let catalogName = $state<Record<string, string>>({});
 	let vehicleDocs = $state<{ stnk: any | null; kir: any | null }>({ stnk: null, kir: null });
 
 	const normalisePlate = (p: string) => (p ?? '').replace(/\s+/g, '').toUpperCase();
@@ -832,11 +837,24 @@
 	onMount(async () => {
 		try {
 			const res = await api.get(ENDPOINTS.trucks.list, { pageSize: 500 });
-			const map: Record<string, string> = {};
+			const map: Record<string, any> = {};
 			for (const t of res.data?.data ?? []) {
-				if (t.policeNumber && t.id) map[normalisePlate(t.policeNumber)] = t.id;
+				if (t.policeNumber && t.id) map[normalisePlate(t.policeNumber)] = t;
 			}
-			truckIdByPlate = map;
+			truckByPlate = map;
+			// A truck record names its brand and type by id. Both catalogues
+			// are small and shared across every truck, so they are read once
+			// here rather than per selection.
+			const names: Record<string, string> = {};
+			for (const kind of ['brand', 'truckType']) {
+				try {
+					const c = await api.get(ENDPOINTS.catalog.list(kind), { pageSize: 500 });
+					for (const row of c.data?.data ?? []) if (row.id) names[row.id] = row.name ?? '';
+				} catch {
+					/* an unnamed id reads as "—" rather than as a raw uuid */
+				}
+			}
+			catalogName = names;
 		} catch {
 			/* no register: the panel simply says the papers are not known */
 		}
@@ -865,6 +883,39 @@
 		return () => {
 			cancelled = true;
 		};
+	});
+
+	/* ---------- Specification ----------
+	   Assembled from the three places that hold it: the truck record in master
+	   data for what the vehicle IS, the fuel estimate for the ratio FMS was
+	   configured with, and the device's own metadata for the two counters it
+	   reports. Odometer and engine hours move here out of Sensors & Telemetry,
+	   where they sat among live readings although they are lifetime figures.
+
+	   Tank capacity is absent. It lives on FMS's vehicle record, which the
+	   live feed does not publish, and inventing it from a truck type would be
+	   a guess printed as a fact. */
+	let specRows = $derived.by(() => {
+		const t = selectedVehicle ? truckByPlate[normalisePlate(selectedVehicle.license_plate)] : null;
+		const meta = (detail?.position?.metadata ?? {}) as Record<string, unknown>;
+		const num = (k: string) => (typeof meta[k] === 'number' ? (meta[k] as number) : null);
+		const odometerKm = num('Total Odometer');
+		const engineHours = num('Engine Total Hours');
+		const ratio = fuel?.kmpl ?? null;
+		return [
+			{ label: 'Brand', value: (t?.brandId && catalogName[t.brandId]) || '—' },
+			{ label: 'Type', value: (t?.truckTypeId && catalogName[t.truckTypeId]) || '—' },
+			{ label: 'Tank', value: '—' },
+			{ label: 'Fuel ratio', value: ratio != null ? `${ratio.toFixed(1)} km/L` : '—' },
+			{
+				label: 'Engine hours (life)',
+				value: engineHours != null ? `${Math.round(engineHours).toLocaleString('id-ID')} h` : '—'
+			},
+			{
+				label: 'Odometer',
+				value: odometerKm != null ? `${Math.round(odometerKm / 1000).toLocaleString('id-ID')} km` : '—'
+			}
+		];
 	});
 
 	/** A document's standing: valid until a date, expired, or not recorded. */
@@ -1495,13 +1546,14 @@
 	// Widgets: which cards the panel shows and in what order. Adjust mode
 	// adds/removes/reorders; the layout can be saved as this browser's default.
 	// ------------------------------------------------------------------------
-	type WidgetKey = 'cargo' | 'route' | 'progress' | 'tasklist' | 'status' | 'telemetry' | 'fuel';
+	type WidgetKey = 'cargo' | 'route' | 'progress' | 'tasklist' | 'status' | 'spec' | 'telemetry' | 'fuel';
 	const WIDGET_LABEL: Record<WidgetKey, string> = {
 		cargo: 'Detail Muatan',
 		route: 'Rute Perjalanan',
 		progress: 'Progress Pengiriman',
 		tasklist: 'Tasklist',
 		status: 'Status Armada',
+		spec: 'Specification',
 		telemetry: 'Sensors & Telemetry',
 		fuel: 'Fuel Consumption'
 	};
@@ -1527,6 +1579,7 @@
 		progress: 'order',
 		tasklist: 'order',
 		status: 'fleet',
+		spec: 'fleet',
 		telemetry: 'fleet',
 		fuel: 'fleet'
 	};
@@ -2170,7 +2223,19 @@
 										>
 									</div>
 								{/if}
-								{#if key === 'status'}
+								{#if key === 'spec'}
+									<section class="ct2-card">
+										<header><span>Specification</span></header>
+										<div class="ct-spec-list">
+											{#each specRows as r (r.label)}
+												<div class="ct-spec-row">
+													<span class="ct-spec-label">{r.label}</span>
+													<span class="ct-spec-value">{r.value}</span>
+												</div>
+											{/each}
+										</div>
+									</section>
+								{:else if key === 'status'}
 									<!-- What the truck is doing right now, from the live
 								     position the map is already drawing. Opening the
 								     fleet tab to find only sensors and fuel left the

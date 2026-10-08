@@ -1356,6 +1356,14 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 /* The truck's own state, one fact per row: icon, what it is, the value. Read
    down the column rather than across, because the values have no common unit
    and lining them up would suggest they do. */
+/* Specification: a label and its figure per line, the figure right-aligned so
+   the column reads as a list of values rather than a paragraph. */
+.ct-spec-list{display:flex; flex-direction:column;}
+.ct-spec-row{display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:6px 0; font-size:12.5px;}
+.ct-spec-row + .ct-spec-row{border-top:1px solid var(--outline-variant);}
+.ct-spec-label{color:var(--on-surface-variant);}
+.ct-spec-value{font-weight:700; color:var(--on-surface); font-variant-numeric:tabular-nums; text-align:right;}
+
 .ct-fleet-status{display:flex; flex-direction:column; gap:2px; padding:4px 0;}
 .ct-fleet-status-row{display:flex; align-items:flex-start; gap:10px; padding:7px 2px; color:var(--on-surface-variant);}
 .ct-fleet-status-row > div{display:flex; flex-direction:column; gap:1px; min-width:0;}
