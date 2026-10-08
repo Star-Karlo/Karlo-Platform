@@ -172,9 +172,15 @@ export function curatedSensors(metadata: Record<string, unknown> | null | undefi
 		else if (typeof raw === 'string' && raw !== '') out.push({ label: spec.label, value: raw });
 	}
 	for (const [k, v] of Object.entries(metadata)) {
-		if (FUEL.test(k) && (typeof v === 'number' || typeof v === 'string')) {
-			out.push({ label: `Bahan bakar (${k})`, value: String(v) });
-		}
+		// A fuel channel is a MEASUREMENT. The key sweep matched anything whose
+		// name mentioned fuel, so a companion field — "...Last Update", a
+		// timestamp — was picked up and, being first, became the Fuel level
+		// tile: a date where a percentage belongs. Only numbers now, and
+		// strings only when they are numbers written as text.
+		if (!FUEL.test(k)) continue;
+		const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
+		if (!Number.isFinite(n)) continue;
+		out.push({ label: `Bahan bakar (${k})`, value: String(n) });
 	}
 	if (typeof metadata['Movement'] === 'number' || typeof metadata['Movement'] === 'boolean') {
 		out.push({ label: 'Gerakan', value: metadata['Movement'] ? 'Ya' : 'Tidak' });
@@ -716,4 +722,24 @@ export function sortFleetFuel(rows: FleetFuelRow[], by: FuelSort): FleetFuelRow[
 		default:
 			return out.sort((a, b) => desc(b.litres) - desc(a.litres));
 	}
+}
+
+/**
+ * The tank reading, as a percentage, or null when nothing reports one.
+ *
+ * Several channels can mention fuel — level, consumed, a rate — so the one
+ * shown is the one that reads as a LEVEL: a percentage between 0 and 100.
+ * Picking the first match put whatever the device happened to list first
+ * under a label saying "Fuel level".
+ */
+export function fuelLevelPercent(sensors: SensorReading[]): number | null {
+	const fuels = sensors.filter((s) => s.label.startsWith('Bahan bakar'));
+	// A key that says "level" is the one meant, where the device offers it.
+	const named = fuels.find((s) => /level/i.test(s.label));
+	for (const candidate of [named, ...fuels]) {
+		if (!candidate) continue;
+		const n = Number(candidate.value);
+		if (Number.isFinite(n) && n >= 0 && n <= 100) return n;
+	}
+	return null;
 }

@@ -81,6 +81,7 @@
 		plateKey,
 		addressLine,
 		curatedSensors,
+		fuelLevelPercent,
 		hasFix,
 		STATE_LABEL,
 		STATE_COLOUR,
@@ -1635,7 +1636,9 @@
 	function sensorValue(label: string): string | undefined {
 		return sensors.find((s) => s.label === label)?.value;
 	}
-	let fuelLevel = $derived(sensors.find((s) => s.label.startsWith('Bahan bakar'))?.value);
+	/** A percentage, or null — never whatever channel happened to be listed
+	 *  first, which is how a timestamp reached this tile. */
+	let fuelLevel = $derived(fuelLevelPercent(sensors));
 
 	// ------------------------------------------------------------------------
 	// Vehicle list — FMS's: search plate or driver, state dot, location, speed.
@@ -2536,7 +2539,7 @@
 												><small>GSM signal</small>
 											</div>
 											<div class="ct-telemetry-tile">
-												<Fuel size={14} /><span class="ct-telemetry-value">{fuelLevel ?? '—'}</span><small
+												<Fuel size={14} /><span class="ct-telemetry-value">{fuelLevel == null ? '—' : `${Math.round(fuelLevel)}%`}</span><small
 													>Fuel level</small
 												>
 											</div>

@@ -110,6 +110,18 @@
 	const num = (v: number | null | undefined, digits = 0) =>
 		v == null ? '—' : v.toLocaleString('id-ID', { maximumFractionDigits: digits });
 
+	/** Idle as a person would say it. "35,2 j" is arithmetic; a day and a half
+	 *  standing still is the thing a planner reacts to. */
+	function idleLabel(hours: number | null | undefined): string {
+		if (hours == null) return '—';
+		const mins = Math.round(hours * 60);
+		if (mins < 60) return `${mins} Menit`;
+		const d = Math.floor(mins / 1440);
+		const h = Math.floor((mins % 1440) / 60);
+		const m = mins % 60;
+		return [d ? `${d} Hari` : '', h ? `${h} Jam` : '', m ? `${m} Menit` : ''].filter(Boolean).join(' ');
+	}
+
 	let vehicles = $state<Vehicle[]>([]);
 	let busyOrders = $state<any[]>([]);
 	let loaded = $state(false);
@@ -366,7 +378,9 @@
 	<div class="fuel-head">
 		<h2>Fuel Monitoring</h2>
 		<span class="hint">
-			{#if fuel}estimasi FMS · {fuel.days} hari · {formatIDR(fuel.price_per_litre)}/L{/if}
+			{#if fuel}{fuel.totals.vehicles} truck · estimasi FMS {fuel.days} hari · {formatIDR(
+					fuel.price_per_litre
+				)}/L{/if}
 		</span>
 	</div>
 
@@ -418,12 +432,16 @@
 					</div>
 					<div class="fuel-row-figures">
 						<div><span>Jarak tempuh</span><b>{num(r.distance_km)} km</b></div>
-						<div><span>Idle time</span><b>{num(r.idle_hours, 1)} j</b></div>
-						<div><span>Rasio</span><b>{r.kmpl == null ? 'belum diatur' : `${num(r.kmpl, 1)} km/L`}</b></div>
-						<div><span>BBM terpakai</span><b>{r.litres == null ? '—' : `${num(r.litres)} L`}</b></div>
-						<div><span>Biaya BBM</span><b>{r.cost == null ? '—' : formatIDR(r.cost)}</b></div>
+						<div><span>Idle time</span><b>{idleLabel(r.idle_hours)}</b></div>
 						<div>
-							<span>Biaya idle</span><b>{formatIDR(r.idle_cost)}</b>
+							<span>Fuel consumption</span><b>{r.litres == null ? '—' : `${num(r.litres)} L`}</b>
+						</div>
+						<div>
+							<span>Rasio BBM</span><b>{r.kmpl == null ? 'belum diatur' : `${num(r.kmpl, 1)} km/L`}</b>
+						</div>
+						<div><span>Idle cost</span><b>{formatIDR(r.idle_cost)}</b></div>
+						<div>
+							<span>Consumption cost</span><b>{r.cost == null ? '—' : formatIDR(r.cost)}</b>
 						</div>
 					</div>
 				</div>

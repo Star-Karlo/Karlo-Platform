@@ -4,6 +4,7 @@ import {
 	STATE_COLOUR,
 	addressLine,
 	curatedSensors,
+	fuelLevelPercent,
 	hasFix,
 	plateKey,
 	sortFleetFuel,
@@ -320,5 +321,38 @@ describe('fleet fuel sorting', () => {
 		const before = rows.map((r) => r.vehicle_id);
 		sortFleetFuel(rows, 'cost');
 		expect(rows.map((r) => r.vehicle_id)).toEqual(before);
+	});
+});
+
+describe('fuel level', () => {
+	// The bug this exists for: a companion timestamp channel mentions fuel, so
+	// the key sweep matched it, and being first it became the "Fuel level"
+	// tile — a date where a percentage belongs.
+	it('ignores a fuel-named channel that is not a measurement', () => {
+		const rows = curatedSensors({
+			'LLS Fuel Level Last Update': '2026-10-08T07:16:49Z',
+			'LLS Fuel Level': 61
+		});
+		expect(rows.some((r) => r.value.includes('2026-'))).toBe(false);
+		expect(fuelLevelPercent(rows)).toBe(61);
+	});
+
+	it('prefers the channel that says level', () => {
+		const rows = curatedSensors({ 'Fuel Consumed': 820, 'Fuel Level': 44 });
+		expect(fuelLevelPercent(rows)).toBe(44);
+	});
+
+	it('refuses a value that cannot be a percentage', () => {
+		// 820 litres consumed is a real reading, just not a tank level.
+		expect(fuelLevelPercent(curatedSensors({ 'Fuel Consumed': 820 }))).toBeNull();
+	});
+
+	it('accepts a number written as text', () => {
+		expect(fuelLevelPercent(curatedSensors({ 'LLS Fuel Level': '73' }))).toBe(73);
+	});
+
+	it('is null when nothing reports fuel at all', () => {
+		expect(fuelLevelPercent(curatedSensors({ 'External Voltage': 24500 }))).toBeNull();
+		expect(fuelLevelPercent([])).toBeNull();
 	});
 });
