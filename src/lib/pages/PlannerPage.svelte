@@ -1134,7 +1134,12 @@
 			return;
 		}
 		if (truckStatusOf(t) !== 'available') {
-			toast(`Truck ${t.licensePlate} sedang ${TRUCK_STATUS_META[truckStatusOf(t)].label}`);
+			// Says WHY, because "sedang On duty" alone reads as a status rather
+			// than a reason, and a planner reasonably assumes a second order
+			// simply queues behind the first.
+			toast(
+				`Truck ${t.licensePlate} sedang ${TRUCK_STATUS_META[truckStatusOf(t)].label} — K-Trip hanya bisa memegang satu order sampai yang berjalan selesai`
+			);
 			return;
 		}
 		selectedTruckId = t.id;
@@ -1979,8 +1984,18 @@
 													>{/if}
 											</div>
 										</div>
-										<button type="button" class="planner-ft-assign-btn" onclick={(e) => confirmAssign(t, e)}
-											>Assign</button
+										<!-- The shortlist offered Assign on any truck, including
+										     one already running an order, and only said no after
+										     the click. The server refuses it outright now; the
+										     button should not invite it in the first place. -->
+										<button
+											type="button"
+											class="planner-ft-assign-btn"
+											disabled={truckStatusOf(t) !== 'available'}
+											title={truckStatusOf(t) === 'available'
+												? ''
+												: `Truck sedang ${TRUCK_STATUS_META[truckStatusOf(t)].label} — K-Trip hanya bisa memegang satu order`}
+											onclick={(e) => confirmAssign(t, e)}>Assign</button
 										>
 									</div>
 								{/each}
