@@ -75,71 +75,71 @@ describe('FMS live-fleet adapter', () => {
 });
 
 describe('incident summary', () => {
-	const payload = {
-		groups: [
-			{
-				drive_state: 'moving',
-				vehicles: [
-					{
-						vehicle_id: 1,
-						alerts: [
-							{ code: 'OVERSPEED' },
-							{ code: 'SOP_OVERSPEED' },
-							{ code: 'HARSH_BRAKING' },
-							{ code: 'BATTERY_LOW' } // not an incident kind
-						]
-					},
-					{ vehicle_id: 2, alerts: [] }
-				]
-			},
-			{ drive_state: 'parking', vehicles: [{ vehicle_id: 3, alerts: [{ code: 'SOP_LONG_STOP' }] }] }
-		]
-	};
+	// Rows as /alerts returns them: flat, one per event, alert_code not code.
+	const alerts = [
+		{ id: 1, vehicle_id: 1, alert_code: 'OVERSPEED' },
+		{ id: 2, vehicle_id: 1, alert_code: 'SOP_OVERSPEED' },
+		{ id: 3, vehicle_id: 1, alert_code: 'HARSH_BRAKING' },
+		{ id: 4, vehicle_id: 1, alert_code: 'BATTERY_LOW' },
+		{ id: 5, vehicle_id: 3, alert_code: 'SOP_LONG_STOP' },
+		{ id: 6, vehicle_id: 3, alert_code: 'EXCEEDED_IDLE' }
+	];
 
 	it('counts each FMS code under the kind the chip shows', () => {
-		const s = summariseIncidents(payload, true);
-		expect(s.byVehicle.get(1)?.counts).toEqual({
-			overspeed: 2,
-			stopOver: 0,
-			idleOver: 0,
-			harsh: 1
-		});
+		const s = summariseIncidents(alerts, true);
+		expect(s.byVehicle.get(1)?.counts).toEqual({ overspeed: 2, stopOver: 0, idleOver: 0, harsh: 1 });
 		expect(s.byVehicle.get(1)?.total).toBe(3);
-		expect(s.byVehicle.get(3)?.counts.stopOver).toBe(1);
-	});
-
-	it('leaves out trucks with nothing against them', () => {
-		const s = summariseIncidents(payload, true);
-		expect(s.byVehicle.has(2)).toBe(false);
+		expect(s.byVehicle.get(3)?.counts).toEqual({ overspeed: 0, stopOver: 1, idleOver: 1, harsh: 0 });
 		expect(s.affected).toBe(2);
 	});
 
 	it('ignores alert codes that are not incidents', () => {
-		const s = summariseIncidents(payload, true);
-		// BATTERY_LOW is an alert but not one of the four kinds.
-		expect(s.byVehicle.get(1)?.total).toBe(3);
+		// BATTERY_LOW is a real alert but not one of the four kinds.
+		expect(summariseIncidents(alerts, true).byVehicle.get(1)?.total).toBe(3);
 	});
 
 	it('is case-insensitive about codes', () => {
-		const s = summariseIncidents(
-			{ groups: [{ vehicles: [{ vehicle_id: 9, alerts: [{ code: 'harsh_accel' }] }] }] },
-			true
-		);
+		const s = summariseIncidents([{ id: 9, vehicle_id: 9, alert_code: 'harsh_accel' }], true);
 		expect(s.byVehicle.get(9)?.counts.harsh).toBe(1);
 	});
 
-	// A company that never configured SOP raises no SOP_* alerts, so zero
-	// means "nobody set it up", not "nothing happened". The caller has to be
-	// able to tell those apart rather than print a confident nought.
-	it('carries whether SOP is configured at all', () => {
-		expect(summariseIncidents(payload, false).sopConfigured).toBe(false);
-		expect(summariseIncidents(payload, true).sopConfigured).toBe(true);
+	// control-tower prepends a live "speeding right now" line with a negative
+	// id. It is not a stored event and reappears every refresh, so counting it
+	// would inflate the day a little more each time the page polled.
+	it('refuses a synthetic live entry if one ever reaches it', () => {
+		const s = summariseIncidents(
+			[
+				{ id: -42, vehicle_id: 42, alert_code: 'OVERSPEED' },
+				{ id: 7, vehicle_id: 42, alert_code: 'OVERSPEED' }
+			],
+			true
+		);
+		expect(s.byVehicle.get(42)?.counts.overspeed).toBe(1);
 	});
 
-	it('survives a payload shaped differently or empty', () => {
-		for (const p of [null, {}, { items: [] }, { groups: [] }]) {
-			const s = summariseIncidents(p, true);
-			expect(s.affected).toBe(0);
+	it('skips rows with no usable vehicle or code', () => {
+		const s = summariseIncidents(
+			[
+				{ id: 1, vehicle_id: undefined as any, alert_code: 'OVERSPEED' },
+				{ id: 2, vehicle_id: 5, alert_code: null as any },
+				{ id: 3, vehicle_id: 5, alert_code: 'OVERSPEED' }
+			],
+			true
+		);
+		expect(s.byVehicle.get(5)?.total).toBe(1);
+		expect(s.affected).toBe(1);
+	});
+
+	// A company that never configured SOP raises no SOP_* alerts, so zero
+	// means "nobody set it up", not "nothing happened".
+	it('carries whether SOP is configured at all', () => {
+		expect(summariseIncidents(alerts, false).sopConfigured).toBe(false);
+		expect(summariseIncidents(alerts, true).sopConfigured).toBe(true);
+	});
+
+	it('survives an empty or missing list', () => {
+		for (const a of [null, undefined, []]) {
+			expect(summariseIncidents(a as any, true).affected).toBe(0);
 		}
 	});
 });

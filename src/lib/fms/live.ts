@@ -427,15 +427,19 @@ export const SEVERITY_COLOUR: Record<Alert['severity'], string> = {
 /**
  * Incidents over a window, for the whole fleet, in one request.
  *
- * FMS's alerts are events DETECTED AT THE TIME by its notification engine,
- * against each company's own SOP settings — nothing is recomputed on read,
- * which is why one call can answer for sixty trucks. The consequence worth
- * knowing: these counts use FMS's thresholds. Ours cannot be passed in, so the
- * Pantau Armada panel must read the same SOP settings or the chip and the map
- * will describe the same fleet differently.
+ * Read from /alerts, NOT from /control-tower. That endpoint answers a
+ * different question — "what needs attention now" — and three of its
+ * behaviours are right for that and wrong for counting a window: it truncates
+ * alerts to three per vehicle (so every busy truck, which is the point of the
+ * chip, undercounts), it drops an alert once an operator marks it checked (so
+ * the count falls as people work), and it prepends a synthetic live OVERSPEED
+ * line that is not a stored event.
  *
- * Harsh driving is real here. It comes from the tracker's own green-driving
- * events, which is the one category nothing in the live feed reports.
+ * /alerts carries the same events untruncated, checked and unchecked, and
+ * takes vehicle_id as a FILTER rather than requiring it — so one call still
+ * answers for the whole fleet.
+ *
+ * Harsh driving is real here, from the tracker's own green-driving events.
  */
 export type IncidentKind = 'overspeed' | 'stopOver' | 'idleOver' | 'harsh';
 
@@ -477,42 +481,42 @@ const EMPTY_COUNTS = (): Record<IncidentKind, number> => ({
 	harsh: 0
 });
 
-/** Fold FMS's control-tower payload into per-vehicle incident counts. */
-export function summariseIncidents(payload: any, sopConfigured: boolean): IncidentSummary {
+/** Fold a window's alerts into per-vehicle incident counts. */
+export function summariseIncidents(
+	alerts: Partial<Alert>[] | null | undefined,
+	sopConfigured: boolean
+): IncidentSummary {
 	const byVehicle = new Map<number, VehicleIncidents>();
-	// The payload groups vehicles by drive state; every group holds vehicles,
-	// and every vehicle holds the alerts raised for it in the window.
-	const groups: any[] = Array.isArray(payload?.groups)
-		? payload.groups
-		: Array.isArray(payload?.items)
-			? [{ vehicles: payload.items }]
-			: [];
-	for (const g of groups) {
-		for (const v of g?.vehicles ?? g?.items ?? []) {
-			const id = Number(v?.vehicle_id ?? v?.id);
-			if (!Number.isFinite(id)) continue;
-			const counts = EMPTY_COUNTS();
-			let total = 0;
-			for (const a of v?.alerts ?? []) {
-				const kind = KIND_OF_CODE[String(a?.code ?? '').toUpperCase()];
-				if (!kind) continue;
-				counts[kind] += 1;
-				total += 1;
-			}
-			if (total > 0) byVehicle.set(id, { vehicle_id: id, counts, total });
-		}
+	for (const a of alerts ?? []) {
+		const id = Number(a?.vehicle_id);
+		if (!Number.isFinite(id)) continue;
+		// A negative id marks control-tower's synthetic "speeding right now"
+		// line. It should not reach here, and must not be counted as a stored
+		// event if it ever does — it reappears on every refresh.
+		if (Number(a?.id) < 0) continue;
+		const kind = KIND_OF_CODE[String(a?.alert_code ?? '').toUpperCase()];
+		if (!kind) continue;
+		const row = byVehicle.get(id) ?? { vehicle_id: id, counts: EMPTY_COUNTS(), total: 0 };
+		row.counts[kind] += 1;
+		row.total += 1;
+		byVehicle.set(id, row);
 	}
 	return { byVehicle, affected: byVehicle.size, sopConfigured };
 }
 
+/** Alerts can be numerous over a day; this is the ceiling we read. */
+const INCIDENT_FETCH_LIMIT = 2000;
+
 export async function fetchIncidentSummary(from: Date, to: Date): Promise<IncidentSummary> {
-	const [payload, sop] = await Promise.all([
-		fmsGet<any>(`/control-tower?from=${encodeURIComponent(rfc(from))}&to=${encodeURIComponent(rfc(to))}`),
+	const [res, sop] = await Promise.all([
+		fmsGet<{ items?: Alert[] }>(
+			`/alerts?from=${encodeURIComponent(rfc(from))}&to=${encodeURIComponent(rfc(to))}&limit=${INCIDENT_FETCH_LIMIT}`
+		),
 		// A company that never set its SOP produces no SOP_* alerts, so the
 		// chip must be able to say "not configured" rather than "none".
 		fmsGet<any>('/sop/settings').catch(() => null)
 	]);
-	return summariseIncidents(payload, !!sop && Object.keys(sop).length > 0);
+	return summariseIncidents(res.items ?? [], !!sop && Object.keys(sop).length > 0);
 }
 
 export const INCIDENT_LABEL: Record<IncidentKind, string> = {
