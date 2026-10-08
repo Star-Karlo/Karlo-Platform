@@ -2190,13 +2190,22 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .ct-telemetry-head{display:flex; align-items:center; justify-content:space-between; color:var(--on-surface-variant);}
 .ct-telemetry-head-title{display:flex; align-items:center; gap:7px; font-size:13px; font-weight:700; color:var(--on-surface);}
 .ct-telemetry-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:7px;}
-.ct-telemetry-tile{position:relative; background:#fff; border:1px solid var(--outline-variant); border-radius:10px; padding:9px 7px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:3px;}
+/* min-width:0 because a grid track's default is min-content: without it a
+   long value cannot shrink its tile, so it pushes into the neighbour instead
+   of wrapping. That is the overlap — a sensor whose value arrives as a long
+   string (a timestamp from a mislabelled fuel channel, say) ran across the
+   tile beside it. */
+.ct-telemetry-tile{position:relative; min-width:0; background:#fff; border:1px solid var(--outline-variant); border-radius:10px; padding:9px 7px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:3px;}
 .ct-telemetry-tile.good{background:var(--success-container); border-color:var(--success);}
 .ct-telemetry-tile.warn{background:var(--error-container); border-color:var(--error);}
-.ct-telemetry-value{font-size:13px; font-weight:800; color:var(--on-surface); font-variant-numeric:tabular-nums; white-space:nowrap;}
+/* Wraps rather than runs on. Values here are normally short — "30.0 V",
+   "0 km/h" — and nowrap suited those, but it is the reading that cannot be
+   trusted to be short, and an unreadable tile is better than two. */
+.ct-telemetry-value{font-size:13px; font-weight:800; color:var(--on-surface); font-variant-numeric:tabular-nums;
+  max-width:100%; overflow-wrap:anywhere; line-height:1.25;}
 .ct-telemetry-tile.good .ct-telemetry-value{color:var(--success);}
 .ct-telemetry-tile.warn .ct-telemetry-value{color:var(--error);}
-.ct-telemetry-label{font-size:9.5px; color:var(--on-surface-variant);}
+.ct-telemetry-label{font-size:9.5px; color:var(--on-surface-variant); max-width:100%; overflow-wrap:anywhere;}
 .ct-telemetry-badge{position:absolute; top:6px; right:6px; width:14px; height:14px; border-radius:50%; background:var(--error); color:#fff; font-size:9px; font-weight:800; line-height:1; display:flex; align-items:center; justify-content:center;}
 
 /* Card 4 — Fuel Consumption: plain label/value stat grid (no tile boxes,
@@ -2553,20 +2562,21 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .ct2-card header span{font-size:13px; font-weight:700; display:inline-flex; align-items:center; gap:6px;}
 .ct2-card header small{color:var(--on-surface-variant); font-size:11px; text-align:right;}
 .ct2-card-empty{font-size:12px; color:var(--on-surface-variant); padding:6px 0;}
-/* Detail Muatan and Rute Perjalanan read as figures, not as a grid.
-   They were set at 12px with 2-4px of padding and a tinted first column,
-   which packed three numbers into a band thinner than the heading above it.
-   More room per row, a plain label column, and the values at the weight the
-   reader is actually looking for. */
-.ct2-table{width:100%; border-collapse:collapse; font-size:12.5px;}
-/* Headings say the whole word. Uppercase at 10px with letter-spacing is wide
-   for its size, so the load table's own columns were the first thing to be
-   cut off when the panel narrowed. */
-.ct2-table th{font-size:10px; text-transform:uppercase; letter-spacing:.02em; color:var(--on-surface-variant); text-align:right; padding:0 4px 8px; font-weight:600; white-space:nowrap;}
-.ct2-table th:first-child{text-align:left;}
-.ct2-table td{padding:7px 4px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:var(--on-surface);}
-.ct2-table td:first-child{text-align:left; font-weight:500; color:var(--on-surface-variant);}
-.ct2-table tbody tr + tr td{border-top:1px solid var(--outline-variant);}
+/* Detail Muatan and Rute Perjalanan, following the revamp's own rule for
+   these two: "no table chrome — no row divider lines, no boxed/bordered
+   values, just plain aligned columns". Hierarchy comes from type alone.
+
+   My first pass went the other way and added a rule between every row, which
+   is exactly the chrome that note rules out: three figures a row do not need
+   ruling off from three more. The label carries the weight and the values sit
+   plain beside it, as they do on the order page this panel mirrors. */
+.ct2-table{width:100%; border-collapse:collapse; font-size:13px;}
+.ct2-table th{font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:var(--on-surface-variant); font-weight:700; text-align:left; padding:0 0 8px; white-space:nowrap; background:transparent;}
+.ct2-table td{padding:9px 0; text-align:left; font-variant-numeric:tabular-nums; color:var(--on-surface); font-weight:500; background:transparent;}
+.ct2-table td:first-child{font-weight:700; color:var(--on-surface); white-space:nowrap; padding-right:12px;}
+/* The page's global zebra striping would otherwise tint alternate rows and
+   put back the fills this table is meant to be without. */
+.ct2-table tbody tr:nth-child(odd), .ct2-table tbody tr:nth-child(even){background:transparent;}
 .ct2-fuel{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
 .ct2-fuel div{display:flex; flex-direction:column;}
 .ct2-fuel small{font-size:10px; color:var(--on-surface-variant);}
