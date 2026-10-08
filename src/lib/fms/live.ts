@@ -455,6 +455,17 @@ const KIND_OF_CODE: Record<string, IncidentKind> = Object.fromEntries(
 	Object.entries(INCIDENT_CODES).flatMap(([kind, codes]) => codes.map((c) => [c, kind as IncidentKind]))
 );
 
+/** A usable FMS vehicle id, or null.
+ *
+ *  Number(null) is 0 and Number.isFinite(0) is true, so a row with no vehicle
+ *  attached — FMS has them, a device alert raised before its tracker is bound
+ *  to a truck — would otherwise be counted against a vehicle 0 that does not
+ *  exist. Ids are positive, so that is the test. */
+function vehicleIdOf(v: unknown): number | null {
+	const n = Number(v);
+	return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 export interface VehicleIncidents {
 	vehicle_id: number;
 	counts: Record<IncidentKind, number>;
@@ -469,9 +480,13 @@ export interface IncidentSummary {
 	 * True when more alerts matched the window than we read, so the counts are
 	 * a floor rather than a total. The UI must say so: undercounting is most
 	 * likely on a busy day, which is the day somebody is looking at the chip
-	 * because something went wrong.
+	 * because something went wrong. Always false from the aggregate, which
+	 * has no row limit.
 	 */
 	truncated: boolean;
+	/** Which route answered. Kept so one day's numbers can be compared across
+	 *  both before the paging fallback is removed. */
+	source: 'aggregate' | 'paged';
 	/**
 	 * True when the company has SOP settings, so a zero means "nothing
 	 * happened". Without them FMS raises no SOP_* alerts at all, and a zero
@@ -496,8 +511,8 @@ export function summariseIncidents(
 ): IncidentSummary {
 	const byVehicle = new Map<number, VehicleIncidents>();
 	for (const a of alerts ?? []) {
-		const id = Number(a?.vehicle_id);
-		if (!Number.isFinite(id)) continue;
+		const id = vehicleIdOf(a?.vehicle_id);
+		if (id === null) continue;
 		// A negative id marks control-tower's synthetic "speeding right now"
 		// line. It should not reach here, and must not be counted as a stored
 		// event if it ever does — it reappears on every refresh.
@@ -509,7 +524,39 @@ export function summariseIncidents(
 		row.total += 1;
 		byVehicle.set(id, row);
 	}
-	return { byVehicle, affected: byVehicle.size, sopConfigured, truncated };
+	return { byVehicle, affected: byVehicle.size, sopConfigured, truncated, source: 'paged' };
+}
+
+/**
+ * The same counts from FMS's own aggregate: one call, no row limit, no paging.
+ *
+ * Keyed by alert_code rather than by the four kinds the chip shows, so the
+ * grouping stays here with its tests and FMS does not inherit our vocabulary.
+ *
+ * Only vehicles WITH alerts appear — a quiet truck is absent, not zero — which
+ * suits a map keyed on the ones that have something against them. Two further
+ * limits worth knowing rather than discovering: alerts with no vehicle bound
+ * are excluded, so this total can sit slightly under /alerts' own; and alerts
+ * aged into cold storage are not counted, which is nothing for today's window
+ * and wrong for a quarter.
+ */
+export function summariseIncidentAggregate(payload: any, sopConfigured: boolean): IncidentSummary {
+	const byVehicle = new Map<number, VehicleIncidents>();
+	for (const row of payload?.items ?? []) {
+		const id = vehicleIdOf(row?.vehicle_id);
+		if (id === null) continue;
+		const counts = EMPTY_COUNTS();
+		let total = 0;
+		for (const [code, n] of Object.entries(row?.counts ?? {})) {
+			const kind = KIND_OF_CODE[String(code).toUpperCase()];
+			const count = Number(n) || 0;
+			if (!kind || count <= 0) continue;
+			counts[kind] += count;
+			total += count;
+		}
+		if (total > 0) byVehicle.set(id, { vehicle_id: id, counts, total });
+	}
+	return { byVehicle, affected: byVehicle.size, sopConfigured, truncated: false, source: 'aggregate' };
 }
 
 /* Every list endpoint in fms-api clamps to 500 and says nothing about it — no
@@ -525,6 +572,20 @@ const ALERTS_MAX_PAGES = 4;
 export async function fetchIncidentSummary(from: Date, to: Date): Promise<IncidentSummary> {
 	const window = `from=${encodeURIComponent(rfc(from))}&to=${encodeURIComponent(rfc(to))}`;
 	const sopPromise = fmsGet<any>('/sop/settings').catch(() => null);
+
+	// The aggregate where it exists, the paged read where it does not. Asking
+	// first and falling back means no flag day when it deploys, and keeps a
+	// second route to compare one day's numbers against before this fallback
+	// is removed.
+	try {
+		const agg = await fmsGet<any>(`/alerts/summary?${window}`);
+		if (agg && Array.isArray(agg.items)) {
+			const sop = await sopPromise;
+			return summariseIncidentAggregate(agg, !!sop && Object.keys(sop).length > 0);
+		}
+	} catch {
+		/* not deployed yet, or unreachable: fall through and page */
+	}
 
 	const rows: Alert[] = [];
 	let total = 0;

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { STATE_COLOUR, addressLine, curatedSensors, hasFix, plateKey, summariseIncidents } from './live';
+import {
+	STATE_COLOUR,
+	addressLine,
+	curatedSensors,
+	hasFix,
+	plateKey,
+	summariseIncidentAggregate,
+	summariseIncidents
+} from './live';
 
 describe('FMS live-fleet adapter', () => {
 	it('treats a 0,0 fix as no fix — a device with no lock reports null island', () => {
@@ -120,6 +128,9 @@ describe('incident summary', () => {
 	it('skips rows with no usable vehicle or code', () => {
 		const s = summariseIncidents(
 			[
+				// null, not just undefined: Number(null) is 0, which is finite,
+				// so a naive check counts these against a vehicle 0.
+				{ id: 0, vehicle_id: null as any, alert_code: 'OVERSPEED' },
 				{ id: 1, vehicle_id: undefined as any, alert_code: 'OVERSPEED' },
 				{ id: 2, vehicle_id: 5, alert_code: null as any },
 				{ id: 3, vehicle_id: 5, alert_code: 'OVERSPEED' }
@@ -148,6 +159,93 @@ describe('incident summary', () => {
 	it('survives an empty or missing list', () => {
 		for (const a of [null, undefined, []]) {
 			expect(summariseIncidents(a as any, true).affected).toBe(0);
+		}
+	});
+});
+
+describe('incident summary from the FMS aggregate', () => {
+	const payload = {
+		by_code: { OVERSPEED: 6, HARSH_BRAKING: 2, BATTERY_DROP: 9 },
+		items: [
+			{ vehicle_id: 1, counts: { OVERSPEED: 4, HARSH_BRAKING: 2, BATTERY_DROP: 9 }, total: 15 },
+			{ vehicle_id: 3, counts: { SOP_LONG_STOP: 1, EXCEEDED_IDLE: 2 }, total: 3 }
+		],
+		total: 18
+	};
+
+	it('folds alert codes into the four kinds the chip shows', () => {
+		const s = summariseIncidentAggregate(payload, true);
+		expect(s.byVehicle.get(1)?.counts).toEqual({ overspeed: 4, stopOver: 0, idleOver: 0, harsh: 2 });
+		// BATTERY_DROP is counted by FMS but is not an incident kind here, so
+		// the vehicle's total is the six that are, not the fifteen it reports.
+		expect(s.byVehicle.get(1)?.total).toBe(6);
+		expect(s.byVehicle.get(3)?.counts).toEqual({ overspeed: 0, stopOver: 1, idleOver: 2, harsh: 0 });
+		expect(s.affected).toBe(2);
+	});
+
+	it('is never truncated and says which route answered', () => {
+		const s = summariseIncidentAggregate(payload, true);
+		expect(s.truncated).toBe(false);
+		expect(s.source).toBe('aggregate');
+		expect(summariseIncidents([], true).source).toBe('paged');
+	});
+
+	// A vehicle whose only alerts are outside the four kinds has nothing
+	// against it, and must not appear as an affected truck with a zero.
+	it('leaves out a vehicle whose alerts are all of other kinds', () => {
+		const s = summariseIncidentAggregate(
+			{ items: [{ vehicle_id: 8, counts: { BATTERY_DROP: 3 }, total: 3 }] },
+			true
+		);
+		expect(s.byVehicle.has(8)).toBe(false);
+		expect(s.affected).toBe(0);
+	});
+
+	it('ignores rows with no usable vehicle, and zero or negative counts', () => {
+		const s = summariseIncidentAggregate(
+			{
+				items: [
+					{ vehicle_id: null, counts: { OVERSPEED: 5 } },
+					{ vehicle_id: 2, counts: { OVERSPEED: 0, HARSH_BUMP: -1 } },
+					{ vehicle_id: 4, counts: { OVERSPEED: 1 } }
+				]
+			},
+			true
+		);
+		expect(s.affected).toBe(1);
+		expect(s.byVehicle.get(4)?.total).toBe(1);
+	});
+
+	it('survives an empty or malformed payload', () => {
+		for (const p of [null, {}, { items: [] }, { items: null }]) {
+			expect(summariseIncidentAggregate(p, true).affected).toBe(0);
+		}
+	});
+
+	// The two routes must agree on the same day, which is the check that lets
+	// the paged fallback be removed later rather than trusted away.
+	it('agrees with the paged route over the same events', () => {
+		const paged = summariseIncidents(
+			[
+				{ id: 1, vehicle_id: 1, alert_code: 'OVERSPEED' },
+				{ id: 2, vehicle_id: 1, alert_code: 'OVERSPEED' },
+				{ id: 3, vehicle_id: 1, alert_code: 'HARSH_BRAKING' },
+				{ id: 4, vehicle_id: 2, alert_code: 'EXCEEDED_IDLE' }
+			],
+			true
+		);
+		const aggregate = summariseIncidentAggregate(
+			{
+				items: [
+					{ vehicle_id: 1, counts: { OVERSPEED: 2, HARSH_BRAKING: 1 } },
+					{ vehicle_id: 2, counts: { EXCEEDED_IDLE: 1 } }
+				]
+			},
+			true
+		);
+		expect(aggregate.affected).toBe(paged.affected);
+		for (const [id, row] of paged.byVehicle) {
+			expect(aggregate.byVehicle.get(id)?.counts).toEqual(row.counts);
 		}
 	});
 });
