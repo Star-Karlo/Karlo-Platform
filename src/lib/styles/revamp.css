@@ -1356,6 +1356,36 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 /* The truck's own state, one fact per row: icon, what it is, the value. Read
    down the column rather than across, because the values have no common unit
    and lining them up would suggest they do. */
+/* Empty Order's filter bar, ported from the prototype.
+   Each group is a real <fieldset>/<legend> rather than a label-then-box —
+   the legend sits inset into the border itself, so the group reads as ONE
+   light layer nested in the page's .card instead of two stacked boxes, a
+   label block and a bordered box, competing for attention. */
+.eo-filter-groups{display:flex; gap:16px; flex-wrap:wrap;}
+.eo-filter-group{flex:1; min-width:260px; border:1px solid var(--outline-variant); border-radius:var(--r-lg); padding:6px 16px 14px; margin:0;}
+/* Rute holds two fields with longer placeholders, so a touch more grow than
+   the single-field Truck group: otherwise "Type Route From"/"To" clip. */
+.eo-filter-group:nth-child(2){flex:1.4; min-width:340px;}
+.eo-filter-group:nth-child(3){flex:0.8; min-width:220px;}
+.eo-filter-group legend{padding:0 6px; margin-left:4px; font-size:12.5px; font-weight:700; color:var(--on-surface);}
+.eo-filter-group-row{display:flex; gap:10px;}
+.eo-filter-group-row > *{flex:1; min-width:0;}
+/* Direct-child only. FieldSelect's searchable variant renders its own
+   <input type="text">, which a descendant selector would catch and give a
+   second pill border on top of FieldSelect's — ballooning the field and
+   throwing off the 50/50 split with its sibling. */
+.eo-filter-group-row > input[type="text"],
+.eo-filter-group-row > input[type="date"]{
+  width:100%; padding:11px 18px; border:1px solid var(--outline); border-radius:999px;
+  background:var(--surface); outline:none; font-size:13px; font-family:inherit; color:var(--on-surface);
+  transition:border .15s, box-shadow .15s;
+}
+.eo-filter-group-row > input[type="text"]:focus,
+.eo-filter-group-row > input[type="date"]:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(11,87,208,.14);}
+.eo-filter-actions{display:flex; justify-content:flex-end; align-items:center; gap:14px; margin-top:16px;}
+.eo-list-head{display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:16px;}
+.eo-list-head .method-tabs{margin-bottom:0;}
+
 /* Fuel Monitoring (Truck Insight) — the fleet's headline figures, then one
    block per vehicle. A block rather than a table row: six figures per truck
    is too many for columns at this width, and they read as a group about one
