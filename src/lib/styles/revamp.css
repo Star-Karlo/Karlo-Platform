@@ -1393,11 +1393,15 @@ td.sticky-col-aksi,td.sticky-col-status{z-index:1;}
 .fuel-panel{display:flex; flex-direction:column; gap:14px;}
 .fuel-head{display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;}
 .fuel-periods{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
-.fuel-period{border:1px solid var(--outline-variant); background:transparent; color:var(--on-surface-variant);
-  border-radius:999px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer;}
-.fuel-period:hover{border-color:var(--primary); color:var(--primary);}
-.fuel-period.active{background:var(--primary-container); border-color:var(--primary); color:var(--primary);}
-.fuel-window-note{margin-left:auto;}
+/* Text tabs with a rule under the active one, as the design has them and as
+   .method-tabs does elsewhere here — pills read as filters you can combine,
+   and these are one-at-a-time. */
+.fuel-periods{border-bottom:1px solid var(--outline-variant); gap:18px;}
+.fuel-period{border:none; background:transparent; color:var(--on-surface-variant);
+  padding:8px 0; font-size:12.5px; font-weight:600; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px;}
+.fuel-period:hover:not(:disabled){color:var(--primary);}
+.fuel-period.active{color:var(--primary); border-bottom-color:var(--primary);}
+.fuel-period:disabled{opacity:.45; cursor:not-allowed;}
 /* Two across, always. auto-fit re-flowed them to three or four as the panel
    widened, so the four figures stopped reading as two pairs and the card
    changed shape with the window. */

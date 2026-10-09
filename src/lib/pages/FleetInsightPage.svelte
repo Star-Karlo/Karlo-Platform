@@ -45,11 +45,19 @@
 	   cost. Those read as "belum diatur" rather than as zero, and the fleet
 	   total is a total of what IS configured. A zero there would quietly
 	   claim a truck used no fuel. */
-	const FUEL_PERIODS = [
+	/* The five the design asks for. Two FMS cannot answer: its window is a
+	   number of days back from today, capped at 35, so last month — up to 62
+	   days back — and a free custom range fall outside it. They are shown,
+	   disabled, saying why on hover. A tab that silently returned the wrong
+	   month would be worse than one admitting it cannot. */
+	const FUEL_PERIODS: { value: number; label: string; disabled?: boolean }[] = [
 		{ value: 7, label: '7 Hari Terakhir' },
 		{ value: 30, label: '30 Hari Terakhir' },
-		{ value: 0, label: 'Bulan Ini' }
+		{ value: 0, label: 'Bulan Ini' },
+		{ value: -1, label: 'Bulan Lalu', disabled: true },
+		{ value: -2, label: 'Custom', disabled: true }
 	];
+	const FUEL_PERIOD_UNAVAILABLE = `FMS hanya menyimpan ${FUEL_MAX_DAYS} hari terakhir, jadi periode ini belum bisa dihitung`;
 	let fuelPeriod = $state(30);
 	let fuelSort = $state<FuelSort>('litres');
 	let fuelSearch = $state('');
@@ -372,89 +380,10 @@
 	</div>
 </div>
 
-<!-- Fuel Monitoring — what the fleet burned over a window the planner
-     chooses, heaviest user first. -->
-<section class="card insight-panel fuel-panel">
-	<div class="fuel-head">
-		<h2>Fuel Monitoring</h2>
-		<span class="hint">
-			{#if fuel}{fuel.totals.vehicles} truck · estimasi FMS {fuel.days} hari · {formatIDR(
-					fuel.price_per_litre
-				)}/L{/if}
-		</span>
-	</div>
-
-	<div class="fuel-periods">
-		{#each FUEL_PERIODS as p (p.value)}
-			<button
-				type="button"
-				class="fuel-period {fuelPeriod === p.value ? 'active' : ''}"
-				onclick={() => (fuelPeriod = p.value)}>{p.label}</button
-			>
-		{/each}
-		<span class="hint fuel-window-note">Maksimal {FUEL_MAX_DAYS} hari</span>
-	</div>
-
-	{#if fuelError}
-		<div class="fuel-empty">{fuelError}</div>
-	{:else if fuelLoading && !fuel}
-		<div class="fuel-empty">Memuat data bahan bakar…</div>
-	{:else if fuel}
-		<div class="fuel-totals">
-			<div><span>Total Penggunaan BBM</span><b>{num(fuel.totals.litres)} L</b></div>
-			<div><span>Total Biaya BBM</span><b>{formatIDR(fuel.totals.cost)}</b></div>
-			<div><span>Total Jarak Tempuh</span><b>{num(fuel.totals.distance_km)} km</b></div>
-			<div>
-				<span>Rata-rata Rasio</span><b>{fuelRatio == null ? '—' : `${num(fuelRatio, 1)} km/L`}</b>
-			</div>
-		</div>
-		{#if fuelUnconfigured}
-			<p class="hint fuel-note">
-				{fuelUnconfigured} armada belum punya rasio km/L di FMS, jadi pemakaian dan biayanya tidak ikut dihitung
-				— totalnya adalah total dari armada yang sudah diatur.
-			</p>
-		{/if}
-
-		<div class="fuel-controls">
-			<div class="search-box fuel-search">
-				<Search size={14} />
-				<input placeholder="Cari nomor polisi atau tipe" bind:value={fuelSearch} />
-			</div>
-			<FieldSelect bind:value={fuelSort} options={FUEL_SORTS} />
-		</div>
-
-		<div class="fuel-list">
-			{#each fuelRows as r (r.vehicle_id)}
-				<div class="fuel-row">
-					<div class="fuel-row-head">
-						<b>{r.license_plate}</b>
-						{#if r.vehicle_type}<span class="hint">{r.vehicle_type}</span>{/if}
-					</div>
-					<div class="fuel-row-figures">
-						<div><span>Jarak tempuh</span><b>{num(r.distance_km)} km</b></div>
-						<div><span>Idle time</span><b>{idleLabel(r.idle_hours)}</b></div>
-						<div>
-							<span>Fuel consumption</span><b>{r.litres == null ? '—' : `${num(r.litres)} L`}</b>
-						</div>
-						<div>
-							<span>Rasio BBM</span><b>{r.kmpl == null ? 'belum diatur' : `${num(r.kmpl, 1)} km/L`}</b>
-						</div>
-						<div><span>Idle cost</span><b>{formatIDR(r.idle_cost)}</b></div>
-						<div>
-							<span>Consumption cost</span><b>{r.cost == null ? '—' : formatIDR(r.cost)}</b>
-						</div>
-					</div>
-				</div>
-			{/each}
-			{#if !fuelRows.length}
-				<div class="fuel-empty">
-					{fuelSearch.trim() ? 'Tidak ada armada yang cocok.' : 'Belum ada data pemakaian di periode ini.'}
-				</div>
-			{/if}
-		</div>
-	{/if}
-</section>
-
+<!-- Two rows of two: fleet status beside the fleet list, then the
+     documents beside the fuel. Fuel Monitoring sat full width above
+     everything, which pushed the four status panels below the fold and
+     gave the widest card on the page to the one nobody opens first. -->
 <div class="insight-panels">
 	<section class="card insight-panel">
 		<h2>Fleet by active Status</h2>
@@ -583,124 +512,208 @@
 			</div>
 		</div>
 	</section>
-</div>
 
-<section class="card insight-doc-card">
-	<div class="insight-fleet-head">
-		<h2>Fleet Document</h2>
-		<span class="insight-fleet-count">{docRows.length} truck</span>
-	</div>
+	<section class="card insight-doc-card">
+		<div class="insight-fleet-head">
+			<h2>Fleet Document</h2>
+			<span class="insight-fleet-count">{docRows.length} truck</span>
+		</div>
 
-	{#if total}
-		<div class="insight-doc-charts">
-			{#each documentStatusRows as d (d.key)}
-				<div class="insight-doc-chart">
-					<div class="insight-doc-chart-head">{d.label}</div>
-					<div
-						class="insight-stack"
-						role="img"
-						aria-label={d.label + ': ' + d.states.map((st) => `${st.label} ${st.percent}%`).join(', ')}
-					>
-						{#each d.states.filter((x) => x.count > 0) as st (st.key)}
-							<span
-								class="insight-stack-seg"
-								style="flex-grow:{st.count}; background:{st.color}"
-								title="{d.label} {st.label}: {st.count} truck | {st.percent}%"
-							></span>
-						{/each}
+		{#if total}
+			<div class="insight-doc-charts">
+				{#each documentStatusRows as d (d.key)}
+					<div class="insight-doc-chart">
+						<div class="insight-doc-chart-head">{d.label}</div>
+						<div
+							class="insight-stack"
+							role="img"
+							aria-label={d.label + ': ' + d.states.map((st) => `${st.label} ${st.percent}%`).join(', ')}
+						>
+							{#each d.states.filter((x) => x.count > 0) as st (st.key)}
+								<span
+									class="insight-stack-seg"
+									style="flex-grow:{st.count}; background:{st.color}"
+									title="{d.label} {st.label}: {st.count} truck | {st.percent}%"
+								></span>
+							{/each}
+						</div>
+						<ul class="insight-legend insight-legend--inline">
+							{#each d.states as st (st.key)}
+								<li>
+									<span class="insight-legend-swatch" style="background:{st.color}"></span><span
+										class="insight-legend-label">{st.label}</span
+									><span class="insight-legend-count">{st.count} | {st.percent}%</span>
+								</li>
+							{/each}
+						</ul>
 					</div>
-					<ul class="insight-legend insight-legend--inline">
-						{#each d.states as st (st.key)}
-							<li>
-								<span class="insight-legend-swatch" style="background:{st.color}"></span><span
-									class="insight-legend-label">{st.label}</span
-								><span class="insight-legend-count">{st.count} | {st.percent}%</span>
-							</li>
-						{/each}
-					</ul>
-				</div>
+				{/each}
+			</div>
+		{/if}
+
+		<div class="method-tabs insight-doc-tabs">
+			{#each docTabs as tab (tab.value)}
+				<button
+					type="button"
+					class="method-tab"
+					class:active={docFilter === tab.value}
+					onclick={() => (docFilter = tab.value)}>{tab.label} ({tab.count})</button
+				>
 			{/each}
 		</div>
-	{/if}
 
-	<div class="method-tabs insight-doc-tabs">
-		{#each docTabs as tab (tab.value)}
-			<button
-				type="button"
-				class="method-tab"
-				class:active={docFilter === tab.value}
-				onclick={() => (docFilter = tab.value)}>{tab.label} ({tab.count})</button
-			>
-		{/each}
-	</div>
-
-	{#if docFilter === 'soon'}
-		<div class="insight-soon-bar">
-			<span>Akan expired dalam</span>
-			<div class="insight-stepper">
-				<button
-					type="button"
-					aria-label="Kurangi periode"
-					disabled={soonMonths <= SOON_MONTHS_MIN}
-					onclick={() => setSoonMonths(soonMonths - 1)}>−</button
-				>
-				<input
-					type="number"
-					inputmode="numeric"
-					min={SOON_MONTHS_MIN}
-					max={SOON_MONTHS_MAX}
-					value={soonMonths}
-					aria-label="Periode dalam bulan"
-					onchange={(e) => {
-						setSoonMonths((e.target as HTMLInputElement).value);
-						(e.target as HTMLInputElement).value = String(soonMonths);
-					}}
-				/>
-				<button
-					type="button"
-					aria-label="Tambah periode"
-					disabled={soonMonths >= SOON_MONTHS_MAX}
-					onclick={() => setSoonMonths(soonMonths + 1)}>+</button
-				>
-			</div>
-			<span>bulan ke depan</span>
-			<span class="insight-soon-until">(sampai {soonUntilLabel})</span>
-		</div>
-	{/if}
-
-	<div class="insight-doc-table-head">
-		<span>Truck</span><span>STNK</span><span>KIR</span><span class="insight-doc-actions">Aksi</span>
-	</div>
-	<div class="insight-doc-table-body">
-		{#each docRows as f (f.id)}
-			<div class="insight-doc-row">
-				<span class="insight-doc-plate">{f.plate}</span>
-				<div class="insight-doc-period is-{f.docs.stnk.state}">
-					<span class="insight-doc-dot"></span><span class="insight-doc-text"
-						>{docPeriodLabel(f.docs.stnk)}</span
-					>
-				</div>
-				<div class="insight-doc-period is-{f.docs.kir.state}">
-					<span class="insight-doc-dot"></span><span class="insight-doc-text"
-						>{docPeriodLabel(f.docs.kir)}</span
-					>
-				</div>
-				<div class="insight-doc-actions">
+		{#if docFilter === 'soon'}
+			<div class="insight-soon-bar">
+				<span>Akan expired dalam</span>
+				<div class="insight-stepper">
 					<button
 						type="button"
-						class="mini-icon-btn"
-						title="Lihat detail truck"
-						onclick={() => viewTruck(f.id)}><Search size={14} /></button
+						aria-label="Kurangi periode"
+						disabled={soonMonths <= SOON_MONTHS_MIN}
+						onclick={() => setSoonMonths(soonMonths - 1)}>−</button
+					>
+					<input
+						type="number"
+						inputmode="numeric"
+						min={SOON_MONTHS_MIN}
+						max={SOON_MONTHS_MAX}
+						value={soonMonths}
+						aria-label="Periode dalam bulan"
+						onchange={(e) => {
+							setSoonMonths((e.target as HTMLInputElement).value);
+							(e.target as HTMLInputElement).value = String(soonMonths);
+						}}
+					/>
+					<button
+						type="button"
+						aria-label="Tambah periode"
+						disabled={soonMonths >= SOON_MONTHS_MAX}
+						onclick={() => setSoonMonths(soonMonths + 1)}>+</button
 					>
 				</div>
+				<span>bulan ke depan</span>
+				<span class="insight-soon-until">(sampai {soonUntilLabel})</span>
 			</div>
-		{/each}
-		{#if !docRows.length}<div class="insight-empty">
-				{allFleetRows.length
-					? 'Tidak ada truck pada filter ini.'
-					: loaded
-						? 'Belum ada truck terdaftar.'
-						: 'Memuat…'}
-			</div>{/if}
-	</div>
-</section>
+		{/if}
+
+		<div class="insight-doc-table-head">
+			<span>Truck</span><span>STNK</span><span>KIR</span><span class="insight-doc-actions">Aksi</span>
+		</div>
+		<div class="insight-doc-table-body">
+			{#each docRows as f (f.id)}
+				<div class="insight-doc-row">
+					<span class="insight-doc-plate">{f.plate}</span>
+					<div class="insight-doc-period is-{f.docs.stnk.state}">
+						<span class="insight-doc-dot"></span><span class="insight-doc-text"
+							>{docPeriodLabel(f.docs.stnk)}</span
+						>
+					</div>
+					<div class="insight-doc-period is-{f.docs.kir.state}">
+						<span class="insight-doc-dot"></span><span class="insight-doc-text"
+							>{docPeriodLabel(f.docs.kir)}</span
+						>
+					</div>
+					<div class="insight-doc-actions">
+						<button
+							type="button"
+							class="mini-icon-btn"
+							title="Lihat detail truck"
+							onclick={() => viewTruck(f.id)}><Search size={14} /></button
+						>
+					</div>
+				</div>
+			{/each}
+			{#if !docRows.length}<div class="insight-empty">
+					{allFleetRows.length
+						? 'Tidak ada truck pada filter ini.'
+						: loaded
+							? 'Belum ada truck terdaftar.'
+							: 'Memuat…'}
+				</div>{/if}
+		</div>
+	</section>
+
+	<!-- Fuel Monitoring — what the fleet burned over a window the planner
+	     chooses, heaviest user first. -->
+	<section class="card insight-panel fuel-panel">
+		<div class="fuel-head">
+			<h2>Fuel Monitoring</h2>
+			<!-- Matching the other panels' heading count. The price and window
+			     were detail for a card that now sits in a half-width column. -->
+			<span class="insight-fleet-count">
+				{#if fuel}{fuel.totals.vehicles} truck aktif{/if}
+			</span>
+		</div>
+
+		<div class="fuel-periods">
+			{#each FUEL_PERIODS as p (p.value)}
+				<button
+					type="button"
+					class="fuel-period {fuelPeriod === p.value ? 'active' : ''}"
+					disabled={p.disabled}
+					title={p.disabled ? FUEL_PERIOD_UNAVAILABLE : ''}
+					onclick={() => !p.disabled && (fuelPeriod = p.value)}>{p.label}</button
+				>
+			{/each}
+		</div>
+
+		{#if fuelError}
+			<div class="fuel-empty">{fuelError}</div>
+		{:else if fuelLoading && !fuel}
+			<div class="fuel-empty">Memuat data bahan bakar…</div>
+		{:else if fuel}
+			<div class="fuel-totals">
+				<div><span>Total Penggunaan BBM</span><b>{num(fuel.totals.litres)} L</b></div>
+				<div><span>Total Biaya BBM</span><b>{formatIDR(fuel.totals.cost)}</b></div>
+				<div><span>Total Jarak Tempuh</span><b>{num(fuel.totals.distance_km)} km</b></div>
+				<div>
+					<span>Rata-rata Rasio</span><b>{fuelRatio == null ? '—' : `${num(fuelRatio, 1)} km/L`}</b>
+				</div>
+			</div>
+			{#if fuelUnconfigured}
+				<p class="hint fuel-note">
+					{fuelUnconfigured} armada belum punya rasio km/L di FMS, jadi pemakaian dan biayanya tidak ikut dihitung
+					— totalnya adalah total dari armada yang sudah diatur.
+				</p>
+			{/if}
+
+			<div class="fuel-controls">
+				<div class="search-box fuel-search">
+					<Search size={14} />
+					<input placeholder="Cari nomor polisi atau tipe" bind:value={fuelSearch} />
+				</div>
+				<FieldSelect bind:value={fuelSort} options={FUEL_SORTS} />
+			</div>
+
+			<div class="fuel-list">
+				{#each fuelRows as r (r.vehicle_id)}
+					<div class="fuel-row">
+						<div class="fuel-row-head">
+							<b>{r.license_plate}</b>
+							{#if r.vehicle_type}<span class="hint">{r.vehicle_type}</span>{/if}
+						</div>
+						<div class="fuel-row-figures">
+							<div><span>Jarak tempuh</span><b>{num(r.distance_km)} km</b></div>
+							<div><span>Idle time</span><b>{idleLabel(r.idle_hours)}</b></div>
+							<div>
+								<span>Fuel consumption</span><b>{r.litres == null ? '—' : `${num(r.litres)} L`}</b>
+							</div>
+							<div>
+								<span>Rasio BBM</span><b>{r.kmpl == null ? 'belum diatur' : `${num(r.kmpl, 1)} km/L`}</b>
+							</div>
+							<div><span>Idle cost</span><b>{formatIDR(r.idle_cost)}</b></div>
+							<div>
+								<span>Consumption cost</span><b>{r.cost == null ? '—' : formatIDR(r.cost)}</b>
+							</div>
+						</div>
+					</div>
+				{/each}
+				{#if !fuelRows.length}
+					<div class="fuel-empty">
+						{fuelSearch.trim() ? 'Tidak ada armada yang cocok.' : 'Belum ada data pemakaian di periode ini.'}
+					</div>
+				{/if}
+			</div>
+		{/if}
+	</section>
+</div>
