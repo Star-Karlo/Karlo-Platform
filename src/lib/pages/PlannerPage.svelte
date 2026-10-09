@@ -128,6 +128,16 @@
 		{ key: 'unpaired', label: 'Unpaired', color: '#5B5F67', icon: 'unpaired' }
 	] as const;
 	type TruckStatus = (typeof TRUCK_STATUS_LIST)[number]['key'];
+
+	/* Which statuses may take an order.
+	   Planned and On Duty CAN: a planner books a truck for tomorrow while it
+	   is still out today, and the order waits for it. That is the point of
+	   planning ahead, and refusing it would make the planner wait for a truck
+	   to come home before they could schedule it.
+	   Unpaired and Unavailable cannot — one has no driver to send it to, the
+	   other is out of service — and neither is a queue that clears. */
+	const ASSIGNABLE_STATUSES = new Set<TruckStatus>(['available', 'planned', 'onduty']);
+	const canAssignTo = (t: Vehicle) => ASSIGNABLE_STATUSES.has(truckStatusOf(t));
 	const TRUCK_STATUS_META = Object.fromEntries(TRUCK_STATUS_LIST.map((s) => [s.key, s])) as Record<
 		TruckStatus,
 		(typeof TRUCK_STATUS_LIST)[number]
@@ -1133,12 +1143,10 @@
 			toast(`Truck ${t.licensePlate} belum punya driver — pasangkan dulu di My Fleet`);
 			return;
 		}
-		if (truckStatusOf(t) !== 'available') {
-			// Says WHY, because "sedang On duty" alone reads as a status rather
-			// than a reason, and a planner reasonably assumes a second order
-			// simply queues behind the first.
+		if (!canAssignTo(t)) {
+			// Only the two that are not a queue: no driver, or out of service.
 			toast(
-				`Truck ${t.licensePlate} sedang ${TRUCK_STATUS_META[truckStatusOf(t)].label} — K-Trip hanya bisa memegang satu order sampai yang berjalan selesai`
+				`Truck ${t.licensePlate} ${TRUCK_STATUS_META[truckStatusOf(t)].label} — tidak bisa menerima order`
 			);
 			return;
 		}
@@ -1991,10 +1999,10 @@
 										<button
 											type="button"
 											class="planner-ft-assign-btn"
-											disabled={truckStatusOf(t) !== 'available'}
-											title={truckStatusOf(t) === 'available'
+											disabled={!canAssignTo(t)}
+											title={canAssignTo(t)
 												? ''
-												: `Truck sedang ${TRUCK_STATUS_META[truckStatusOf(t)].label} — K-Trip hanya bisa memegang satu order`}
+												: `Truck ${TRUCK_STATUS_META[truckStatusOf(t)].label} tidak bisa menerima order`}
 											onclick={(e) => confirmAssign(t, e)}>Assign</button
 										>
 									</div>
@@ -2274,7 +2282,7 @@
 										<button
 											type="button"
 											class="planner-ft-assign-btn planner-ft-assign-btn-sm"
-											disabled={st !== 'available'}
+											disabled={!ASSIGNABLE_STATUSES.has(st)}
 											onclick={(e) => confirmAssign(t, e)}>Assign</button
 										>
 									</div>
